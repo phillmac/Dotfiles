@@ -57,7 +57,7 @@ function source_env_files () {
             alias_pvte_dev_update
             ;;
         'hughes' )
-            alias_pvte_prod_huges
+            alias_pvte_prod_hughes
             ;;
 
     esac
