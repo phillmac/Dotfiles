@@ -12,33 +12,20 @@ function source_env_files () {
         source "${file}"
     done
 
-    alias_pvs_dev_kore
-    alias_pvs_dev_update
-
     for file in  ${repos_dir}/pvs/Build-Env/Scripts/*
     do
         source "${file}"
     done
-
-    alias_pvs_build_kore
-    alias_pvs_build_update
 
     for file in  ${repos_dir}/kapcd/Dev-Env/Scripts/*functions.sh
     do
         source "${file}"
     done
 
-    alias_kapcd_dev_kore
-    alias_kapcd_dev_update
-
     for file in  ${repos_dir}/phill/Dev-Env/Scripts/*functions.sh
     do
       source "${file}"
     done
-
-    alias_phill_dev_kore
-    alias_phill_dev_update
-
 
     for file in  ${repos_dir}/pvte/Dev-Env/Scripts/*functions.sh
     do
@@ -52,6 +39,14 @@ function source_env_files () {
 
     case "$(hostname)" in
         'kore' )
+            alias_pvs_dev_kore
+            alias_pvs_dev_update
+            alias_pvs_build_kore
+            alias_pvs_build_update
+            alias_kapcd_dev_kore
+            alias_kapcd_dev_update
+            alias_phill_dev_kore
+            alias_phill_dev_update
             alias_pvte_dev_kore
             alias_pvte_dev_update
             ;;
