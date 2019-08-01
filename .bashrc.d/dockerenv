@@ -60,9 +60,6 @@ function source_env_files () {
             ;;
 
     esac
-
-    alias_pvte_dev_kore
-    alias_pvte_dev_update
 }
 
 source_env_files
