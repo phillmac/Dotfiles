@@ -45,6 +45,22 @@ function source_env_files () {
       source "${file}"
     done
 
+    for file in  ${repos_dir}/pvte/Prod-Env/Scripts/*functions.sh
+    do
+      source "${file}"
+    done
+
+    case "$(hostname)" in
+        'kore' )
+            alias_pvte_dev_kore
+            alias_pvte_dev_update
+            ;;
+        'hughes' )
+            alias_pvte_prod_huges
+            ;;
+
+    esac
+
     alias_pvte_dev_kore
     alias_pvte_dev_update
 }
