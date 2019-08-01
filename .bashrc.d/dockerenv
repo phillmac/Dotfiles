@@ -7,31 +7,37 @@ function source_env_files () {
 
 
     #set up docker & compose aliases
+    [[ -d "${repos_dir}/pvs/Dev-Env/Scripts" ]] && \
     for file in  ${repos_dir}/pvs/Dev-Env/Scripts/*
     do
         source "${file}"
     done
 
+    [[ -d "${repos_dir}/pvs/Build-Env/Scripts" ]] && \
     for file in  ${repos_dir}/pvs/Build-Env/Scripts/*
     do
         source "${file}"
     done
 
-    for file in  ${repos_dir}/kapcd/Dev-Env/Scripts/*functions.sh
+    [[ -d "${repos_dir}/phill/Dev-Env/Scripts" ]] && \
+    for file in  ${repos_dir}/phill/Dev-Env/Scripts/*functions.sh
     do
         source "${file}"
     done
 
+    [[ -d "${repos_dir}/phill/Dev-Env/Scripts" ]] && \
     for file in  ${repos_dir}/phill/Dev-Env/Scripts/*functions.sh
     do
       source "${file}"
     done
 
+    [[ -d "${repos_dir}/pvte/Dev-Env/Scripts" ]] && \
     for file in  ${repos_dir}/pvte/Dev-Env/Scripts/*functions.sh
     do
       source "${file}"
     done
 
+    [[ -d "${repos_dir}/pvte/Prod-Env/Scripts" ]] && \
     for file in  ${repos_dir}/pvte/Prod-Env/Scripts/*functions.sh
     do
       source "${file}"
