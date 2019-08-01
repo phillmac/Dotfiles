@@ -58,6 +58,7 @@ function source_env_files () {
             ;;
         'hughes' )
             alias_pvte_prod_hughes
+            alias_pvte_prod_update
             ;;
 
     esac
