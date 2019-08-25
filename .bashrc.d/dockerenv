@@ -9,7 +9,7 @@ function source_env_files () {
     #set up docker & compose aliases
 
     [[ -d "${repos_dir}/kapcd/Dev-Env/Scripts" ]] && \
-    for file in  ${repos_dir}/pvs/Dev-Env/Scripts/*
+    for file in  ${repos_dir}/kapcd/Dev-Env/Scripts/*
     do
         source "${file}"
     done
@@ -51,7 +51,7 @@ function source_env_files () {
     done
 
     [[ -d "${repos_dir}/scouts/Prod-Env/Scripts" ]] && \
-    for file in  ${repos_dir}/pvte/Prod-Env/Scripts/*functions.sh
+    for file in  ${repos_dir}/scouts/Prod-Env/Scripts/*functions.sh
     do
       source "${file}"
     done
