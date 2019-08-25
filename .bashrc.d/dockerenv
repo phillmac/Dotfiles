@@ -50,7 +50,7 @@ function source_env_files () {
       source "${file}"
     done
 
-    [[ -d "${repos_dir}/scouts/Prod-Env/Scripts" ]] && \
+    [[ -d "${repos_dir}/scouts/Dev-Env/Scripts" ]] && \
     for file in  ${repos_dir}/scouts/Prod-Env/Scripts/*functions.sh
     do
       source "${file}"
