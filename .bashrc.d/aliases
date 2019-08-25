@@ -9,6 +9,10 @@ function curljson () {
     _curl  -H "Content-Type: application/json" "${@}"
 }
 
+function curljsonp () {
+    _curl  -X POST -H "Content-Type: application/json" "${@}"
+}
+
 alias curl=_curl
 alias ipfs="docker run --rm --net pvs-dev_ipfs peelvalley/ipfs-cli"
 alias dagr="docker run --rm  -v/callisto/Data/Phill/_/DA\ Artists:/DA -w /DA phillmac/dagr_revamped:latest dagr.py"
