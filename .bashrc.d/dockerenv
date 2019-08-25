@@ -7,6 +7,13 @@ function source_env_files () {
 
 
     #set up docker & compose aliases
+
+    [[ -d "${repos_dir}/kapcd/Dev-Env/Scripts" ]] && \
+    for file in  ${repos_dir}/pvs/Dev-Env/Scripts/*
+    do
+        source "${file}"
+    done
+
     [[ -d "${repos_dir}/pvs/Dev-Env/Scripts" ]] && \
     for file in  ${repos_dir}/pvs/Dev-Env/Scripts/*
     do
@@ -43,6 +50,12 @@ function source_env_files () {
       source "${file}"
     done
 
+     [[ -d "${repos_dir}/scouts/Prod-Env/Scripts" ]] && \
+    for file in  ${repos_dir}/pvte/Prod-Env/Scripts/*functions.sh
+    do
+      source "${file}"
+    done
+
     case "$(hostname)" in
         'kore' )
             alias_pvs_dev_kore
@@ -55,6 +68,8 @@ function source_env_files () {
             alias_phill_dev_update
             alias_pvte_dev_kore
             alias_pvte_dev_update
+            alias_scouts_dev_update
+            alias_scouts_dev_kore
             ;;
         'hughes' )
             alias_pvte_prod_hughes
