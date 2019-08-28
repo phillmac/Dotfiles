@@ -19,4 +19,4 @@ alias dagr="docker run --rm  -v/callisto/Data/Phill/_/DA\ Artists:/DA -w /DA phi
 alias dagr-bulk="docker run --rm  -v/callisto/Data/Phill/_/DA\ Artists:/DA -w /DA  phillmac/dagr_revamped:latest  dagr-bulk.py"
 alias dagr-utils="docker run --rm -it -v/callisto/Data/Phill/_/DA\ Artists:/DA -w /DA  -v/ananke/D/Source/Phill/Repos/Phill:/Repos phillmac/dagr_revamped:latest dagr-utils.py"
 alias dagr-dev="docker run --rm -it -v/callisto/Data/Phill/_/DA\ Artists:/DA -w /DA  -v/ananke/D/Source/Phill/Repos/Phill:/Repos python bash"
-alias orbitdbapi="docker run --rm -it -w /Repos/orbit-db-http-api  -v/ananke/D/Source/Phill/Repos/Phill:/Repos --net pvs-dev_ipfs node:11.13 bash"
+alias orbitdbapi="docker run --rm -it -w /Repos/orbit-db-http-api  -v pvs-dev_cert-data:/certs -v/ananke/D/Source/Phill/Repos/Phill:/Repos --net pvs-dev_ipfs node:11.13 bash"
