@@ -39,7 +39,7 @@ function source_env_files () {
             alias_scouts_dev_update
             alias_scouts_dev_kore
             ;;
-        'titan' )
+        'titan_ubuntu' )
             alias_phill_dev_titan
             alias_phill_dev_update
             ;;
