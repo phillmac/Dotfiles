@@ -40,8 +40,8 @@ function source_env_files () {
             alias_scouts_dev_kore
             ;;
         'titan' )
-        alias_phill_dev_titan
-        ;;
+            alias_phill_dev_titan
+            ;;
         'hughes' )
             alias_pvte_prod_hughes
             alias_pvte_prod_update
