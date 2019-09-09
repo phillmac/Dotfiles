@@ -41,6 +41,7 @@ function source_env_files () {
             ;;
         'titan' )
             alias_phill_dev_titan
+            alias_phill_dev_update
             ;;
         'hughes' )
             alias_pvte_prod_hughes
