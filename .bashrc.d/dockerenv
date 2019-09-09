@@ -4,57 +4,25 @@ function source_env_files () {
     local repos_dir
     repos_dir="${REPOS_DIR:-${HOME}/source/repos}"
 
+    local repo_dirs_list=(
+            "kapcd/Dev-Env"
+            "pvs/Dev-Env"
+            "pvs/Build-Env"
+            "phill/Dev-Env"
+            "pvte/Dev-Env"
+            "pvte/Prod-Env"
+            "scouts/Dev-Env"
+            )
 
-
-    #set up docker & compose aliases
-
-    [[ -d "${repos_dir}/kapcd/Dev-Env/Scripts" ]] && \
-    for file in  ${repos_dir}/kapcd/Dev-Env/Scripts/*
-    do
+    for repo in "${repo_dirs_list[@]}"; do
+        [[ -d "${repos_dir}/${repo}/Scripts" ]] && \
+        for file in  "${repos_dir}/${repo}"/Scripts/*functions.sh
+        do
         source "${file}"
+        done
     done
 
-    [[ -d "${repos_dir}/pvs/Dev-Env/Scripts" ]] && \
-    for file in  ${repos_dir}/pvs/Dev-Env/Scripts/*
-    do
-        source "${file}"
-    done
 
-    [[ -d "${repos_dir}/pvs/Build-Env/Scripts" ]] && \
-    for file in  ${repos_dir}/pvs/Build-Env/Scripts/*
-    do
-        source "${file}"
-    done
-
-    [[ -d "${repos_dir}/phill/Dev-Env/Scripts" ]] && \
-    for file in  ${repos_dir}/phill/Dev-Env/Scripts/*functions.sh
-    do
-        source "${file}"
-    done
-
-    [[ -d "${repos_dir}/phill/Dev-Env/Scripts" ]] && \
-    for file in  ${repos_dir}/phill/Dev-Env/Scripts/*functions.sh
-    do
-      source "${file}"
-    done
-
-    [[ -d "${repos_dir}/pvte/Dev-Env/Scripts" ]] && \
-    for file in  ${repos_dir}/pvte/Dev-Env/Scripts/*functions.sh
-    do
-      source "${file}"
-    done
-
-    [[ -d "${repos_dir}/pvte/Prod-Env/Scripts" ]] && \
-    for file in  ${repos_dir}/pvte/Prod-Env/Scripts/*functions.sh
-    do
-      source "${file}"
-    done
-
-    [[ -d "${repos_dir}/scouts/Dev-Env/Scripts" ]] && \
-    for file in  ${repos_dir}/scouts/Dev-Env/Scripts/*functions.sh
-    do
-      source "${file}"
-    done
 
     case "$(hostname)" in
         'kore' )
@@ -71,11 +39,13 @@ function source_env_files () {
             alias_scouts_dev_update
             alias_scouts_dev_kore
             ;;
+        'titan' )
+        alias_phill_dev_titan
+        ;;
         'hughes' )
             alias_pvte_prod_hughes
             alias_pvte_prod_update
             ;;
-
     esac
 }
 
