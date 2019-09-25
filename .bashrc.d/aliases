@@ -34,6 +34,8 @@ function ipfs() {
     docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs peelvalley/ipfs-cli "${@}"
 }
 
+export -f ipfs
+
 alias curl=_curl
 alias dagr="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA phillmac/dagr_revamped:latest dagr.py"
 alias dagr-bulk="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA  phillmac/dagr_revamped:latest  dagr-bulk.py"
