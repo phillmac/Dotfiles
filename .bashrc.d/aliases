@@ -31,7 +31,7 @@ function rawurlencode () {
 }
 
 function ipfs() {
-    docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs peelvalley/ipfs-cli
+    docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs peelvalley/ipfs-cli "${@}"
 }
 
 alias curl=_curl
