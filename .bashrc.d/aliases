@@ -35,7 +35,7 @@ function ipfs() {
 }
 
 function youtube_dl () {
-    docker run --rm -v /callisto/Data:/workdir -w/workdir python bash -c "apt update && apt install ffmpeg -y && pip install youtube-dl && youtube-dl ${1}"
+    docker run --rm -v /callisto/Data:/workdir -w/workdir python bash -c "apt update && apt install ffmpeg -y && pip install youtube-dl && youtube-dl ${*}"
 }
 
 export -f ipfs
