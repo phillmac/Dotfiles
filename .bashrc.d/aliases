@@ -38,6 +38,10 @@ function youtube_dl () {
     docker run --rm -v /callisto/Data:/workdir -w/workdir python bash -c "apt update && apt install ffmpeg -y && pip install youtube-dl && youtube-dl ${*}"
 }
 
+function nodejs_dev () {
+    docker run --rm -it -w /wd   -v "$(pwd)":/wd node:latest bash -c "${*}"
+}
+
 export -f ipfs
 
 alias curl=_curl
@@ -48,3 +52,4 @@ alias dagr-dev="docker run --rm -it -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w
 alias orbitdbapi="docker run --rm -it -w /Repos/orbit-db-http-api  -v pvs-dev_cert-data:/certs -v/ananke/D/Source/Phill/Repos/Phill:/Repos --net pvs-dev_ipfs node:11.13 bash"
 alias orbitdbsprinkle="docker run --rm -d -w /var/www  -v/ananke/D/Source/Phill/Repos:/Repos --net pvs-dev_ipfs --name orbitdb_dash peelvalley/userfrosting"
 alias youtube-dl=youtube_dl
+alias nodejs-dev=nodejs_dev
