@@ -31,7 +31,12 @@ function rawurlencode () {
 }
 
 function ipfs() {
-    docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs peelvalley/ipfs-cli "${@}"
+    if [[ "$(docker network ls --format '{{.Name}}')" == *"phill-dev_ipfs"* ]]; then
+        docker run --rm -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs peelvalley/ipfs-cli "${@}"
+    else
+        docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs peelvalley/ipfs-cli "${@}"
+    fi
+
 }
 
 function youtube_dl () {
