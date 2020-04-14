@@ -34,8 +34,9 @@ function source_env_files () {
     done
 
 
-
-    case "$(hostname)" in
+    local hostname
+    hostname=$(hostname)
+    case "${hostname}" in
         'kore' )
             alias_pvs_dev_kore
             alias_pvs_dev_update
@@ -51,12 +52,15 @@ function source_env_files () {
             alias_scouts_dev_kore
             ;;
         'atlas' )
-            alias_phill_dev_titan
+            alias_phill_dev_atlas
             alias_phill_dev_update
             ;;
         'hughes' )
             alias_pvte_prod_hughes
             alias_pvte_prod_update
+            ;;
+        *)
+            echo "Unkown host ${hostname}"
             ;;
     esac
 }
