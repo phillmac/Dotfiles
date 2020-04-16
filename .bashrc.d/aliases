@@ -39,6 +39,21 @@ function ipfs() {
 
 }
 
+
+function ipfs_add_folder() {
+    local file
+    local folder
+    local file_hash
+
+    file="${1}"
+    folder="${2}"
+
+    file_hash=$(ipfs add --pin=false -Q "${file}")
+
+    ipfs files cp "/ipfs/${file_hash}" "/${folder}/${file}"
+
+}
+
 function youtube_dl () {
     docker run --rm -v /callisto/Data:/workdir -w/workdir python bash -c "apt update && apt install ffmpeg -y && pip install youtube-dl && youtube-dl ${*}"
 }
