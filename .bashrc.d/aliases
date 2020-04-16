@@ -63,6 +63,7 @@ function nodejs_dev () {
 }
 
 export -f ipfs
+export -f ipfs_add_folder
 
 alias curl=_curl
 alias dagr="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA phillmac/dagr_revamped:latest dagr.py"
