@@ -62,8 +62,14 @@ function nodejs_dev () {
     docker run --rm -it -w /wd   -v "$(pwd)":/wd node:latest bash -c "${*}"
 }
 
+function video_archive () {
+    docker run --rm -v /root:/root -v /callisto/Data/Upload/TV-Shows:/TV-Shows peelvalley/rclone-b2 "rclone move --verbose --transfers 1 /TV-Shows  b2-phill:Video-Archive2/TV-Shows"
+    docker run --rm -v /root:/root -v /callisto/Data/Upload/Movies:/Movies peelvalley/rclone-b2 "rclone move --verbose --transfers 1 --delete-empty-src-dirs /Movies  b2-phill:Video-Archive2/Movies"
+}
+
 export -f ipfs
 export -f ipfs_add_folder
+export -f video_archive
 
 alias curl=_curl
 alias dagr="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA phillmac/dagr_revamped:latest dagr.py"
