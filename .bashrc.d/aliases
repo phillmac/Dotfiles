@@ -49,7 +49,7 @@ function orbitdb-close () {
 
     dbAddr=$(rawurlencode "${1}")
 
-    curl -x DELETE "${host}/db/${dbAddr}"
+    curl -X DELETE "${host}/db/${dbAddr}"
 }
 
 function orbitdb-pending () {
@@ -59,7 +59,7 @@ function orbitdb-pending () {
 
     dbAddr=$(rawurlencode "${1}")
 
-    curl -x DELETE "${host}/db/pending"
+    curl "${host}/db/pending"
 }
 
 function ipfs() {
