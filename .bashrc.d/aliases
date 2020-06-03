@@ -41,6 +41,27 @@ function orbitdb-open () {
     curljsonp -d '{"awaitOpen": false}' "${host}/db/${dbAddr}"
 }
 
+function orbitdb-close () {
+    local host
+    local dbAddr
+
+    host=${2:-"https://orbitdb-api.phillm.net:3000"}
+
+    dbAddr=$(rawurlencode "${1}")
+
+    curl -x DELETE "${host}/db/${dbAddr}"
+}
+
+function orbitdb-pending () {
+    local dbAddr
+
+    host=${1:-"https://orbitdb-api.phillm.net:3000"}
+
+    dbAddr=$(rawurlencode "${1}")
+
+    curl -x DELETE "${host}/db/pending"
+}
+
 function ipfs() {
     if [[ "$(docker network ls --format '{{.Name}}')" == *"phill-dev_ipfs"* ]]; then
         docker run --rm -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs peelvalley/ipfs-cli "${@}"
