@@ -49,7 +49,7 @@ function orbitdb-close () {
 
     dbAddr=$(rawurlencode "${1}")
 
-    curl -X DELETE "${host}/db/${dbAddr}"
+    _curl -X DELETE "${host}/db/${dbAddr}"
 }
 
 function orbitdb-pending () {
@@ -57,7 +57,7 @@ function orbitdb-pending () {
 
     host=${1:-"https://orbitdb-api.phillm.net:3000"}
 
-    curl "${host}/pending"
+    _curl "${host}/pending"
 }
 
 function orbitdb-load () {
@@ -68,7 +68,7 @@ function orbitdb-load () {
 
     dbAddr=$(rawurlencode "${1}")
 
-    curl -X POST "${host}/db/${dbAddr}/load"
+    _curl -X POST "${host}/db/${dbAddr}/load"
 }
 
 function ipfs() {
