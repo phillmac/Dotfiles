@@ -57,9 +57,18 @@ function orbitdb-pending () {
 
     host=${1:-"https://orbitdb-api.phillm.net:3000"}
 
+    curl "${host}/pending"
+}
+
+function orbitdb-load () {
+    local host
+    local dbAddr
+
+    host=${2:-"https://orbitdb-api.phillm.net:3000"}
+
     dbAddr=$(rawurlencode "${1}")
 
-    curl "${host}/db/pending"
+    curl -X POST "${host}/db/${dbAddr}/load"
 }
 
 function ipfs() {
