@@ -38,7 +38,7 @@ function orbitdb-open () {
 
     dbAddr=$(rawurlencode "${1}")
 
-    curljsonp -d '{"awaitOpen": false}' "${host}/db/${dbAddr}"
+    curljsonp -d '{"awaitOpen": false, "fetchEntryTimeout": 300}' "${host}/db/${dbAddr}"
 }
 
 function orbitdb-close () {
