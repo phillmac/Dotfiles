@@ -72,7 +72,7 @@ function db.put () {
 
     dbAddr=$(rawurlencode "${2}")
 
-    curljsonp -d "${1}" "${host}/db/${dbAddr}/put"
+    curljsonp -d "[${*:1:1}]" "${host}/db/${dbAddr}/put"
 }
 
 function db.sync () {
@@ -84,7 +84,7 @@ function db.sync () {
 
     dbAddr=$(rawurlencode "${2}")
 
-    curljsonp -d "[${1}]" "${host}/db/${dbAddr}/sync"
+    curljsonp -d "[${*:1:1}]" "${host}/db/${dbAddr}/sync"
 }
 
 function db.replication () {
@@ -97,6 +97,35 @@ function db.replication () {
     dbAddr=$(rawurlencode "${1}")
 
     _curl "${host}/db/${dbAddr}" |  jsawk "'return this.replicationStatus'" | python -m json.tool
+
+
+}
+
+
+function db.status () {
+    local host
+    local dbAddr
+
+
+    host=${2:-${ORBIT_DB_HOST}}
+
+    dbAddr=$(rawurlencode "${1}")
+
+    _curl "${host}/db/${dbAddr}" |  jsawk "'return {loaded: this.loaded, ready: this.ready}'" | python -m json.tool
+
+
+}
+
+function db.info () {
+    local host
+    local dbAddr
+
+
+    host=${2:-${ORBIT_DB_HOST}}
+
+    dbAddr=$(rawurlencode "${1}")
+
+    _curl "${host}/db/${dbAddr}" | python -m json.tool
 
 
 }
