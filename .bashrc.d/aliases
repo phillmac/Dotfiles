@@ -30,7 +30,7 @@ function rawurlencode () {
   echo "${encoded}"
 }
 
-function orbitdb-open () {
+function db.open () {
     local host
     local dbAddr
 
@@ -38,10 +38,10 @@ function orbitdb-open () {
 
     dbAddr=$(rawurlencode "${1}")
 
-    curljsonp -d '{"awaitOpen": false, "fetchEntryTimeout": 300000}' "${host}/db/${dbAddr}" | python3 -m json.tool
+    curljsonp -d '{"awaitOpen": false, "fetchEntryTimeout": 30000}' "${host}/db/${dbAddr}" | python3 -m json.tool
 }
 
-function orbitdb-close () {
+function db.close () {
     local host
     local dbAddr
 
@@ -52,7 +52,7 @@ function orbitdb-close () {
     _curl -X DELETE "${host}/db/${dbAddr}"
 }
 
-function orbitdb-pending () {
+function orbitdb.pending () {
     local dbAddr
 
     host=${1:-"https://orbitdb-api.phillm.net:3000"}
@@ -60,7 +60,7 @@ function orbitdb-pending () {
     _curl "${host}/pending"
 }
 
-function orbitdb-load () {
+function db.load () {
     local host
     local dbAddr
 
@@ -70,6 +70,43 @@ function orbitdb-load () {
 
     _curl -X POST "${host}/db/${dbAddr}/load"
 }
+
+function db.all () {
+    local host
+    local dbAddr
+
+    host=${2:-"https://orbitdb-api.phillm.net:3000"}
+
+    dbAddr=$(rawurlencode "${1}")
+
+    _curl "${host}/db/${dbAddr}/all" | python3 -m json.tool
+}
+
+function db.put () {
+    local host
+    local dbAddr
+
+    host=${3:-"https://orbitdb-api.phillm.net:3000"}
+
+    dbAddr=$(rawurlencode "${2}")
+
+    curljsonp -d "${1}" "${host}/db/${dbAddr}/put"
+}
+
+function db.sync () {
+    local host
+    local dbAddr
+
+
+    host=${3:-"https://orbitdb-api.phillm.net:3000"}
+
+    dbAddr=$(rawurlencode "${2}")
+
+    curljsonp -d "[${1}]" "${host}/db/${dbAddr}/sync"
+}
+
+
+
 
 function ipfs() {
     if [[ "$(docker network ls --format '{{.Name}}')" == *"phill-dev_ipfs"* ]]; then
