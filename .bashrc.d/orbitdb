@@ -166,5 +166,5 @@ function db.oplog.values.hashes () {
 function db.heads.pin () {
     local hashes
     hashes=$(db.oplog.values.hashes "${@}")
-    ipfs pin add --progress "${hashes}"
+    ipfs pin add --progress ${hashes}
 }
