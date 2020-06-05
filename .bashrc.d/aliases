@@ -38,7 +38,7 @@ function orbitdb-open () {
 
     dbAddr=$(rawurlencode "${1}")
 
-    curljsonp -d '{"awaitOpen": false, "fetchEntryTimeout": 300000}' "${host}/db/${dbAddr}"
+    curljsonp -d '{"awaitOpen": false, "fetchEntryTimeout": 300000}' "${host}/db/${dbAddr}" | python3 -m json.tool
 }
 
 function orbitdb-close () {
