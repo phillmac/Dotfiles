@@ -1,0 +1,8 @@
+#!/bin/bash
+
+
+ORBIT_DB_HOST="https://orbitdb-api.phillm.net:3000"
+ORBIT_DB_ENTRIES_TIMEOUT=$((30 * 1000))
+
+export ORBIT_DB_HOST
+export ORBIT_DB_ENTRIES_TIMEOUT

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+for file in "${HOME}/.bashrc.d/$(hostname).bashrc.d"/*
+do
+    source "${file}"
+done
