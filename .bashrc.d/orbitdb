@@ -170,7 +170,7 @@ function db.heads.pin () {
         hashes+=("$hash")
         if [[ ${#hashes[@]} -ge ${IPFS_PIN_BATCH_COUNT} ]]; then
             echo "Pinning ${hashes[*]}"
-            ipfs pin add --progress "${hashes[@]}" > /dev/null &
+            ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}" > /dev/null &
             sleep 30
         fi
     done
