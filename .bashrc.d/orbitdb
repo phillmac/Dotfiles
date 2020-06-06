@@ -173,5 +173,6 @@ function db.heads.pin () {
             ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
             sleep 30
         fi
+        ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
     done
 }
