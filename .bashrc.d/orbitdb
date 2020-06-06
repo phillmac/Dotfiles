@@ -174,8 +174,8 @@ function db.heads.pin () {
             hashes=()
             sleep 30
         fi
-        # Pin leftover hashes batch < 100
-        echo "Pinning ${hashes[*]}"
-        ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
     done
+    # Pin leftover hashes batch < 100
+    echo "Pinning ${hashes[*]}"
+    ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
 }
