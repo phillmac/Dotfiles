@@ -164,7 +164,14 @@ function db.oplog.values.hashes () {
 }
 
 function db.heads.pin () {
-    local hashes
-    hashes=$(db.oplog.values.hashes "${@}")
-    ipfs pin add --progress ${hashes}
+    declare -a hashes=()
+    for hash in $(db.oplog.values.hashes "${@}")
+    do
+        hashes+=("$hash")
+        if [[ ${#hashes[@]} -ge ${IPFS_PIN_BATCH_COUNT} ]]; then
+            echo "Pinning ${hashes[*]}"
+            ipfs pin add --progress "${hashes[@]}"
+            hashes=()
+        fi
+    done
 }
