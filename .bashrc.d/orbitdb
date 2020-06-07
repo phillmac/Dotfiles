@@ -179,3 +179,36 @@ function db.heads.pin () {
     echo "Pinning ${hashes[*]}"
     ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
 }
+
+function db.events () {
+    local host
+    local dbAddr
+    local events
+
+
+    host=${3:-${ORBIT_DB_HOST}}
+
+    dbAddr=$(rawurlencode "${2}")
+
+    events=$(rawurlencode "${1}")
+
+    _curl "${host}/db/${dbAddr}/events/${events}"
+}
+
+export -f db.open
+export -f db.close
+export -f orbitdb.pending
+export -f db.load
+export -f db.all
+export -f db.get
+export -f db.put
+export -f db.sync
+export -f db.replication
+export -f db.status
+export -f info
+export -f db.oplog.heads
+export -f db.oplog.values
+export -f db.oplog.values.hashes
+export -f db.heads.pin
+export -f db.events
+
