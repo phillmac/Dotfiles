@@ -205,7 +205,7 @@ export -f db.put
 export -f db.sync
 export -f db.replication
 export -f db.status
-export -f info
+export -f db.info
 export -f db.oplog.heads
 export -f db.oplog.values
 export -f db.oplog.values.hashes
