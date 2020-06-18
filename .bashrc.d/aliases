@@ -58,6 +58,7 @@ function ipfs_find_add_folder() {
 
 function ipfs_add_folder() {
     local file
+    local fname
     local folder
     local file_hash
     local existing
@@ -76,8 +77,9 @@ function ipfs_add_folder() {
     echo "Adding ${file}"
 
     file_hash=$(ipfs add --pin=false -Q "${file}")
+    fname=$(basename "${file}")
 
-    ipfs files cp "/ipfs/${file_hash}" "/${folder}/${file}"
+    ipfs files cp "/ipfs/${file_hash}" "/${folder}/${fname}"
 
 }
 
