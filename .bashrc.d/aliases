@@ -65,19 +65,19 @@ function ipfs_add_folder() {
 
     file="${1#"./"}"
     folder="${2}"
+    fname=$(basename "${file}")
 
     while read -r existing
     do
-    if [[ "${file}" = "${existing}" ]]; then
-        echo "Skiping existing file ${file}"
+    if [[ "${fname}" = "${existing}" ]]; then
+        echo "Skiping existing file ${fname}"
         return
     fi
     done < <(ipfs files ls "/${folder}")
 
-    echo "Adding ${file}"
+    echo "Adding ${fname}"
 
     file_hash=$(ipfs add --pin=false -Q "${file}")
-    fname=$(basename "${file}")
 
     ipfs files cp "/ipfs/${file_hash}" "/${folder}/${fname}"
 
