@@ -36,7 +36,7 @@ function jsawk () {
 
 
 function ipfs() {
-    if [[ "$(docker network ls --format '{{.Name}}')" == *"phill-dev_ipfs"* ]]; then
+    if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]; then
         docker run --rm -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs peelvalley/ipfs-cli "${@}"
     else
         docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs peelvalley/ipfs-cli "${@}"
@@ -62,6 +62,7 @@ function ipfs_add_folder() {
     local folder
     local file_hash
     local existing
+    local isExisting=false
 
     file="${1#"./"}"
     folder="${2}"
@@ -69,11 +70,15 @@ function ipfs_add_folder() {
 
     while read -r existing
     do
-    if [[ "${fname}" = "${existing}" ]]; then
+        if [[ "${fname}" = "${existing}" ]]; then
+            isExisting=true
+        fi
+    done < <(ipfs files ls "/${folder}")
+
+    if [[ ${isExisting} = true ]]; then
         echo "Skiping existing file ${fname}"
         return
     fi
-    done < <(ipfs files ls "/${folder}")
 
     echo "Adding ${fname}"
 
