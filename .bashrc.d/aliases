@@ -64,7 +64,7 @@ function ipfs_add_folder() {
     local existing
     local isExisting=false
 
-    file="${1#"./"}"
+    file="${1#'./'}"
     folder="${2}"
     fname=$(basename "${file}")
 
@@ -88,6 +88,32 @@ function ipfs_add_folder() {
 
 }
 
+function ipfs_provide_folder() {
+    local folder
+    local fname
+    local listing
+    local file_hash
+    local size
+    local len
+
+    folder="${1}"
+    echo "Recursing into ${folder}"
+
+    while read -r -a listing
+    do
+        size=${listing[-1]}
+        len=$((${#listing[@]} -2 ))
+        fname=$(basename "${listing[*]:0:$len}")
+        if [[ "${size}" -eq 0 ]]; then
+           ipfs_provide_folder "${folder}/${fname}"
+        else
+            file_hash=${listing[-2]}
+            echo "Providing ${fname} - ${file_hash}"
+            ipfs dht provide --timeout 900s "${file_hash}"
+        fi
+    done < <(ipfs files ls -l "/${folder}")
+}
+
 function youtube_dl () {
     docker run --rm -v /callisto/Data:/workdir -w/workdir python bash -c "apt update && apt install ffmpeg -y && pip install youtube-dl && youtube-dl ${*}"
 }
@@ -103,6 +129,8 @@ function video_archive () {
 
 export -f ipfs
 export -f ipfs_add_folder
+export -f ipfs_find_add_folder
+export -f ipfs_provide_folder
 export -f video_archive
 
 alias curl=_curl
