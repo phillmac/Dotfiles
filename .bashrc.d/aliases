@@ -108,7 +108,7 @@ function ipfs_provide_folder() {
            ipfs_provide_folder "${folder}/${fname}"
         else
             file_hash=${listing[-2]}
-            echo "Providing ${fname} - ${file_hash}"
+            echo "$(date) Providing ${fname} - ${file_hash}"
             ipfs dht provide --timeout 900s "${file_hash}"
         fi
     done < <(ipfs files ls -l "/${folder}")
