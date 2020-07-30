@@ -180,6 +180,24 @@ function db.heads.pin () {
     ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
 }
 
+
+function db.heads.unpin () {
+    declare -a hashes=()
+    for hash in $(db.oplog.values.hashes "${@}")
+    do
+        hashes+=("$hash")
+        if [[ ${#hashes[@]} -ge ${IPFS_PIN_BATCH_COUNT} ]]; then
+            ipfs pin rm --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
+            hashes=()
+            sleep 30
+        fi
+    done
+    # Pin leftover hashes batch < 100
+    echo "Pinning ${hashes[*]}"
+    ipfs pin rm --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
+}
+
+
 function db.events () {
     local host
     local dbAddr
