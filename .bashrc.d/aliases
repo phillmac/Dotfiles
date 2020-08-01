@@ -123,8 +123,8 @@ function nodejs_dev () {
 }
 
 function video_archive () {
-    docker run --rm -v /root:/root -v /callisto/Data/Upload/TV-Shows:/TV-Shows peelvalley/rclone-b2 "rclone move --verbose --bwlimit 400k --transfers 1 /TV-Shows  b2-phill:Video-Archive2/TV-Shows"
-    docker run --rm -v /root:/root -v /callisto/Data/Upload/Movies:/Movies peelvalley/rclone-b2 "rclone move --verbose --transfers 1 --bwlimit 400k --delete-empty-src-dirs /Movies  b2-phill:Video-Archive2/Movies"
+    docker run --rm -v /root:/root -v /callisto/Data/Upload/TV-Shows:/TV-Shows peelvalley/rclone-b2 "rclone move --verbose --bwlimit 0.625M --transfers 1 /TV-Shows  b2-phill:Video-Archive2/TV-Shows"
+    docker run --rm -v /root:/root -v /callisto/Data/Upload/Movies:/Movies peelvalley/rclone-b2 "rclone move --verbose --transfers 1 --bwlimit 0.625M --delete-empty-src-dirs /Movies  b2-phill:Video-Archive2/Movies"
 }
 
 export -f ipfs
