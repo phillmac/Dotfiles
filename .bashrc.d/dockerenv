@@ -20,17 +20,18 @@ function source_env_files () {
         [[ "${DOCKERENV_DEBUG}" ]] && {
             echo "Searching for ${scripts_dir}"
         }
-        [[ -d "${repos_dir}/${repo}/Scripts" ]] && \
-        [[ "${DOCKERENV_DEBUG}" ]] && {
-            echo "Found ${scripts_dir}"
+        [[ -d "${repos_dir}/${repo}/Scripts" ]] && {
+            [[ "${DOCKERENV_DEBUG}" ]] && {
+                echo "Found ${scripts_dir}"
+            }
+            for file in  "${repos_dir}/${repo}"/Scripts/*functions.sh
+            do
+            [[ "${DOCKERENV_DEBUG}" ]] && {
+                echo "Sourcing ${file}"
+            }
+            source "${file}"
+            done
         }
-        for file in  "${repos_dir}/${repo}"/Scripts/*functions.sh
-        do
-        [[ "${DOCKERENV_DEBUG}" ]] && {
-            echo "Sourcing ${file}"
-        }
-        source "${file}"
-        done
     done
 
 
