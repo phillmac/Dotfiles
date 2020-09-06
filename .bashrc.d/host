@@ -1,8 +1,16 @@
 #!/bin/bash
-
+[[ "${HOSTENV_DEBUG}" ]] && {
+    echo "Searching for ${HOME}/.bashrc.d/$(hostname -s).bashrc.d"
+}
 [[ -d "${HOME}/.bashrc.d/$(hostname -s).bashrc.d" ]] && {
+    [[ "${HOSTENV_DEBUG}" ]] && {
+    echo "Found ${HOME}/.bashrc.d/$(hostname -s).bashrc.d"
+    }
     for file in "${HOME}/.bashrc.d/$(hostname -s).bashrc.d"/*
     do
+        [[ "${HOSTENV_DEBUG}" ]] && {
+                echo "Sourcing ${file}"
+        }
         source "${file}"
     done
 }
