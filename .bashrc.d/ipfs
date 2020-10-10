@@ -80,7 +80,7 @@ function ipfs.pin.monitor () {
     resolve_timeout=${3:-$IPFS_RESOLVE_TIMEOUT}
     sleep_delay=${4:-$IPFS_PIN_SLEEP}
 
-    if [[ -z "${ipns}" ]];
+    if [[ -z "${ipns}" ]]
     then
         echo "ipns addr is required"
         return 252
@@ -94,7 +94,13 @@ function ipfs.pin.monitor () {
             sleep "${sleep_delay}"
             continue
         fi
-        ipfs pin add --progress --timeout "${pin_timeout}" "${ipns}"
+        echo "Pinning ${rnew}"
+        ipfs pin add --progress --timeout "${pin_timeout}" "${rnew}"
+        if [[ -n "${rlast}" ]]
+        then
+            echo "Removing pin for ${rlast}"
+            ipfs pin rm "${rlast}"
+        fi
         rlast=${rnew}
         date
     fi
