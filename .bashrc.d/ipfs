@@ -1,0 +1,106 @@
+#! /bin/bash
+
+# function ipfs.hashes.get () {
+#     local fileHash
+#     declare -a hashes=()
+#     while read -r fileHash
+#     do
+#         hashes+=("${fileHash}")
+#         if [[ ${#hashes[@]} -ge ${IPFS_GET_BATCH_COUNT} ]]; then
+#             echo "Fetching ${hashes[*]}"
+#             ipfs get --timeout "${IPFS_GET_TIMEOUT}" "${hashes[@]}"
+#             hashes=()
+#             sleep 30
+#         fi
+#     done < hashes.txt
+#     # Get leftover hashes batch < 100
+#     echo "Fetching ${hashes[*]}"
+#     ipfs get --timeout "${IPFS_GET_TIMEOUT}" "${hashes[@]}"
+# }
+
+# function ipfs.ls.recursive.hash () {
+#     local addr
+#     local url
+#     local result
+#     local links
+#     local links_formatted
+#     local linkitem
+#     local itemhash
+
+#     addr=${1:-$IPFS_ADDR}
+
+#     if [[ -z "${addr}" ]];
+#     then
+#         echo "IPFS addr is required"
+#         return 252
+#     fi
+
+#     url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${addr}"
+#     result=$(curl "${url}")
+#     links=$(jq -r ".Objects[].Links" <<< "${result}")
+#     local links_formatted=$(jsawk "'const links=this; return links.map(function(l) {return l.Name + String.fromCharCode(32) + l.type}).join(String.fromCharCode(10))'" <<<"${links}")
+
+#     for linkitem in ${links}
+#     do
+#         echo "$linkitem"
+#     done
+#     # for itemhash in ${hasheslist}
+#     # do
+#     #     echo "${itemhash}"
+#     #     ipfs.ls.recursive.hash "${itemhash}"
+#     # done
+# }
+
+function ipfs.pins.prune () {
+    local pinHash
+    local resp
+    ipfs pin ls | grep -v indirect | cut -f 1 -d " " > pins.txt
+
+    mkfifo inp
+
+    while read -r pinHash
+    do
+        echo "Hash is ${pinHash}"
+        ipfs ls "${pinHash}"
+        resp=$(<inp)
+        [[ "${resp}" == "q" ]] && return
+        [[ "${resp}" == "y" ]] && ipfs pin rm "${pinHash}"
+    done < pins.txt
+}
+
+function ipfs.pin.monitor () {
+    local rlast
+    local ipns
+    local rnew
+    local pin_timeout
+    local resolve_timeout
+    local sleep_delay
+    ipns=${1:-$IPFS_PIN_HASH}
+    pin_timeout=${2:-$IPFS_PIN_TIMEOUT}
+    resolve_timeout=${3:-$IPFS_RESOLVE_TIMEOUT}
+    sleep_delay=${4:-$IPFS_PIN_SLEEP}
+
+    if [[ -z "${ipns}" ]];
+    then
+        echo "ipns addr is required"
+        return 252
+    fi
+    while true
+    do
+      if rnew=$(ipfs resolve --timeout "${resolve_timeout}" "${ipns}")
+      then
+        if [[ "${rlast}" == "${rnew}" ]]
+        then
+            sleep "${sleep_delay}"
+            continue
+        fi
+        ipfs pin add --progress --timeout "${pin_timeout}" "${ipns}"
+        rlast=${rnew}
+        date
+    fi
+    done
+}
+
+# export -f ipfs.hashes.get
+export -f ipfs.pins.prune
+export -f ipfs.pin.monitor
