@@ -38,6 +38,16 @@ function source_env_files () {
     local hostname
     hostname=$(hostname)
     case "${hostname}" in
+        'charon' )
+            alias_pvs_dev_charon
+            alias_pvs_dev_update
+            #alias_pvs_build_charon
+            #alias_pvs_build_update
+            #alias_kapcd_dev_charon
+            #alias_kapcd_dev_update
+            alias_phill_dev_charon
+            alias_phill_dev_update
+            ;;
         'kore' )
             alias_pvs_dev_kore
             alias_pvs_dev_update
