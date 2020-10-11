@@ -54,7 +54,7 @@
 function ipfs.pins.prune () {
     local pinHash
     local resp
-    ipfs pin ls | grep -v indirect | cut -f 1 -d " " > pins.txt
+    ipfs pin ls | grep -v indirect | cut -f 1 -d " " | sort > pins.txt
 
     mkfifo inp
 
