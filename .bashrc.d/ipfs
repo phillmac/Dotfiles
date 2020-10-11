@@ -54,17 +54,23 @@
 function ipfs.pins.prune () {
     local pinHash
     local resp
+    local total
+    local pcount
     ipfs pin ls | grep -v indirect | cut -f 1 -d " " | sort > pins.txt
 
     mkfifo inp
 
+    total=$(wc -l < pins.txt)
+    pcount=1
+
     while read -r pinHash
     do
-        echo "Hash is ${pinHash}"
+        echo "Hash is ${pinHash} [${pcount}/${total}]"
         ipfs ls "${pinHash}"
         resp=$(<inp)
         [[ "${resp}" == "q" ]] && return
         [[ "${resp}" == "y" ]] && ipfs pin rm "${pinHash}"
+        ((pcount++))
     done < pins.txt
 }
 
