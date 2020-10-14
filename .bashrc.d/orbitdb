@@ -168,16 +168,16 @@ function db.heads.pin () {
     for hash in $(db.oplog.values.hashes "${@}")
     do
         hashes+=("$hash")
-        if [[ ${#hashes[@]} -ge ${IPFS_PIN_BATCH_COUNT} ]]; then
+        if [[ ${#hashes[@]} -ge ${ORBIT_DB_PIN_BATCH_COUNT} ]]; then
             echo "Pinning ${hashes[*]}"
-            ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
+            ipfs pin add --progress --timeout "${ORBIT_DB_PIN_TIMEOUT}" "${hashes[@]}"
             hashes=()
             sleep 30
         fi
     done
     # Pin leftover hashes batch < 100
     echo "Pinning ${hashes[*]}"
-    ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
+    ipfs pin add --progress --timeout "${ORBIT_DB_PIN_TIMEOUT}" "${hashes[@]}"
 }
 
 
@@ -186,15 +186,15 @@ function db.heads.unpin () {
     for hash in $(db.oplog.values.hashes "${@}")
     do
         hashes+=("$hash")
-        if [[ ${#hashes[@]} -ge ${IPFS_PIN_BATCH_COUNT} ]]; then
-            ipfs pin rm --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
+        if [[ ${#hashes[@]} -ge ${ORBIT_DB_PIN_BATCH_COUNT} ]]; then
+            ipfs pin rm --timeout "${ORBIT_DB_PIN_TIMEOUT}" "${hashes[@]}"
             hashes=()
             sleep 30
         fi
     done
     # Pin leftover hashes batch < 100
     echo "Pinning ${hashes[*]}"
-    ipfs pin rm --timeout "${IPFS_PIN_TIMEOUT}" "${hashes[@]}"
+    ipfs pin rm --timeout "${ORBIT_DB_PIN_TIMEOUT}" "${hashes[@]}"
 }
 
 
