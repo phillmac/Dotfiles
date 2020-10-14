@@ -51,14 +51,17 @@
 #     # done
 # }
 
+function ipfs.pin.ls () {
+    ipfs pin ls | grep -v indirect | cut -f 1 -d " " | sort > pins.txt
+}
+
 function ipfs.pins.prune () {
     local pinHash
     local resp
     local total
     local pcount
-    ipfs pin ls | grep -v indirect | cut -f 1 -d " " | sort > pins.txt
 
-    mkfifo inp
+    test -f inp || mkfifo inp
 
     total=$(wc -l < pins.txt)
     pcount=1
@@ -72,6 +75,23 @@ function ipfs.pins.prune () {
         [[ "${resp}" == "y" ]] && ipfs pin rm "${pinHash}"
         ((pcount++))
     done < pins.txt
+}
+
+function ipfs.pins.details () {
+    local pinHash
+    local resp
+    local total
+    local pcount
+
+    total=$(wc -l < pins.txt)
+    pcount=1
+
+    while read -r pinHash
+    do
+        echo "Hash is ${pinHash} [${pcount}/${total}]"
+        ipfs ls "${pinHash}"
+        ((pcount++))
+    done < pins.txt | tee pins.details.txt
 }
 
 function ipfs.pin.monitor () {
@@ -101,13 +121,16 @@ function ipfs.pin.monitor () {
             continue
         fi
         echo "Pinning ${rnew}"
-        ipfs pin add --progress --timeout "${pin_timeout}" "${rnew}"
-        if [[ -n "${rlast}" ]]
+
+        if ipfs pin add --progress --timeout "${pin_timeout}" "${rnew}"
         then
-            echo "Removing pin for ${rlast}"
-            ipfs pin rm "${rlast}"
+            if [[ -n "${rlast}" ]]
+            then
+                echo "Removing pin for ${rlast}"
+                ipfs pin rm "${rlast}"
+            fi
+            rlast=${rnew}
         fi
-        rlast=${rnew}
         date
     fi
     done
