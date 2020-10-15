@@ -176,5 +176,10 @@ function ipfs.pin.monitor () {
 }
 
 # export -f ipfs.hashes.get
+export ipfs.ls
 export -f ipfs.pins.prune
 export -f ipfs.pin.monitor
+
+IPFS_API="api/v0"
+
+export IPFS_API
