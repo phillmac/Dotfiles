@@ -1,58 +1,35 @@
 #! /bin/bash
 
-# function ipfs.hashes.get () {
-#     local fileHash
-#     declare -a hashes=()
-#     while read -r fileHash
-#     do
-#         hashes+=("${fileHash}")
-#         if [[ ${#hashes[@]} -ge ${IPFS_GET_BATCH_COUNT} ]]; then
-#             echo "Fetching ${hashes[*]}"
-#             ipfs get --timeout "${IPFS_GET_TIMEOUT}" "${hashes[@]}"
-#             hashes=()
-#             sleep 30
-#         fi
-#     done < hashes.txt
-#     # Get leftover hashes batch < 100
-#     echo "Fetching ${hashes[*]}"
-#     ipfs get --timeout "${IPFS_GET_TIMEOUT}" "${hashes[@]}"
-# }
+function ipfs.get.recursive () {
+    while read -r hash
+    do
+        echo "$(date) Fetching ${hash}"
+        curl -s "${IPFS_HTTP_GATEWAY}/ipfs/${hash}" > /dev/null
+    done < <(ipfs.ls.recursive "${*}")
+}
 
-# function ipfs.ls.recursive.hash () {
-#     local addr
-#     local url
-#     local result
-#     local links
-#     local links_formatted
-#     local linkitem
-#     local itemhash
+function ipfs.ls.recursive () {
+    local entries
+    local itemtype
+    local itemhash
+    local itemname
 
-#     addr=${1:-$IPFS_ADDR}
-
-#     if [[ -z "${addr}" ]];
-#     then
-#         echo "IPFS addr is required"
-#         return 252
-#     fi
-
-#     url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${addr}"
-#     result=$(curl "${url}")
-#     links=$(jq -r ".Objects[].Links" <<< "${result}")
-#     local links_formatted=$(jsawk "'const links=this; return links.map(function(l) {return l.Name + String.fromCharCode(32) + l.type}).join(String.fromCharCode(10))'" <<<"${links}")
-
-#     for linkitem in ${links}
-#     do
-#         echo "$linkitem"
-#     done
-#     # for itemhash in ${hasheslist}
-#     # do
-#     #     echo "${itemhash}"
-#     #     ipfs.ls.recursive.hash "${itemhash}"
-#     # done
-# }
+    echo "Resolving ${*}"
+    entries=$(ipfs.ls "${*}" | ipfs.links.info)
+    while read -r itemtype itemhash itemname
+    do
+        echo "${itemhash}" "${itemname}" >&2
+        echo "${itemhash}"
+        if (( itemtype == 1))
+        then
+            ipfs.ls.recursive.hash "${1}/${itemname}"
+        fi
+    done <<< "${entries}"
+}
 
 function ipfs.ls () {
     local addr
+    local addr_encoded
     local url
     local result
 
@@ -64,11 +41,19 @@ function ipfs.ls () {
         return 252
     fi
 
-    url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${addr}"
+    addr_encoded=$(rawurlencode "${addr}")
+
+    url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${addr_encoded}"
+    echo "url is ${url}" >&2
 
     result=$(curl "${url}")
 
     jq -r ".Objects[].Links" <<< "${result}"
+}
+
+function ipfs.links.info () {
+    # shellcheck disable=SC2006,SC2154,SC2086
+    jsawk "'return [this.Type,  this.Hash, this.Name].join(String.fromCharCode(32))'" -a "'return this.join(String.fromCharCode(10))'"
 }
 
 function ipfs.pin.ls () {
@@ -175,8 +160,9 @@ function ipfs.pin.monitor () {
     done
 }
 
-# export -f ipfs.hashes.get
 export -f ipfs.ls
+export -f ipfs.ls.recursive
+export -f ipfs.get.recursive
 export -f ipfs.pins.prune
 export -f ipfs.pin.monitor
 
