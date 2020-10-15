@@ -22,7 +22,7 @@ function ipfs.ls.recursive () {
         echo "${itemhash}"
         if (( itemtype == 1))
         then
-            ipfs.ls.recursive.hash "${1}/${itemname}"
+            ipfs.ls.recursive "${1}/${itemname}"
         fi
     done <<< "${entries}"
 }
@@ -43,8 +43,10 @@ function ipfs.ls () {
 
     addr_encoded=$(rawurlencode "${addr}")
 
+    [[ -n "${IPFS_DEBUG}" ]] &&  echo "addr_encoded is ${addr_encoded}" >&2
+
     url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${addr_encoded}"
-    echo "url is ${url}" >&2
+    [[ -n "${IPFS_DEBUG}" ]] &&  echo "url is ${url}" >&2
 
     result=$(curl "${url}")
 
