@@ -176,7 +176,7 @@ function ipfs.pin.monitor () {
 }
 
 # export -f ipfs.hashes.get
-export ipfs.ls
+export -f ipfs.ls
 export -f ipfs.pins.prune
 export -f ipfs.pin.monitor
 
