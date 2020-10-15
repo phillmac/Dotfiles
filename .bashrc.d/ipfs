@@ -1,9 +1,11 @@
 #! /bin/bash
 
 function ipfs.get.recursive () {
-    while read -r hash
+    local itemhash
+    local itempath
+    while read -r itemhash itempath
     do
-        echo "$(date) Fetching ${hash}"
+        echo "$(date) Fetching ${itempath}"
         curl -s "${IPFS_HTTP_GATEWAY}/ipfs/${hash}" > /dev/null
     done < <(ipfs.ls.recursive "${*}")
 }
@@ -18,8 +20,7 @@ function ipfs.ls.recursive () {
     entries=$(ipfs.ls "${*}" | ipfs.links.info)
     while read -r itemtype itemhash itemname
     do
-        echo "${itemhash}" "${itemname}" >&2
-        echo "${itemhash}"
+        echo "${itemhash}" "${1}/${itemname}"
         if (( itemtype == 1))
         then
             ipfs.ls.recursive "${1}/${itemname}"
