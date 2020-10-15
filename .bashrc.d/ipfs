@@ -51,6 +51,26 @@
 #     # done
 # }
 
+function ipfs.ls () {
+    local addr
+    local url
+    local result
+
+    addr=${1:-$IPFS_ADDR}
+
+    if [[ -z "${addr}" ]];
+    then
+        echo "IPFS addr is required"
+        return 252
+    fi
+
+    url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${addr}"
+
+    result=$(curl "${url}")
+
+    jq -r ".Objects[].Links" <<< "${result}"
+}
+
 function ipfs.pin.ls () {
     ipfs pin ls | grep -v indirect | cut -f 1 -d " " | sort > pins.txt
 }
@@ -94,7 +114,26 @@ function ipfs.pins.details () {
     done < pins.txt | tee pins.details.txt
 }
 
+function check_lockout_time () {
+    local currenttime
+
+    if [[ -z  "${IPFS_PIN_ALLOWED_START}" ]] || [[ -z "${IPFS_PIN_ALLOWED_FIN}" ]]
+    then
+        return 0
+    fi
+
+    currenttime=$(date +%H:%M)
+
+    if [[ "${currenttime}" > "${IPFS_PIN_ALLOWED_START}" ]] || [[ "${currenttime}" < "${IPFS_PIN_ALLOWED_FIN}" ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
 function ipfs.pin.monitor () {
+    local currenttime
     local rlast
     local ipns
     local rnew
@@ -113,26 +152,26 @@ function ipfs.pin.monitor () {
     fi
     while true
     do
-      if rnew=$(ipfs resolve --timeout "${resolve_timeout}" "${ipns}")
-      then
-        if [[ "${rlast}" == "${rnew}" ]]
+        if rnew=$(ipfs resolve --timeout "${resolve_timeout}" "${ipns}")
         then
-            sleep "${sleep_delay}"
-            continue
-        fi
-        echo "Pinning ${rnew}"
-
-        if ipfs pin add --progress --timeout "${pin_timeout}" "${rnew}"
-        then
-            if [[ -n "${rlast}" ]]
+            if ! check_lockout_time || [[ "${rlast}" == "${rnew}" ]]
             then
-                echo "Removing pin for ${rlast}"
-                ipfs pin rm "${rlast}"
+                sleep "${sleep_delay}"
+                continue
             fi
-            rlast=${rnew}
+            echo "Pinning ${rnew}"
+
+            if ipfs pin add --progress --timeout "${pin_timeout}" "${rnew}"
+            then
+                if [[ -n "${rlast}" ]]
+                then
+                    echo "Removing pin for ${rlast}"
+                    ipfs pin rm "${rlast}"
+                fi
+                rlast=${rnew}
+            fi
+            date
         fi
-        date
-    fi
     done
 }
 
