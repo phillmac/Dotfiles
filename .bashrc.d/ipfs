@@ -5,7 +5,7 @@ function ipfs.get.recursive () {
     local itempath
     while read -r itemhash itempath
     do
-        echo "$(date) Fetching ${itempath}"
+        echo "$(date) Fetching ${itempath}" >&2
         curl -s "${IPFS_HTTP_GATEWAY}/ipfs/${itemhash}" > /dev/null
     done < <(ipfs.ls.recursive "${*}")
 }
@@ -16,7 +16,7 @@ function ipfs.ls.recursive () {
     local itemhash
     local itemname
 
-    echo "Resolving ${*}"
+    echo "Resolving ${*}" >&2
     entries=$(ipfs.ls "${*}" | ipfs.links.info)
     while read -r itemtype itemhash itemname
     do
@@ -38,7 +38,7 @@ function ipfs.ls () {
 
     if [[ -z "${addr}" ]];
     then
-        echo "IPFS addr is required"
+        echo "IPFS addr is required" >&2
         return 252
     fi
 
