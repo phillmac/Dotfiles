@@ -16,7 +16,7 @@ function ipfs.ls.recursive () {
     local itemhash
     local itemname
 
-    echo "Resolving ${*}" >&2
+    echo "$(date) Resolving ${*}" >&2
     entries=$(ipfs.ls "${*}" | ipfs.links.info)
     while read -r itemtype itemhash itemname
     do
