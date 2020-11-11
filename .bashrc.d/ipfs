@@ -28,6 +28,66 @@ function ipfs.ls.recursive () {
     done <<< "${entries}"
 }
 
+function ipfs.ls.recursive.dirs () {
+    local entries
+    local itemtype
+    local itemhash
+    local itemname
+
+    echo "$(date) Resolving ${*}" >&2
+    entries=$(ipfs.ls "${*}" | ipfs.links.info)
+    while read -r itemtype itemhash itemname
+    do
+        if (( itemtype == 1))
+        then
+            echo "${itemhash}" "${1}/${itemname}"
+            ipfs.ls.recursive.dirs "${1}/${itemname}"
+        fi
+    done <<< "${entries}"
+}
+
+function ipfs.ls.recursive.dirs () {
+    local itemtype
+    local itemhash
+    local itemname
+
+    echo "$(date) Resolving ${*}" >&2
+
+    while read -r itemtype itemhash itemname
+    do
+        if (( itemtype == 1))
+        then
+            echo "${itemhash}" "${1}/${itemname}"
+            ipfs.ls.recursive.dirs "${1}/${itemname}"
+        fi
+    done < <(ipfs.ls "${*}" | ipfs.links.info)
+}
+
+function ipfs.ls.recursive.dirs.filtered () {
+    local filter
+    local addr
+
+    addr=${1:-$IPFS_ADDR}
+    filter=${2:-$IPFS_FILTER}
+
+    if [[ -z "${addr}" ]];
+    then
+        echo "IPFS addr is required" >&2
+        return 252
+    fi
+
+    if [[ -z "${filter}" ]];
+    then
+        echo "IPFS filter is required" >&2
+        return 252
+    fi
+    
+    echo "filter is ${filter}" >&2
+
+    ipfs.ls.recursive.dirs "${addr}" | grep "${filter}"
+}
+
+
 function ipfs.ls () {
     local addr
     local addr_encoded
@@ -76,7 +136,7 @@ function ipfs.pins.prune () {
 
     while read -r pinHash
     do
-        echo "Hash is ${pinHash} [${pcount}/${total}]"
+        echo "Hash is ${pinHash} [${pcount}/${total}]" >&2
         ipfs ls "${pinHash}"
         resp=$(<inp)
         [[ "${resp}" == "q" ]] && return
@@ -96,7 +156,7 @@ function ipfs.pins.details () {
 
     while read -r pinHash
     do
-        echo "Hash is ${pinHash} [${pcount}/${total}]"
+        echo "Hash is ${pinHash} [${pcount}/${total}]" >&2
         ipfs ls "${pinHash}"
         ((pcount++))
     done < pins.txt | tee pins.details.txt
@@ -120,6 +180,58 @@ function check_lockout_time () {
     return 1
 }
 
+function ipfs.pin.dirs.filtered () {
+    local currenttime
+    local rlast
+    local ipns
+    local filter
+    local rnew
+    local pin_timeout
+    local resolve_timeout
+    local sleep_delay
+    local itemhash
+    local pathname
+    ipns=${1:-$IPFS_PIN_HASH}
+    filter=${2:-$IPFS_PIN_FILTER}
+    pin_timeout=${3:-$IPFS_PIN_TIMEOUT}
+    resolve_timeout=${4:-$IPFS_RESOLVE_TIMEOUT}
+    sleep_delay=${5:-$IPFS_PIN_SLEEP}
+
+    if [[ -z "${ipns}" ]]
+    then
+        echo "ipns addr is required" >&2
+        return 252
+    fi
+    
+    if [[ -z "${filter}" ]];
+    then
+        echo "IPFS filter is required" >&2
+        return 252
+    fi
+    
+    echo "filter is ${filter}" >&2
+    
+    while true
+    do
+        if rnew=$(ipfs resolve --timeout "${resolve_timeout}" "${ipns}")
+        then
+            if ! check_lockout_time || [[ "${rlast}" == "${rnew}" ]]
+            then
+                sleep "${sleep_delay}"
+                continue
+            fi
+            echo "Pinning ${rnew}" >&2
+            while read -r itemhash pathname
+            do
+                echo "Pinning folder ${pathname}" >&2
+                ipfs pin add --progress "${itemhash}"
+            done < <(ipfs.ls.recursive.dirs.filtered "${ipns}" "${filter}")
+            rlast=${rnew}
+            date
+        fi
+    done
+}
+
 function ipfs.pin.monitor () {
     local currenttime
     local rlast
@@ -135,7 +247,7 @@ function ipfs.pin.monitor () {
 
     if [[ -z "${ipns}" ]]
     then
-        echo "ipns addr is required"
+        echo "ipns addr is required" >&2
         return 252
     fi
     while true
@@ -147,13 +259,13 @@ function ipfs.pin.monitor () {
                 sleep "${sleep_delay}"
                 continue
             fi
-            echo "Pinning ${rnew}"
+            echo "Pinning ${rnew}" >&2
 
             if ipfs pin add --progress --timeout "${pin_timeout}" "${rnew}"
             then
                 if [[ -n "${rlast}" ]]
                 then
-                    echo "Removing pin for ${rlast}"
+                    echo "Removing pin for ${rlast}" >&2
                     ipfs pin rm "${rlast}"
                 fi
                 rlast=${rnew}
@@ -165,8 +277,10 @@ function ipfs.pin.monitor () {
 
 export -f ipfs.ls
 export -f ipfs.ls.recursive
-export -f ipfs.get.recursive
+export -f ipfs.ls.recursive.dirs
+export -f ipfs.get.recursive.dirs.filtered
 export -f ipfs.pins.prune
+ecport -f ipfs.pin.dirs.filtered
 export -f ipfs.pin.monitor
 
 IPFS_API="api/v0"
