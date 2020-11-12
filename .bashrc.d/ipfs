@@ -278,7 +278,8 @@ function ipfs.pin.monitor () {
 export -f ipfs.ls
 export -f ipfs.ls.recursive
 export -f ipfs.ls.recursive.dirs
-export -f ipfs.get.recursive.dirs.filtered
+export -f ipfs.ls.recursive.dirs.filtered
+export -f ipfs.get.recursive
 export -f ipfs.pins.prune
 ecport -f ipfs.pin.dirs.filtered
 export -f ipfs.pin.monitor
