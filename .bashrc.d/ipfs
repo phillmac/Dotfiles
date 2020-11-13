@@ -281,7 +281,7 @@ export -f ipfs.ls.recursive.dirs
 export -f ipfs.ls.recursive.dirs.filtered
 export -f ipfs.get.recursive
 export -f ipfs.pins.prune
-ecport -f ipfs.pin.dirs.filtered
+export -f ipfs.pin.dirs.filtered
 export -f ipfs.pin.monitor
 
 IPFS_API="api/v0"
