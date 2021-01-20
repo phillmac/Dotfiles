@@ -282,7 +282,7 @@ function getIPNSBase58BTC() {
  
     if [[ -z "${ipns}" ]]
     then
-	echo "IPNS_RESOLVE_ADDR is required"
+	    echo "IPNS_RESOLVE_ADDR is required"
         return 252
     fi
 
