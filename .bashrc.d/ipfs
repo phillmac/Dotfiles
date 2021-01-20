@@ -275,6 +275,21 @@ function ipfs.pin.monitor () {
     done
 }
 
+function getIPNSBase58BTC() {
+    local cid
+    local ipns
+    ipns=${1=:$IPNS_RESOLVE_ADDR}
+ 
+    if [[ -z "${ipns}" ]]
+    then
+	echo "IPNS_RESOLVE_ADDR is required"
+        return 252
+    fi
+
+    cid=$(ipfs resolve "${ipns}" --timeout "${IPFS_RESOLVE_TIMEOUT}" | sed 's/\/ipfs\///g' /dev/stdin)
+    ipfs cid format -b base58btc "${cid}"
+}
+
 export -f ipfs.ls
 export -f ipfs.ls.recursive
 export -f ipfs.ls.recursive.dirs
@@ -283,6 +298,7 @@ export -f ipfs.get.recursive
 export -f ipfs.pins.prune
 export -f ipfs.pin.dirs.filtered
 export -f ipfs.pin.monitor
+export -f getIPNSBase58BTC
 
 IPFS_API="api/v0"
 
