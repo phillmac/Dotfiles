@@ -213,6 +213,12 @@ function db.events () {
     _curl "${host}/db/${dbAddr}/events/${events}"
 }
 
+function dbs.list.ids () {
+   local host;
+   host=${1:-${ORBIT_DB_HOST}};
+    _curl "${host}/dbs" | jsawk "'return this.id'" -a "'return this.join(\"\n\")'" 
+ }
+
 export -f db.open
 export -f db.close
 export -f orbitdb.pending
@@ -229,4 +235,5 @@ export -f db.oplog.values
 export -f db.oplog.values.hashes
 export -f db.heads.pin
 export -f db.events
+export -f dbs.list.ids 
 
