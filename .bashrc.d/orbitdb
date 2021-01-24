@@ -273,5 +273,5 @@ export -f db.events
 export -f dbs.list.ids 
 export -f dbs.contents.get
 export -f db.contents.get
-export -f deb.payload.values
+export -f db.payload.values
 
