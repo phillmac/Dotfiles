@@ -6,6 +6,10 @@ function ipfs.get.recursive () {
     while read -r itemhash itempath
     do
         echo "$(date) Fetching ${itempath}" >&2
+        url="${IPFS_HTTP_GATEWAY}/ipfs/${itemhash}"
+        
+        [[ -n "${IPFS_DEBUG}" ]] &&  echo "url is ${url}" >&2
+        
         curl -s "${IPFS_HTTP_GATEWAY}/ipfs/${itemhash}" > /dev/null
     done < <(ipfs.ls.recursive "${*}")
 }
