@@ -253,9 +253,6 @@ dbs.contents.get () {
         done
 }
 
- while read hash; do ipfs.get.recursive $hash; "$(which curl)" "${IPFS_HTTP_GATEWAY}/ipfs/${hash}" > /dev/null; done; done
-
-
 
 export -f db.open
 export -f db.close
@@ -274,4 +271,7 @@ export -f db.oplog.values.hashes
 export -f db.heads.pin
 export -f db.events
 export -f dbs.list.ids 
+export -f dbs.contents.get
+export -f db.contents.get
+export -f deb.payload.values
 
