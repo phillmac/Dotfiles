@@ -237,7 +237,7 @@ function db.contents.get () {
      
      db.payload.value "${1}" "${host}" | while read hash
      do
-         ipfs.get.recursive $hash
+         ipfs.get.recursive "${hash}"
          "$(which curl)" "${IPFS_HTTP_GATEWAY}/ipfs/${hash}" > /dev/null
      done
 
