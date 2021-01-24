@@ -24,10 +24,13 @@ function ipfs.ls.recursive () {
     entries=$(ipfs.ls "${*}" | ipfs.links.info)
     while read -r itemtype itemhash itemname
     do
-        echo "${itemhash}" "${1}/${itemname}"
-        if (( itemtype == 1))
+        if [[ -n "${itemname}" ]]
         then
-            ipfs.ls.recursive "${1}/${itemname}"
+            echo "${itemhash}" "${1}/${itemname}"
+            if (( itemtype == 1))
+            then
+                ipfs.ls.recursive "${1}/${itemname}"
+            fi
         fi
     done <<< "${entries}"
 }
