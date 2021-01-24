@@ -213,11 +213,49 @@ function db.events () {
     _curl "${host}/db/${dbAddr}/events/${events}"
 }
 
+function db.payload.value () {
+    local host
+    local dbAddr
+
+    host=${2:-${ORBIT_DB_HOST}}
+
+    dbAddr=$(rawurlencode "${1}")
+
+    _curl "${host}/db/${dbAddr}/oplog/values" | jsawk "'return this.payload.value'" -a "'return this.join(\"\n\")'"
+}
+
 function dbs.list.ids () {
    local host;
    host=${1:-${ORBIT_DB_HOST}};
     _curl "${host}/dbs" | jsawk "'return this.id'" -a "'return this.join(\"\n\")'" 
- }
+}
+
+function db.contents.get () {
+    local host
+
+    host=${2:-${ORBIT_DB_HOST}}
+     
+     db.payload.value "${1}" "${host}" | while read hash
+     do
+         ipfs.get.recursive $hash
+         "$(which curl)" "${IPFS_HTTP_GATEWAY}/ipfs/${hash}" > /dev/null
+     done
+
+}
+
+ 
+
+dbs.contents.get () {
+    dbs.list.ids | while read -r dbaddr
+        do 
+            echo "Fetching DBAddr: ${dbaddr}"
+            db.contents.get "${dbaddr}"
+        done
+}
+
+ while read hash; do ipfs.get.recursive $hash; "$(which curl)" "${IPFS_HTTP_GATEWAY}/ipfs/${hash}" > /dev/null; done; done
+
+
 
 export -f db.open
 export -f db.close
