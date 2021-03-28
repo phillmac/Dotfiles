@@ -131,11 +131,65 @@ function rclone_move_callisto () {
     docker run --rm --net host -v /root:/root -v /callisto:/callisto peelvalley/rclone-b2 "rclone move --verbose --transfers 1 --delete-empty-src-dirs --ignore-existing ${*}"
 }
 
+
+function ipfs_archive_add () {
+    (
+        local artist_name
+
+        artist_name=${1}
+
+        if [[ -z "${artist_name}" ]]
+        then
+            read -r -p 'Enter artist name: ' artist_name
+        fi
+        cd "/callisto/Data/Phill/_/DA Artists" \
+        && (
+            cd "${artist_name}/gallery" \
+            && docker run --rm --net none \
+                -v "$(pwd)":/wd \
+                -w /wd \
+                peelvalley/imagemagick bash -c "source /scripts/functions.sh && generate-thumbs"
+            # &&  python3 /callisto/Data/Scripts/Python/rename-thumbs.py
+        ) \
+        && ipfs add --pin=false --progress -r -w "${artist_name}"
+        echo
+    )
+}
+
+function load_bashrc.d () {
+    for file in "${HOME}"/.bashrc.d/*
+    do
+        if [[ -f "${file}" && -r "${file}" ]]; then
+            source "${file}"
+        fi
+    done
+}
+
+function ipfs_cache_hash () {
+    local hash
+
+    hash=${1}
+
+    if [[ -z "${hash}" ]]
+    then
+        read -r -p 'Enter hash: ' hash
+    fi
+
+    parallel --ungroup --env load_bashrc.d -S titan "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
+    parallel --ungroup --env load_bashrc.d -S charon "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
+    parallel --ungroup --env load_bashrc.d -S io "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
+    parallel --ungroup --env load_bashrc.d -S vps3.phillm.net "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
+    parallel --ungroup --env load_bashrc.d -S vps1.phillm.net "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
+}
+
 export -f ipfs
 export -f ipfs_add_folder
 export -f ipfs_find_add_folder
 export -f ipfs_provide_folder
 export -f video_archive
+export -f load_bashrc.d
+export -f ipfs_archive_add
+export -f ipfs_cache_hash
 
 alias curl=_curl
 alias dagr="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA phillmac/dagr_revamped:latest dagr.py"
