@@ -297,6 +297,23 @@ function getIPNSBase58BTC() {
     ipfs cid format -b base58btc "${cid}"
 }
 
+function ipfs.pin.archive () {
+    local ipfs_pin_addr
+    
+    ipfs_pin_addr=${1:-$IPFS__PIN_ADDR}
+    
+     if [[ -z "${ipfs_pin_addr}" ]];
+    then
+        echo "IPFS pin addr is required" >&2
+        return 252
+    fi
+
+    while read -r itemhash pathname; do
+        echo "$(date) Pinning folder ${pathname}" 1>&2;
+        ipfs pin add --progress "${itemhash}";
+    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${ipfs_pin_addr}/.*/");
+}
+
 export -f ipfs.ls
 export -f ipfs.ls.recursive
 export -f ipfs.ls.recursive.dirs
@@ -306,6 +323,7 @@ export -f ipfs.pins.prune
 export -f ipfs.pin.dirs.filtered
 export -f ipfs.pin.monitor
 export -f getIPNSBase58BTC
+export -f ipfs.pin.archive
 
 IPFS_API="api/v0"
 
