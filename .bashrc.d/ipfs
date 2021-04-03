@@ -309,7 +309,7 @@ function ipfs.pin.archive () {
     fi
 
     while read -r itemhash pathname; do
-        echo "$(date) Pinning folder ${pathname}" 1>&2;
+        echo "$(date) Pinning folder ${pathname}" >&2;
         ipfs pin add --progress "${itemhash}";
     done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${ipfs_pin_addr}/.*/");
 }
