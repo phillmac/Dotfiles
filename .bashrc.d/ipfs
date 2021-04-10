@@ -127,7 +127,7 @@ function ipfs.links.info () {
 }
 
 function ipfs.pin.ls () {
-    ipfs pin ls | grep -v indirect | cut -f 1 -d " " | sort > pins.txt
+    ipfs pin ls --type=recursive | sort > pins.txt
 }
 
 function ipfs.pins.prune () {
@@ -141,9 +141,9 @@ function ipfs.pins.prune () {
     total=$(wc -l < pins.txt)
     pcount=1
 
-    while read -r pinHash
+    while read -r pinHash pintype
     do
-        echo "Hash is ${pinHash} [${pcount}/${total}]" >&2
+        echo "Hash is ${pinHash} ${pintype} [${pcount}/${total}]" >&2
         ipfs ls "${pinHash}"
         resp=$(<inp)
         [[ "${resp}" == "q" ]] && return
@@ -161,9 +161,9 @@ function ipfs.pins.details () {
     total=$(wc -l < pins.txt)
     pcount=1
 
-    while read -r pinHash
+    while read -r pinHash pintype
     do
-        echo "Hash is ${pinHash} [${pcount}/${total}]" >&2
+        echo "Hash is ${pinHash} ${pintype} [${pcount}/${total}]" >&2
         ipfs ls "${pinHash}"
         ((pcount++))
     done < pins.txt | tee pins.details.txt
