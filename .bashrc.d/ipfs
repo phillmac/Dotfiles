@@ -136,7 +136,7 @@ function ipfs.pins.prune () {
     local total
     local pcount
 
-    test -f inp || mkfifo inp
+    test -p inp || mkfifo inp
 
     total=$(wc -l < pins.txt)
     pcount=1
