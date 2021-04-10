@@ -6,7 +6,7 @@ function ncd_push () {
     (cd /d/Source/Phill/Repos/PVTE/NCDSprinkle \
     && git pull \
     && git push \
-    && sshp kore docker exec -u www-data pvte-dev_ncd_dev_1 bash -c "'cd app/sprinkles/ncd && git pull'")
+    && sshp phill@kore.peelvalley.com.au docker exec -u www-data pvte-dev_ncd_dev_1 bash -c "'cd app/sprinkles/ncd && git fetch && git checkout origin/$(git branch --show-current)'")
 }
 
 
@@ -41,7 +41,7 @@ function build_ncd_image () {
     echo "Version tag is required"
     return 252
   fi
-  sshp kore bash -c "'source ~/.bashrc.d/dockerenv && build_pvte_image ncd --no-cache --tag 991291726468.dkr.ecr.ap-southeast-2.amazonaws.com/pvte/ncd:latest --tag 991291726468.dkr.ecr.ap-southeast-2.amazonaws.com/pvte/ncd:${version_tag}'"
+  sshp phill@kore.peelvalley.com.au bash -c "'source ~/.bashrc.d/dockerenv && build_pvte_image ncd --no-cache --tag 991291726468.dkr.ecr.ap-southeast-2.amazonaws.com/pvte/ncd:latest --tag 991291726468.dkr.ecr.ap-southeast-2.amazonaws.com/pvte/ncd:${version_tag}'"
 }
 
 function ncd_release () {
@@ -51,6 +51,7 @@ function ncd_release () {
   else
     (cd /d/Source/Phill/Repos/PVTE/NCDSprinkle \
     && start_release "${version_tag}" \
+    && sleep 30 \
     && finish_release "${version_tag}"
     ) \
     && ncd_push \
@@ -64,9 +65,9 @@ function ncd_publish () {
     echo "Version tag is required"
     return 252
   fi
-  sshp kore bash -c "'source ~/.bashrc.d/dockerenv && aws_publish pvte/ncd ${version_tag}'"
+  sshp phill@kore.peelvalley.com.au bash -c "'source ~/.bashrc.d/dockerenv && aws_publish pvte/ncd ${version_tag}'"
 }
 
 function ncd_deploy () {
-    sshp kore bash -c "'source ~/.bashrc.d/dockerenv && pvte_prod_service_deploy_hughes ncd'"
+    sshp phill@kore.peelvalley.com.au bash -c "'source ~/.bashrc.d/dockerenv && pvte_prod_service_deploy_hughes ncd'"
 }
