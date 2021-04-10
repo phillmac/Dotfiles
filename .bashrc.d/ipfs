@@ -166,7 +166,7 @@ function ipfs.pins.details () {
         echo "Hash is ${pinHash} ${pintype} [${pcount}/${total}]" >&2
         ipfs ls "${pinHash}"
         ((pcount++))
-    done < pins.txt | tee pins.details.txt
+    done < pins.txt 2>&1 | tee pins.details.txt
 }
 
 function check_lockout_time () {
