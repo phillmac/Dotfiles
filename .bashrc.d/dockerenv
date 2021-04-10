@@ -11,7 +11,8 @@ function source_env_files () {
             "phill/Dev-Env"
             "pvte/Dev-Env"
             "pvte/Prod-Env"
-            "scouts/Dev-Env"
+            "scouts/Dev-Env",
+            "epra/Dev-Env"
             )
 
     for repo in "${repo_dirs_list[@]}"; do
