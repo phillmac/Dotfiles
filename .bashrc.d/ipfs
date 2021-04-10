@@ -81,7 +81,7 @@ function ipfs.ls.recursive.dirs.filtered () {
         echo "IPFS filter is required" >&2
         return 252
     fi
-    
+
     echo "filter is ${filter}" >&2
 
     ipfs.ls.recursive.dirs "${addr}" | grep "${filter}"
@@ -154,9 +154,9 @@ function ipfs.pins.details () {
     total=$(wc -l < pins.txt)
     pcount=1
 
-    while read -r pinHash
+    while read -r pinHash pintype
     do
-        echo "Hash is ${pinHash} [${pcount}/${total}]" >&2
+        echo "Hash is ${pinHash} ${pintype} [${pcount}/${total}]" >&2
         ipfs ls "${pinHash}"
         ((pcount++))
     done < pins.txt | tee pins.details.txt
@@ -202,15 +202,15 @@ function ipfs.pin.dirs.filtered () {
         echo "ipns addr is required" >&2
         return 252
     fi
-    
+
     if [[ -z "${filter}" ]];
     then
         echo "IPFS filter is required" >&2
         return 252
     fi
-    
+
     echo "filter is ${filter}" >&2
-    
+
     while true
     do
         if rnew=$(ipfs resolve --timeout "${resolve_timeout}" "${ipns}")
