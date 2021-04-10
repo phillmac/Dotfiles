@@ -6,7 +6,7 @@ function _curl () {
     local maxtime
     
     retries=${CURL_RETRIES:-0}
-    maxtime=${CURL_RETRIES:-300}
+    maxtime=${CURL_MAXTIME:-300}
 
     curl --silent --retry="${retries}" --max-time="${maxtime}" "${@}"
     echo
