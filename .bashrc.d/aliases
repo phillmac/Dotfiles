@@ -1,7 +1,13 @@
 #!/bin/bash
 
 function _curl () {
-    curl --silent "${@}"
+
+    local retries
+    local maxtime
+    
+    retries=${CURL_RETRIES:-0}
+    maxttime=${CURL_RETRIES:-300}
+    curl --silent --retry="${retries}" --max-time="${maxttime}" "${@}"
     echo
 }
 
