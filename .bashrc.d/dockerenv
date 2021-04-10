@@ -62,6 +62,8 @@ function source_env_files () {
             alias_pvte_dev_update
             alias_scouts_dev_update
             alias_scouts_dev_kore
+            alias_epra_dev_update
+            alias_epra_dev_kore
             ;;
         'atlas' )
             alias_phill_dev_atlas
