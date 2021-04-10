@@ -144,7 +144,7 @@ function ipfs.pins.prune () {
     while read -r pinHash pintype
     do
         echo "Hash is ${pinHash} ${pintype} [${pcount}/${total}]" >&2
-        ipfs ls "${pinHash}"
+        ipfs.ls "${pinHash}" | ipfs.links.info
         resp=$(<inp)
         [[ "${resp}" == "q" ]] && return
         [[ "${resp}" == "y" ]] && ipfs pin rm "${pinHash}"
