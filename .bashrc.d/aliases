@@ -10,7 +10,7 @@ function _curl () {
 
     if [[ -n "${ENABLE_DEBUG}" ]] || [[ -n "${DEBUG_CURL}" ]]
     then
-        curl --verbose --retry="${retries}" --max-time="${maxtime}" "${@}"
+        curl --verbose --retry "${retries}" --max-time "${maxtime}" "${@}"
     else
         curl --silent "${@}"
     fi
