@@ -121,9 +121,9 @@ function ipfs.ls () {
     jq -r ".Objects[].Links" <<< "${result}"
 }
 
-function ipfs.links.info () {
-    # shellcheck disable=SC2006,SC2154,SC2086
-    jsawk "'return [this.Type,  this.Hash, this.Name].join(String.fromCharCode(32))'" -a "'return this.join(String.fromCharCode(10))'"
+function ipfs.links.info ()
+{
+    jq -r '.[] | "\(.Type) \(.Hash) \(.Name)"'
 }
 
 function ipfs.pin.ls () {
@@ -299,19 +299,42 @@ function getIPNSBase58BTC() {
 
 function ipfs.pin.archive () {
     local ipfs_pin_addr
+    local path_filter
 
-    ipfs_pin_addr=${1:-$IPFS__PIN_ADDR}
+    ipfs_pin_addr=${1:-$IPFS_PIN_ADDR}
+    path_filter=${2:-${ipfs_pin_addr}/.*/}
 
-     if [[ -z "${ipfs_pin_addr}" ]];
+    if [[ -z "${ipfs_pin_addr}" ]]
     then
         echo "IPFS pin addr is required" >&2
         return 252
     fi
 
-    while read -r itemhash pathname; do
-        echo "$(date) Pinning folder ${pathname}" >&2;
-        ipfs pin add --progress "${itemhash}";
-    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${ipfs_pin_addr}/.*/");
+    while read -r itemhash pathname
+    do
+        echo "$(date) Pinning folder ${pathname}" >&2
+        ipfs pin add --progress "${itemhash}"
+    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${path_filter}")
+}
+
+function ipfs.entries.archive () {
+    local ipfs_pin_addr
+    local path_filter
+
+    ipfs_pin_addr=${1:-$IPFS_PIN_ADDR}
+    path_filter=${2:-${ipfs_pin_addr}/.*/}
+
+    if [[ -z "${ipfs_pin_addr}" ]]
+    then
+        echo "IPFS pin addr is required" >&2
+        return 252
+    fi
+
+    while read -r itemhash pathname
+    do
+        echo "$(date) Adding folder ${pathname}" >&2
+        echo "${itemhash} ${pathname}"
+    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${path_filter}")
 }
 
 export -f ipfs.ls
