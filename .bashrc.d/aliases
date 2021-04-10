@@ -8,7 +8,7 @@ function _curl () {
     retries=${CURL_RETRIES:-0}
     maxtime=${CURL_MAXTIME:-300}
 
-    curl --silent --retry="${retries}" --max-time="${maxtime}" "${@}"
+    curl --silent --retry "${retries}" --max-time "${maxtime}" "${@}"
     echo
 }
 
