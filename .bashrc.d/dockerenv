@@ -75,6 +75,10 @@ function source_env_files () {
             alias_phill_dev_vps1
             alias_phill_dev_update
             ;;
+        'vps2' )
+            alias_phill_dev_vps2
+            alias_phill_dev_update
+            ;;
         'vps3' )
             alias_phill_dev_vps3
             alias_phill_dev_update
