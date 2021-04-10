@@ -333,7 +333,7 @@ function ipfs.entries.archive () {
     while read -r itemhash pathname
     do
         echo "$(date) Adding folder ${pathname}" >&2
-        echo "${itemhash} ${pathname}"
+        echo "${itemhash}"
     done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${path_filter}")
 }
 
