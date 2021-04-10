@@ -1,7 +1,14 @@
 #!/bin/bash
 
 function _curl () {
-    curl --silent "${@}"
+
+    local retries
+    local maxtime
+
+    retries=${CURL_RETRIES:-0}
+    maxtime=${CURL_MAXTIME:-300}
+
+    curl --silent --retry="${retries}" --max-time="${maxtime}" "${@}"
     echo
 }
 
@@ -187,6 +194,8 @@ export -f ipfs_find_add_folder
 export -f ipfs_provide_folder
 export -f video_archive
 export -f load_bashrc.d
+export -f ipfs_archive_add
+export -f ipfs_cache_hash
 
 alias curl=_curl
 alias dagr="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA phillmac/dagr_revamped:latest dagr.py"

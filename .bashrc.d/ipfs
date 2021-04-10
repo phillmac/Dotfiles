@@ -6,6 +6,10 @@ function ipfs.get.recursive () {
     while read -r itemhash itempath
     do
         echo "$(date) Fetching ${itempath}" >&2
+        url="${IPFS_HTTP_GATEWAY}/ipfs/${itemhash}"
+
+        [[ -n "${IPFS_DEBUG}" ]] &&  echo "url is ${url}" >&2
+
         curl -s "${IPFS_HTTP_GATEWAY}/ipfs/${itemhash}" > /dev/null
     done < <(ipfs.ls.recursive "${*}")
 }
@@ -20,10 +24,13 @@ function ipfs.ls.recursive () {
     entries=$(ipfs.ls "${*}" | ipfs.links.info)
     while read -r itemtype itemhash itemname
     do
-        echo "${itemhash}" "${1}/${itemname}"
-        if (( itemtype == 1))
+        if [[ -n "${itemname}" ]]
         then
-            ipfs.ls.recursive "${1}/${itemname}"
+            echo "${itemhash}" "${1}/${itemname}"
+            if (( itemtype == 1))
+            then
+                ipfs.ls.recursive "${1}/${itemname}"
+            fi
         fi
     done <<< "${entries}"
 }
@@ -120,7 +127,7 @@ function ipfs.links.info () {
 }
 
 function ipfs.pin.ls () {
-    ipfs pin ls | grep -v indirect | cut -f 1 -d " " | sort > pins.txt
+    ipfs pin ls --type=recursive | sort > pins.txt
 }
 
 function ipfs.pins.prune () {
@@ -129,15 +136,15 @@ function ipfs.pins.prune () {
     local total
     local pcount
 
-    test -f inp || mkfifo inp
+    test -p inp || mkfifo inp
 
     total=$(wc -l < pins.txt)
     pcount=1
 
-    while read -r pinHash
+    while read -r pinHash pintype
     do
-        echo "Hash is ${pinHash} [${pcount}/${total}]" >&2
-        ipfs ls "${pinHash}"
+        echo "Hash is ${pinHash} ${pintype} [${pcount}/${total}]" >&2
+        ipfs.ls "${pinHash}" | ipfs.links.info
         resp=$(<inp)
         [[ "${resp}" == "q" ]] && return
         [[ "${resp}" == "y" ]] && ipfs pin rm "${pinHash}"
@@ -157,9 +164,9 @@ function ipfs.pins.details () {
     while read -r pinHash pintype
     do
         echo "Hash is ${pinHash} ${pintype} [${pcount}/${total}]" >&2
-        ipfs ls "${pinHash}"
+        ipfs.ls "${pinHash}" | ipfs.links.info
         ((pcount++))
-    done < pins.txt | tee pins.details.txt
+    done < pins.txt 2>&1 | tee pins.details.txt
 }
 
 function check_lockout_time () {
@@ -275,6 +282,38 @@ function ipfs.pin.monitor () {
     done
 }
 
+function getIPNSBase58BTC() {
+    local cid
+    local ipns
+    ipns=${1=:$IPNS_RESOLVE_ADDR}
+
+    if [[ -z "${ipns}" ]]
+    then
+	    echo "IPNS_RESOLVE_ADDR is required"
+        return 252
+    fi
+
+    cid=$(ipfs resolve "${ipns}" --timeout "${IPFS_RESOLVE_TIMEOUT}" | sed 's/\/ipfs\///g' /dev/stdin)
+    ipfs cid format -b base58btc "${cid}"
+}
+
+function ipfs.pin.archive () {
+    local ipfs_pin_addr
+
+    ipfs_pin_addr=${1:-$IPFS__PIN_ADDR}
+
+     if [[ -z "${ipfs_pin_addr}" ]];
+    then
+        echo "IPFS pin addr is required" >&2
+        return 252
+    fi
+
+    while read -r itemhash pathname; do
+        echo "$(date) Pinning folder ${pathname}" >&2;
+        ipfs pin add --progress "${itemhash}";
+    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${ipfs_pin_addr}/.*/");
+}
+
 export -f ipfs.ls
 export -f ipfs.ls.recursive
 export -f ipfs.ls.recursive.dirs
@@ -283,6 +322,8 @@ export -f ipfs.get.recursive
 export -f ipfs.pins.prune
 export -f ipfs.pin.dirs.filtered
 export -f ipfs.pin.monitor
+export -f getIPNSBase58BTC
+export -f ipfs.pin.archive
 
 IPFS_API="api/v0"
 
