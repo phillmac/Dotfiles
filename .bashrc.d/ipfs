@@ -164,7 +164,7 @@ function ipfs.pins.details () {
     while read -r pinHash pintype
     do
         echo "Hash is ${pinHash} ${pintype} [${pcount}/${total}]" >&2
-        ipfs ls "${pinHash}"
+        ipfs.ls "${pinHash}" | ipfs.links.info
         ((pcount++))
     done < pins.txt 2>&1 | tee pins.details.txt
 }
