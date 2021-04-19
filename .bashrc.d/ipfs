@@ -3,15 +3,25 @@
 function ipfs.get.recursive () {
     local itemhash
     local itempath
+    local gw_addr
+
+    gw_addr=${2:-${IPFS_HTTP_GATEWAY}}
+
+    if [[ -z "${gw_addr}" ]];
+    then
+        echo "IPFS_HTTP_GATEWAY is required" >&2
+        return 252
+    fi
+
     while read -r itemhash itempath
     do
         echo "$(date) Fetching ${itempath}" >&2
-        url="${IPFS_HTTP_GATEWAY}/ipfs/${itemhash}"
+        url="${gw_addr}/ipfs/${itemhash}"
 
         [[ -n "${IPFS_DEBUG}" ]] &&  echo "url is ${url}" >&2
 
-        curl -s "${IPFS_HTTP_GATEWAY}/ipfs/${itemhash}" > /dev/null
-    done < <(ipfs.ls.recursive "${*}")
+        curl -s "${}/ipfs/${itemhash}" > /dev/null
+    done < <(ipfs.ls.recursive "${1}")
 }
 
 function ipfs.ls.recursive () {
