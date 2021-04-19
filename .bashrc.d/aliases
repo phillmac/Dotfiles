@@ -193,6 +193,7 @@ function ipfs_cache_hash () {
     parallel --ungroup --env load_bashrc.d -S vps1.phillm.net "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
 }
 
+export -f _curl
 export -f ipfs
 export -f rawurlencode
 export -f ipfs_add_folder
