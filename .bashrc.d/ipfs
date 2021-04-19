@@ -20,7 +20,7 @@ function ipfs.get.recursive () {
 
         [[ -n "${IPFS_DEBUG}" ]] &&  echo "url is ${url}" >&2
 
-        curl -s "${}/ipfs/${itemhash}" > /dev/null
+        curl -s "${url}" > /dev/null
     done < <(ipfs.ls.recursive "${1}")
 }
 
@@ -351,6 +351,7 @@ export -f ipfs.ls
 export -f ipfs.ls.recursive
 export -f ipfs.ls.recursive.dirs
 export -f ipfs.ls.recursive.dirs.filtered
+export -f ipfs.links.info
 export -f ipfs.get.recursive
 export -f ipfs.pins.prune
 export -f ipfs.pin.dirs.filtered

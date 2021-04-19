@@ -194,6 +194,7 @@ function ipfs_cache_hash () {
 }
 
 export -f ipfs
+export -f rawurlencode
 export -f ipfs_add_folder
 export -f ipfs_find_add_folder
 export -f ipfs_provide_folder
