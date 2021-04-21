@@ -193,6 +193,11 @@ function ipfs_cache_hash () {
     parallel --ungroup --env load_bashrc.d -S vps1.phillm.net "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
 }
 
+function webtorrent ()
+{
+    docker run --rm -it --net host node:12 bash -c "npm install -g --unsafe-perm=true webtorrent-hybrid && webtorrent-hybrid --keep-seeding $1"
+}
+
 export -f _curl
 export -f ipfs
 export -f rawurlencode
@@ -203,6 +208,7 @@ export -f video_archive
 export -f load_bashrc.d
 export -f ipfs_archive_add
 export -f ipfs_cache_hash
+export -f webtorrent
 
 alias curl=_curl
 alias dagr="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA phillmac/dagr_revamped:latest dagr.py"
