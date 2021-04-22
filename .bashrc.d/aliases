@@ -195,7 +195,11 @@ function ipfs_cache_hash () {
 
 function webtorrent ()
 {
-    docker run --rm -it --net host node:12 bash -c "npm install -g --unsafe-perm=true webtorrent-hybrid && webtorrent-hybrid --keep-seeding $1"
+    docker run \
+    --rm -it \
+    --net host \
+    node:12 bash -c \
+    "npm install -g --unsafe-perm=true webtorrent-hybrid && webtorrent-hybrid --announce 'wss://tracker.openwebtorrent.com' --keep-seeding $1"
 }
 
 export -f _curl
