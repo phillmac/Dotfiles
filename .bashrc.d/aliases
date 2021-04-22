@@ -199,7 +199,7 @@ function webtorrent ()
     --rm -it \
     --net host \
     node:12 bash -c \
-    "npm install -g --unsafe-perm=true webtorrent-hybrid && webtorrent-hybrid --announce 'wss://tracker.vps1.phillm.net' --keep-seeding $1"
+    "npm install -g --unsafe-perm=true webtorrent-hybrid && webtorrent-hybrid --announce 'wss://tracker.vps1.phillm.net:8000' --keep-seeding $1"
 }
 
 export -f _curl
