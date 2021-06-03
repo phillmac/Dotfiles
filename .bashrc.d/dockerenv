@@ -49,6 +49,10 @@ function source_env_files () {
             alias_phill_dev_charon
             alias_phill_dev_update
             ;;
+        'callisto')
+            alias_pvs_dev_callisto
+            alias_pvs_dev_update
+            ;;
         'kore' )
             alias_pvs_dev_kore
             alias_pvs_dev_update
