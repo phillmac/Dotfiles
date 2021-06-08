@@ -222,7 +222,11 @@ alias dagr="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA ph
 alias dagr-bulk="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA  phillmac/dagr_revamped:latest  dagr-bulk.py"
 alias dagr-utils="docker run --rm -it -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA  -v/ananke/D/Source/Phill/Repos/Phill:/Repos phillmac/dagr_revamped:latest dagr-utils.py"
 alias dagr-dev="docker run --rm -it -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA  -v/ananke/D/Source/Phill/Repos/Phill:/Repos python bash"
-alias dagr-selenium="docker run --rm -it  --net phill-dev_chrome -v/callisto/Data/Phill/_/DA\ Artists:/DA -w /DA phillmac/dagr_selenium:latest -u -m"
+alias dagr-dev-debug="docker run --rm -it -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA  -v/ananke/D/Source/Phill/Repos/Phill:/Repos -e 'Dagr.Logging.Level=4' python bash"
+
+alias dagr-selenium="docker run --rm -it --net phill-dev_chrome -v/callisto/Data/Phill/_/DA\ Artists:/DA -w /DA phillmac/dagr_selenium:latest -u -m"
+alias dagr-selenium-debug="docker run --rm -it --net phill-dev_chrome -v/callisto/Data/Phill/_/DA\ Artists:/DA -w /DA  -e 'dagr.logging.level=4' phillmac/dagr_selenium:latest -u -m"
+alias rip-gallery-debug="docker run --rm -it --net phill-dev_chrome -v/callisto/Data/Phill/_/DA\ Artists:/DA -w /DA  -e 'dagr.rip_gallery.logging.level=4' phillmac/dagr_selenium:latest -u -m dagr_selenium.rip_gallery"
 alias orbitdbapi="docker run --rm -it -w /Repos/orbit-db-http-api  -v pvs-dev_cert-data:/certs -v/ananke/D/Source/Phill/Repos/Phill:/Repos --net pvs-dev_ipfs node:11.13 bash"
 alias orbitdbsprinkle="docker run --rm -d -w /var/www  -v/ananke/D/Source/Phill/Repos:/Repos --net pvs-dev_ipfs --name orbitdb_dash peelvalley/userfrosting"
 alias youtube-dl=youtube_dl
