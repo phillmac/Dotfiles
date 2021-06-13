@@ -347,6 +347,21 @@ function ipfs.entries.archive () {
     done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${path_filter}")
 }
 
+function ipfs.preload ()
+{
+    if [[ ! -p ipfs_dag_export ]]
+    then
+        mkfifo ipfs_dag_export
+    fi
+    tail -f  ipfs_dag_export | ssh -p 35681 vps1.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
+    tail -f  ipfs_dag_export | ssh -p 35681 vps2.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
+    tail -f  ipfs_dag_export | ssh -p 35681 vps3.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
+    tail -f  ipfs_dag_export | ssh -p 35681 io.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
+    sleep 60s
+    echo 'Exporting' >&2
+    ipfs dag export "${@}" > ipfs_dag_export
+}
+
 export -f ipfs.ls
 export -f ipfs.ls.recursive
 export -f ipfs.ls.recursive.dirs
@@ -358,6 +373,7 @@ export -f ipfs.pin.dirs.filtered
 export -f ipfs.pin.monitor
 export -f getIPNSBase58BTC
 export -f ipfs.pin.archive
+export -f ipfs.preload
 
 IPFS_API="api/v0"
 
