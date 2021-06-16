@@ -362,6 +362,37 @@ function ipfs.preload ()
     ipfs dag export "${@}" > ipfs_dag_export
 }
 
+function ipfs_masonry_publish ()
+{
+    docker pull phillmac/ipfs-masonry-publish >&2
+
+    if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]
+    then
+        docker run --rm -v --net phill-dev_ipfs phillmac/ipfs-masonry-publish "${@}";
+    else
+        docker run --rm --net pvs-dev_ipfs phillmac/ipfs-masonry-publish "${@}";
+    fi
+}
+
+function ipfs_masonry_deploy_dev ()
+{
+    local masonry_cid
+    masonry_cid=$(ipfs_masonry_publish -Q)
+
+    ipfs files rm -r /dev.ipfs-archive.online/galleries
+    ipfs files cp "/ipfs/${masonry_cid}" /dev.ipfs-archive.online/galleries
+
+    dev_cid=$(ipfs files stat --hash /dev.ipfs-archive.online)
+
+    docker run --rm --net host\
+        -e "CF_TOKEN=jloiYa7e-B29xbQi3um34m9NyWeUGcdLS3RY1u6V" \
+        -e "CF_ZONE_NAME=ipfs-archive.online" \
+        -e "CF_RECORD=dev" \
+        -e "IPFS_KEY=${dev_cid}" \
+        peelvalley/cloudflare scripts/update-ipns.py
+
+}
+
 export -f ipfs.ls
 export -f ipfs.ls.recursive
 export -f ipfs.ls.recursive.dirs
