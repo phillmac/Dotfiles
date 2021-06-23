@@ -1,4 +1,8 @@
 #!/bin/bash
 
+SOURCE_DIR="//192.168.42.230/D/Source"
+
 # source "${BASH_RC_DIR}/projects/ncd/*.sh"
 source "${BASH_RC_DIR}/projects/hrd/*.sh"
+
+export SOURCE_DIR
