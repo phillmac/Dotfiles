@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# source "${BASHRCDIR}/projects/ncd/*.sh"
+source "${BASHRCDIR}/projects/hrd/*.sh"
