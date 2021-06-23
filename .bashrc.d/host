@@ -1,12 +1,15 @@
 #!/bin/bash
+shorthost=$(cut -d"." -f1 <<<"$HOSTNAME")
+bashrcdir="${HOME}/.bashrc.d/${shorthost}.bashrc.d"
+
 [[ "${HOSTENV_DEBUG}" ]] && {
-    echo "Searching for ${HOME}/.bashrc.d/$(hostname -s).bashrc.d"
+    echo "Searching for ${bashrcdir}" >&2
 }
-[[ -d "${HOME}/.bashrc.d/$(hostname -s).bashrc.d" ]] && {
+[[ -d "${bashrcdir}" ]] && {
     [[ "${HOSTENV_DEBUG}" ]] && {
-    echo "Found ${HOME}/.bashrc.d/$(hostname -s).bashrc.d"
+    echo "Found ${bashrcdir}" >&2
     }
-    for file in "${HOME}/.bashrc.d/$(hostname -s).bashrc.d"/*
+    for file in "${bashrcdir}"/*
     do
         [[ "${HOSTENV_DEBUG}" ]] && {
                 echo "Sourcing ${file}"
