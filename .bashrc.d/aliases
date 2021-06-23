@@ -1,5 +1,16 @@
 #!/bin/bash
 
+function source_dir_files ()
+{
+    for file in "${1}"/*
+    do
+        [[ "${SOURCE_DEBUG}" ]] && {
+            echo "Sourcing ${file}" >&2
+        }
+        source "${file}"
+    done
+}
+
 function _curl () {
 
     local retries

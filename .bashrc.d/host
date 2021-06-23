@@ -8,13 +8,8 @@
     [[ "${HOSTENV_DEBUG}" ]] && {
     echo "Found ${BASH_RC_HOST_DIR}" >&2
     }
-    for file in "${BASH_RC_HOST_DIR}"/*
-    do
-        [[ "${HOSTENV_DEBUG}" ]] && {
-                echo "Sourcing ${file}"
-        }
-        source "${file}"
-    done
+
+    source_dir_files "${BASH_RC_HOST_DIR}"
 }
 
 
