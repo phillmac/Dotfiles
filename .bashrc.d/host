@@ -1,7 +1,8 @@
 #!/bin/bash
 shorthost=$(cut -d"." -f1 <<<"$HOSTNAME")
+shorthost_lower=${shorthost,,}
 BASH_RC_DIR="${HOME}/.bashrc.d"
-BASH_RC_HOST_DIR="${HOME}/.bashrc.d/${shorthost}.bashrc.d"
+BASH_RC_HOST_DIR="${HOME}/.bashrc.d/${shorthost_lower}.bashrc.d"
 
 [[ "${HOSTENV_DEBUG}" ]] && {
     echo "Searching for ${BASH_RC_HOST_DIR}" >&2
