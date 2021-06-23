@@ -36,9 +36,9 @@ function source_env_files () {
     done
 
 
-    local hostname
-    hostname=$(hostname)
-    case "${hostname}" in
+    case "${SHORT_HOST}" in
+        'desktop-pstlv07' )
+            ;;
         'charon' )
             alias_pvs_dev_charon
             alias_pvs_dev_update
