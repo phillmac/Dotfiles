@@ -1,15 +1,15 @@
 #!/bin/bash
 shorthost=$(cut -d"." -f1 <<<"$HOSTNAME")
-BASHRCDIR="${HOME}/.bashrc.d/${shorthost}.bashrc.d"
+BASH_RC_DIR="${HOME}/.bashrc.d/${shorthost}.bashrc.d"
 
 [[ "${HOSTENV_DEBUG}" ]] && {
-    echo "Searching for ${BASHRCDIR}" >&2
+    echo "Searching for ${BASH_RC_DIR}" >&2
 }
-[[ -d "${BASHRCDIR}" ]] && {
+[[ -d "${BASH_RC_DIR}" ]] && {
     [[ "${HOSTENV_DEBUG}" ]] && {
-    echo "Found ${BASHRCDIR}" >&2
+    echo "Found ${BASH_RC_DIR}" >&2
     }
-    for file in "${BASHRCDIR}"/*
+    for file in "${BASH_RC_DIR}"/*
     do
         [[ "${HOSTENV_DEBUG}" ]] && {
                 echo "Sourcing ${file}"
@@ -18,4 +18,4 @@ BASHRCDIR="${HOME}/.bashrc.d/${shorthost}.bashrc.d"
     done
 }
 
-export BASHRCDIR
+export BASH_RC_DIR

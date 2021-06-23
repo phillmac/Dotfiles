@@ -1,4 +1,4 @@
 #!/bin/bash
 
-source "${BASHRCDIR}/projects/ncd/*.sh"
-source "${BASHRCDIR}/projects/hrd/*.sh"
+source "${BASH_RC_DIR}/projects/ncd/*.sh"
+source "${BASH_RC_DIR}/projects/hrd/*.sh"
