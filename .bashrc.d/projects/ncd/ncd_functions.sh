@@ -3,7 +3,7 @@
 alias sshp="ssh -p35681"
 
 function ncd_push () {
-    (cd /d/Source/Phill/Repos/PVTE/NCDSprinkle \
+    (cd "${SOURCE_DIR}/Phill/Repos/PVTE/NCDSprinkle" \
     && git pull \
     && git push \
     && sshp phill@kore.peelvalley.com.au docker exec -u www-data pvte-dev_ncd_dev_1 bash -c "'cd app/sprinkles/ncd && git fetch && git checkout origin/$(git branch --show-current)'")
@@ -11,9 +11,9 @@ function ncd_push () {
 
 
 function ncd_reset() {
-  (cd /d/Source/Phill/Repos/PVTE/NCDSprinkle \
+  (cd "${SOURCE_DIR}/Phill/Repos/PVTE/NCDSprinkle" \
    && git reset --hard
-   )
+  )
 }
 
 
@@ -49,7 +49,7 @@ function ncd_release () {
   if [[ -z "${version_tag}" ]]; then
     echo "Version tag is required"
   else
-    (cd /d/Source/Phill/Repos/PVTE/NCDSprinkle \
+    (cd "${SOURCE_DIR}/Phill/Repos/PVTE/NCDSprinkle" \
     && start_release "${version_tag}" \
     && sleep 30 \
     && finish_release "${version_tag}"
