@@ -328,10 +328,10 @@ function ipfs.pin.archive () {
 }
 
 function ipfs.entries.archive () {
-    local ipfs_pin_addr
+    local ipfs_entries_addr
     local path_filter
 
-    ipfs_pin_addr=${1:-$IPFS_PIN_ADDR}
+    ipfs_entries_addr=${1:-$IPFS_ENTRIES_ADDR}
     path_filter=${2:-${ipfs_pin_addr}/.*/}
 
     if [[ -z "${ipfs_pin_addr}" ]]
@@ -344,7 +344,7 @@ function ipfs.entries.archive () {
     do
         echo "$(date) Adding folder ${pathname}" >&2
         echo "${itemhash}"
-    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${path_filter}")
+    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_entries_addr}" "${path_filter}")
 }
 
 function ipfs.preload ()
