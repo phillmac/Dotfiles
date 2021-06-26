@@ -140,31 +140,60 @@ function ipfs.pin.ls () {
     ipfs pin ls --type=recursive | sort > pins.txt
 }
 
+function containsElement ()
+{
+  local e match="$1"
+  shift
+  for e; do [[ "$e" == "$match" ]] && return 0; done
+  return 1
+}
+
 function ipfs.pins.prune () {
     local pinHash
-    local resp
+    local pinItem
+    local action
     local total
     local pcount
+    local keepPins
+    local pinsList
+
+    keepPins=()
+    pinsList=()
 
     test -p inp || mkfifo inp
 
     total=$(wc -l < pins.txt)
     pcount=1
 
+    ipfs.pin.ls
+    echo '' > ipfs.pins.remove.txt
+
+    while read -r keepItem
+    do
+        keepPins+=("${keepItem}")
+    done < pins.keep.txt
+
     while read -r pinHash pintype
     do
-        echo "Hash is ${pinHash} ${pintype} [${pcount}/${total}]" >&2
-        ipfs.ls "${pinHash}" | ipfs.links.info
-        resp=$(<inp)
-        [[ "${resp}" == "q" ]] && return
-        [[ "${resp}" == "y" ]] && ipfs pin rm "${pinHash}"
-        ((pcount++))
+        pinsList+=("${pinHash}")
     done < pins.txt
+
+    for pinItem in "${pinsList[@]}"
+    do
+        if ! containsElement "${pinItem}" "${keepPins[@]}"
+        then
+            echo "Hash is ${pinItem} [${pcount}/${total}]" >&2
+            grep "${pinItem}" ipfs.dirs.hashes
+            read -r -p "Action: " action
+            [[ "${action}" == "q" ]] && return
+            [[ "${action}" == "y" ]] && echo "${pinItem}" >> ipfs.pins.remove.txt
+        fi
+        ((pcount++))
+    done
 }
 
 function ipfs.pins.details () {
     local pinHash
-    local resp
     local total
     local pcount
 
@@ -393,6 +422,7 @@ function ipfs_masonry_deploy_dev ()
 }
 
 export -f ipfs.ls
+export -f ipfs.pin.ls
 export -f ipfs.ls.recursive
 export -f ipfs.ls.recursive.dirs
 export -f ipfs.ls.recursive.dirs.filtered
