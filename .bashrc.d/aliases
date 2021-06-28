@@ -179,7 +179,7 @@ function ipfs_archive_add () {
 }
 
 function load_bashrc.d () {
-    for file in "${HOME}"/.bashrc.d/*
+    for file in "${HOME}"/.bashrc.d/*.bashrc
     do
         if [[ -f "${file}" && -r "${file}" ]]; then
             source "${file}"
