@@ -4,7 +4,7 @@ function source_dir_files ()
 {
     for file in "${1}"/*
     do
-        [[ "${SOURCE_DEBUG}" ]] && {
+        [[ "${SOURCE_DEBUG}" ]] || [[ "${BASH_RC_D_DEBUG}" ]] && {
             echo "Sourcing ${file}" >&2
         }
         source "${file}"
