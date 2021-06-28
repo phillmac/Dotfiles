@@ -29,65 +29,69 @@ function source_env_files () {
         }
     done
 
+    if [[ -z "${SHORT_HOST}" ]]
+    then
+        echo "SHORT_HOST is empty" >&2
+    else
+        case "${SHORT_HOST}" in
+            'desktop-pstlv07' )
+                ;;
+            'charon' )
+                alias_pvs_dev_charon
+                alias_pvs_dev_update
+                #alias_pvs_build_charon
+                #alias_pvs_build_update
+                #alias_kapcd_dev_charon
+                #alias_kapcd_dev_update
+                alias_phill_dev_charon
+                alias_phill_dev_update
+                ;;
+            'callisto')
+                alias_phill_dev_callisto
+                alias_phill_dev_update
+                ;;
+            'kore' )
+                alias_pvs_dev_kore
+                alias_pvs_dev_update
+                alias_pvs_build_kore
+                alias_pvs_build_update
+                alias_kapcd_dev_kore
+                alias_kapcd_dev_update
+                alias_phill_dev_kore
+                alias_phill_dev_update
+                alias_pvte_dev_kore
+                alias_pvte_dev_update
+                alias_scouts_dev_update
+                alias_scouts_dev_kore
+                alias_epra_dev_update
+                alias_epra_dev_kore
+                ;;
+            'atlas' )
+                alias_phill_dev_atlas
+                alias_phill_dev_update
+                ;;
+            'hughes' )
+                alias_pvte_prod_hughes
+                alias_pvte_prod_update
+                ;;
 
-    case "${SHORT_HOST}" in
-        'desktop-pstlv07' )
-            ;;
-        'charon' )
-            alias_pvs_dev_charon
-            alias_pvs_dev_update
-            #alias_pvs_build_charon
-            #alias_pvs_build_update
-            #alias_kapcd_dev_charon
-            #alias_kapcd_dev_update
-            alias_phill_dev_charon
-            alias_phill_dev_update
-            ;;
-        'callisto')
-            alias_phill_dev_callisto
-            alias_phill_dev_update
-            ;;
-        'kore' )
-            alias_pvs_dev_kore
-            alias_pvs_dev_update
-            alias_pvs_build_kore
-            alias_pvs_build_update
-            alias_kapcd_dev_kore
-            alias_kapcd_dev_update
-            alias_phill_dev_kore
-            alias_phill_dev_update
-            alias_pvte_dev_kore
-            alias_pvte_dev_update
-            alias_scouts_dev_update
-            alias_scouts_dev_kore
-            alias_epra_dev_update
-            alias_epra_dev_kore
-            ;;
-        'atlas' )
-            alias_phill_dev_atlas
-            alias_phill_dev_update
-            ;;
-        'hughes' )
-            alias_pvte_prod_hughes
-            alias_pvte_prod_update
-            ;;
-
-        'vps1' )
-            alias_phill_dev_vps1
-            alias_phill_dev_update
-            ;;
-        'vps2' )
-            alias_phill_dev_vps2
-            alias_phill_dev_update
-            ;;
-        'vps3' )
-            alias_phill_dev_vps3
-            alias_phill_dev_update
-            ;;
-        *)
-            echo "Unkown host ${hostname}"
-            ;;
-    esac
+            'vps1' )
+                alias_phill_dev_vps1
+                alias_phill_dev_update
+                ;;
+            'vps2' )
+                alias_phill_dev_vps2
+                alias_phill_dev_update
+                ;;
+            'vps3' )
+                alias_phill_dev_vps3
+                alias_phill_dev_update
+                ;;
+            *)
+                echo "Unkown host ${SHORT_HOST}"
+                ;;
+        esac
+fi
 }
 
 source_env_files
