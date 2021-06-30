@@ -34,6 +34,18 @@ function source_env_files () {
         echo "SHORT_HOST is empty" >&2
     else
         case "${SHORT_HOST}" in
+            'io' )
+                alias_pvs_dev_io
+                alias_pvs_dev_update
+                #alias_pvs_build_io
+                #alias_pvs_build_update
+                alias_kapcd_dev_io
+                alias_kapcd_dev_update
+                alias_phill_dev_io
+                alias_phill_dev_update
+                alias_scouts_dev_update
+                alias_scouts_dev_io
+                ;;
             'desktop-pstlv07' )
                 ;;
             'charon' )
@@ -53,8 +65,8 @@ function source_env_files () {
             'kore' )
                 alias_pvs_dev_kore
                 alias_pvs_dev_update
-                alias_pvs_build_kore
-                alias_pvs_build_update
+                #alias_pvs_build_kore
+                #alias_pvs_build_update
                 alias_kapcd_dev_kore
                 alias_kapcd_dev_update
                 alias_phill_dev_kore
