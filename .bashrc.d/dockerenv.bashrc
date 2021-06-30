@@ -43,8 +43,6 @@ function source_env_files () {
                 alias_kapcd_dev_update
                 alias_phill_dev_io
                 alias_phill_dev_update
-                alias_scouts_dev_update
-                alias_scouts_dev_io
                 ;;
             'desktop-pstlv07' )
                 ;;
