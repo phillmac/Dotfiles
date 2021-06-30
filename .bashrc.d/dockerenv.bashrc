@@ -7,7 +7,7 @@ function source_env_files () {
     local repo_dirs_list=(
             "kapcd/Dev-Env"
             "pvs/Dev-Env"
-            "pvs/Build-Env"
+            # "pvs/Build-Env"
             "phill/Dev-Env"
             "pvte/Dev-Env"
             "pvte/Prod-Env"
