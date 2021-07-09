@@ -23,3 +23,13 @@ function restart-archive-servers ()
     done
 }
 
+function db_monitor_logs ()
+{
+    local hosts
+
+    hosts=("docker-vps1" "docker-vps2"  "docker-vps3")
+    for h in "${hosts[@]}"
+    do
+        docker run --rm --net phill-dev_default docker sh -c "docker --host ${h}:2377 logs --tail 100 phill-dev_db-monitor_1"
+    done
+}
