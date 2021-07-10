@@ -154,30 +154,6 @@ function rclone_move_callisto () {
     docker run --rm --net host -v /root:/root -v /callisto:/callisto peelvalley/rclone-b2 "rclone move --verbose --transfers 1 --delete-empty-src-dirs --ignore-existing ${*}"
 }
 
-function ipfs_archive_add () {
-    (
-        local artist_name
-
-        artist_name=${1}
-
-        if [[ -z "${artist_name}" ]]
-        then
-            read -r -p 'Enter artist name: ' artist_name
-        fi
-        cd "/callisto/Data/Phill/_/DA Artists" \
-        && (
-            cd "${artist_name}/gallery" \
-            && docker run --rm --net none \
-                -v "$(pwd)":/wd \
-                -w /wd \
-                peelvalley/imagemagick bash -c "source /scripts/functions.sh && generate-thumbs"
-            # &&  python3 /callisto/Data/Scripts/Python/rename-thumbs.py
-        ) \
-        && ipfs add --pin=false --progress -r -w "${artist_name}"
-        echo
-    )
-}
-
 function load_bashrc.d () {
     for file in "${HOME}"/.bashrc.d/*.bashrc
     do

@@ -33,3 +33,27 @@ function db_monitor_logs ()
         docker run --rm --net phill-dev_default docker sh -c "docker --host ${h}:2377 logs --tail 100 phill-dev_db-monitor_1"
     done
 }
+
+function ipfs_archive_add () {
+    (
+        local artist_name
+
+        artist_name=${1}
+
+        if [[ -z "${artist_name}" ]]
+        then
+            read -r -p 'Enter artist name: ' artist_name
+        fi
+        cd "/callisto/Data/Phill/_/DA Artists" \
+        && (
+            cd "${artist_name}/gallery" \
+            && docker run --rm --net none \
+                -v "$(pwd)":/wd \
+                -w /wd \
+                peelvalley/imagemagick bash -c "source /scripts/functions.sh && generate-thumbs"
+            # &&  python3 /callisto/Data/Scripts/Python/rename-thumbs.py
+        ) \
+        && ipfs add --pin=false --progress -r -w "${artist_name}"
+        echo
+    )
+}
