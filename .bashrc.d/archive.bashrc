@@ -46,9 +46,35 @@ function ipfs_masonry_publish ()
     fi
 }
 
+function archive_update_ipns () {
+
+    local update_ipns_record
+    local update_query_addr
+
+    update_ipns_record=${1:-${UPDATE_IPNS_RECORD}}
+
+    update_query_addr=${2:-${UPDATE_IPNS_QUERY_ADDR}}
+
+
+    if [[ -z "${update_query_addr}" ]];
+    then
+        echo "UPDATE_IPNS_QUERY_ADDR is required" >&2
+        return 252
+    fi
+
+    docker run --rm --net host\
+        -e "CF_TOKEN=jloiYa7e-B29xbQi3um34m9NyWeUGcdLS3RY1u6V" \
+        -e "CF_ZONE_NAME=ipfs-archive.online" \
+        -e "CF_RECORD=${update_ipns_record}" \
+        -e "IPFS_KEY=${update_query_addr}" \
+        peelvalley/cloudflare scripts/update-ipns.py
+}
+
 function ipfs_masonry_deploy_dev ()
 {
     local masonry_cid
+    local dev_cid
+
     masonry_cid=$(ipfs_masonry_publish -Q)
 
     ipfs files rm -r /dev.ipfs-archive.online/galleries
@@ -56,13 +82,14 @@ function ipfs_masonry_deploy_dev ()
 
     dev_cid=$(ipfs files stat --hash /dev.ipfs-archive.online)
 
-    docker run --rm --net host\
-        -e "CF_TOKEN=jloiYa7e-B29xbQi3um34m9NyWeUGcdLS3RY1u6V" \
-        -e "CF_ZONE_NAME=ipfs-archive.online" \
-        -e "CF_RECORD=dev" \
-        -e "IPFS_KEY=${dev_cid}" \
-        peelvalley/cloudflare scripts/update-ipns.py
+    archive_update_ipns dev "${dev_cid}"
 
+}
+
+function ipfs_archive_publish ()
+{
+    archive_update_ipns '' /ipns/staging.ipfs-archive.online
+    archive_update_ipns staging "$(ipfs files stat --hash /ipfs-archive.online)"
 }
 
 function ipfs_archive_add () {

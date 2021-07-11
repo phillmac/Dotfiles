@@ -192,6 +192,23 @@ function webtorrent ()
         "${@}"
 }
 
+
+function webtorrent_download ()
+{
+    docker run \
+    --rm -it \
+    --net host \
+    -v /callisto/Data/Staging/Webtorrent:/workdir \
+    -w /workdir \
+    phillmac/webtorrent \
+        download \
+        --announce 'wss://tracker.vps1.phillm.net:8000' \
+        --keep-seeding \
+        --port 8082 \
+        "${@}"
+}
+
+
 export -f _curl
 export -f ipfs
 export -f rawurlencode
@@ -200,7 +217,6 @@ export -f ipfs_find_add_folder
 export -f ipfs_provide_folder
 export -f video_archive
 export -f load_bashrc.d
-export -f ipfs_archive_add
 export -f ipfs_cache_hash
 export -f webtorrent
 
