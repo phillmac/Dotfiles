@@ -57,6 +57,17 @@ function db.get.contents.remote ()
     done
 }
 
+function ipfs.pin.add.remote ()
+{
+    local hosts
+
+    hosts=("docker-vps1" "docker-vps2"  "docker-vps3")
+    for h in "${hosts[@]}"
+    do
+        docker run --rm --net phill-dev_default docker sh -c "docker --host ${h}:2377 exec phill-dev_ipfs_1 sh -c 'ipfs pin add --progress ${*}'"
+    done
+}
+
 function ipfs_masonry_publish ()
 {
     docker pull phillmac/ipfs-masonry-publish >&2
