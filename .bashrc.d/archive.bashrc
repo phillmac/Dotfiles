@@ -34,6 +34,29 @@ function db_monitor_logs ()
     done
 }
 
+function db.open.remote ()
+{
+    local hosts
+
+    hosts=("docker-vps1" "docker-vps2"  "docker-vps3")
+    for h in "${hosts[@]}"
+    do
+        docker run --rm --net phill-dev_default docker sh -c "docker --host ${h}:2377 exec phill-dev_db-monitor_1 bash -c 'source /scripts/functions.sh && db.open ${1}'"
+    done
+}
+
+
+function db.get.contents.remote ()
+{
+    local hosts
+
+    hosts=("docker-vps1" "docker-vps2"  "docker-vps3")
+    for h in "${hosts[@]}"
+    do
+        docker run --rm --net phill-dev_default docker sh -c "docker --host ${h}:2377 exec phill-dev_db-monitor_1 bash -c 'source /scripts/functions.sh && db.get.contents ${1}'"
+    done
+}
+
 function ipfs_masonry_publish ()
 {
     docker pull phillmac/ipfs-masonry-publish >&2
