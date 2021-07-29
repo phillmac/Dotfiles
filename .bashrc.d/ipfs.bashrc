@@ -140,31 +140,60 @@ function ipfs.pin.ls () {
     ipfs pin ls --type=recursive | sort > pins.txt
 }
 
+function containsElement ()
+{
+  local e match="$1"
+  shift
+  for e; do [[ "$e" == "$match" ]] && return 0; done
+  return 1
+}
+
 function ipfs.pins.prune () {
     local pinHash
-    local resp
+    local pinItem
+    local action
     local total
     local pcount
+    local keepPins
+    local pinsList
+
+    keepPins=()
+    pinsList=()
 
     test -p inp || mkfifo inp
 
     total=$(wc -l < pins.txt)
     pcount=1
 
+    ipfs.pin.ls
+    echo '' > ipfs.pins.remove.txt
+
+    while read -r keepItem
+    do
+        keepPins+=("${keepItem}")
+    done < pins.keep.txt
+
     while read -r pinHash pintype
     do
-        echo "Hash is ${pinHash} ${pintype} [${pcount}/${total}]" >&2
-        ipfs.ls "${pinHash}" | ipfs.links.info
-        resp=$(<inp)
-        [[ "${resp}" == "q" ]] && return
-        [[ "${resp}" == "y" ]] && ipfs pin rm "${pinHash}"
-        ((pcount++))
+        pinsList+=("${pinHash}")
     done < pins.txt
+
+    for pinItem in "${pinsList[@]}"
+    do
+        if ! containsElement "${pinItem}" "${keepPins[@]}"
+        then
+            echo "Hash is ${pinItem} [${pcount}/${total}]" >&2
+            grep "${pinItem}" ipfs.dirs.hashes
+            read -r -p "Action: " action
+            [[ "${action}" == "q" ]] && return
+            [[ "${action}" == "y" ]] && echo "${pinItem}" >> ipfs.pins.remove.txt
+        fi
+        ((pcount++))
+    done
 }
 
 function ipfs.pins.details () {
     local pinHash
-    local resp
     local total
     local pcount
 
@@ -328,10 +357,10 @@ function ipfs.pin.archive () {
 }
 
 function ipfs.entries.archive () {
-    local ipfs_pin_addr
+    local ipfs_entries_addr
     local path_filter
 
-    ipfs_pin_addr=${1:-$IPFS_PIN_ADDR}
+    ipfs_entries_addr=${1:-$IPFS_ENTRIES_ADDR}
     path_filter=${2:-${ipfs_pin_addr}/.*/}
 
     if [[ -z "${ipfs_pin_addr}" ]]
@@ -344,7 +373,7 @@ function ipfs.entries.archive () {
     do
         echo "$(date) Adding folder ${pathname}" >&2
         echo "${itemhash}"
-    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${path_filter}")
+    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_entries_addr}" "${path_filter}")
 }
 
 function ipfs.preload ()
@@ -355,44 +384,15 @@ function ipfs.preload ()
     tail -f  "${tmppipe}" | ssh -p 35681 vps1.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
     tail -f  "${tmppipe}" | ssh -p 35681 vps2.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
     tail -f  "${tmppipe}" | ssh -p 35681 vps3.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
-    tail -f  "${tmppipe}" | ssh -p 35681 io.phillm.net   docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
+    # tail -f  "${tmppipe}" | ssh -p 35681 io.phillm.net   docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
     sleep 60s
     echo 'Exporting' >&2
     docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}" | mbuffer -m 100m > "${tmppipe}"
 }
 
-function ipfs_masonry_publish ()
-{
-    docker pull phillmac/ipfs-masonry-publish >&2
-
-    if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]
-    then
-        docker run --rm --net phill-dev_ipfs phillmac/ipfs-masonry-publish "${@}";
-    else
-        docker run --rm --net pvs-dev_ipfs phillmac/ipfs-masonry-publish "${@}";
-    fi
-}
-
-function ipfs_masonry_deploy_dev ()
-{
-    local masonry_cid
-    masonry_cid=$(ipfs_masonry_publish -Q)
-
-    ipfs files rm -r /dev.ipfs-archive.online/galleries
-    ipfs files cp "/ipfs/${masonry_cid}" /dev.ipfs-archive.online/galleries
-
-    dev_cid=$(ipfs files stat --hash /dev.ipfs-archive.online)
-
-    docker run --rm --net host\
-        -e "CF_TOKEN=jloiYa7e-B29xbQi3um34m9NyWeUGcdLS3RY1u6V" \
-        -e "CF_ZONE_NAME=ipfs-archive.online" \
-        -e "CF_RECORD=dev" \
-        -e "IPFS_KEY=${dev_cid}" \
-        peelvalley/cloudflare scripts/update-ipns.py
-
-}
 
 export -f ipfs.ls
+export -f ipfs.pin.ls
 export -f ipfs.ls.recursive
 export -f ipfs.ls.recursive.dirs
 export -f ipfs.ls.recursive.dirs.filtered
