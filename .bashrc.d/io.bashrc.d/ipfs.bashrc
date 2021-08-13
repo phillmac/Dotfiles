@@ -15,9 +15,9 @@ IPFS_HTTP_GATEWAY="192.168.20.33:8080"
 
 function io.ipfs.preload ()
 {
-    docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}"  | ssh -p 35681 vps1.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
-    docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}"  | ssh -p 35681 vps2.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
-    docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}"  | ssh -p 35681 vps3.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
+    tmux split bash -c "docker exec -i phill-dev_ipfs_1 ipfs dag export ${*}  | mbuffer | ssh -p 35681 vps1.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false"
+    tmux split bash -c "docker exec -i phill-dev_ipfs_1 ipfs dag export ${*}  | mbuffer | ssh -p 35681 vps2.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false"
+    tmux split bash -c "docker exec -i phill-dev_ipfs_1 ipfs dag export ${*}  | mbuffer | ssh -p 35681 vps3.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false"
     docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}" | mbuffer | ./ipfs-s3 dag import --pin-roots=false
 }
 
