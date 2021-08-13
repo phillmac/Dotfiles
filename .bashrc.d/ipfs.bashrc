@@ -378,16 +378,10 @@ function ipfs.entries.archive () {
 
 function ipfs.preload ()
 {
-    tmppipe=$(mktemp -u)
-    echo  "Using pipe ${tmppipe}"
-    mkfifo -m 600 "${tmppipe}"
-    tail -f  "${tmppipe}" | ssh -p 35681 vps1.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
-    tail -f  "${tmppipe}" | ssh -p 35681 vps2.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
-    tail -f  "${tmppipe}" | ssh -p 35681 vps3.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
-    # tail -f  "${tmppipe}" | ssh -p 35681 io.phillm.net   docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
-    sleep 60s
-    echo 'Exporting' >&2
-    docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}" | mbuffer -m 100m > "${tmppipe}"
+    docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}" | mbuffer -m 100m | ssh -p 35681 vps1.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false
+    docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}" | mbuffer -m 100m | ssh -p 35681 vps2.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false
+    docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}" | mbuffer -m 100m | ssh -p 35681 vps3.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false
+    docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}" | mbuffer -m 100m | sshp io.phillm.net ./ipfs-s3 dag import --pin-roots=false
 }
 
 
