@@ -18,7 +18,7 @@ function io.ipfs.preload ()
     docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}"  | ssh -p 35681 vps1.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
     docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}"  | ssh -p 35681 vps2.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
     docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}"  | ssh -p 35681 vps3.phillm.net docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false &
-    docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}"  | ./ipfs-s3 dag import --pin-roots=false
+    docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}" | mbuffer | ./ipfs-s3 dag import --pin-roots=false
 }
 
 export IPFS_GET_BATCH_COUNT
