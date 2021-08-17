@@ -220,7 +220,7 @@ export -f load_bashrc.d
 export -f ipfs_cache_hash
 export -f webtorrent
 
-alias sshp="ssh -p 35681"
+alias sshp="ssh -p 35681 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
 alias curl=_curl
 alias dagr="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA phillmac/dagr_revamped:latest dagr.py"
 alias dagr-bulk="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA  phillmac/dagr_revamped:latest  dagr-bulk.py"
