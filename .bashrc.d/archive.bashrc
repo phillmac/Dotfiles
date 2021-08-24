@@ -8,12 +8,14 @@ function restart-archive-servers ()
     local h
     local s
 
-    hosts=("docker-vps1" "docker-vps2"  "docker-vps3")
+    hosts=("docker-vps1" "docker-vps2" "docker-vps3")
 
-    services=('reverse-proxy' 'ipfs' 'orbitdb-api' 'db-monitor')
+    services=('ipfs' 'reverse-proxy' 'orbitdb-api' 'db-monitor')
 
     for h in "${hosts[@]}"
     do
+        docker run --rm --net phill-dev_default docker sh -c "docker --host ${h}:2377 exec phill-dev_ipfs_1 ipfs shutdown"
+        echo 'ipfs shutdown complete'
         for s in "${services[@]}"
         do
             echo "$(date) Restarting ${h} ${s}"
