@@ -20,7 +20,7 @@ function ipfs.get.recursive () {
 
         [[ -n "${IPFS_DEBUG}" ]] &&  echo "url is ${url}" >&2
 
-        curl -s "${url}" > /dev/null
+        _curl "${url}" > /dev/null
     done < <(ipfs.ls.recursive "${1}")
 }
 
@@ -126,7 +126,7 @@ function ipfs.ls () {
     url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${addr_encoded}"
     [[ -n "${IPFS_DEBUG}" ]] &&  echo "url is ${url}" >&2
 
-    result=$(curl "${url}")
+    result=$(_curl "${url}")
 
     jq -r ".Objects[].Links" <<< "${result}"
 }
