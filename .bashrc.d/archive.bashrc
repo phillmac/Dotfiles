@@ -181,6 +181,21 @@ function archive.pin.remote ()
     done
 }
 
+function archive.stats.remote ()
+{
+    local hosts
+
+    hosts=("docker-vps1" "docker-vps2" "docker-vps3")
+
+    for h in "${hosts[@]}"
+    do
+        echo "Stats for ${h}"
+
+        docker run --rm -it --net phill-dev_default docker sh -c \
+            "docker --host ${h}:2377 exec phill-dev_ipfs_1 ipfs repo stat --human"
+    done
+}
+
 function archive.pin () {
     local ipfs_pin_addr
     local path_filter
