@@ -151,3 +151,71 @@ function ipfs_archive_add () {
         echo
     )
 }
+
+
+function archive.pin.remote ()
+{
+    local hosts
+    local pinner_version=pinner-v1.0.0
+
+    hosts=("docker-vps1" "docker-vps2" "docker-vps3")
+
+    for h in "${hosts[@]}"
+    do
+        echo "Pining on ${h}"
+        docker run --rm --net phill-dev_default docker sh -c \
+            "docker --host ${h}:2377 pull peelvalley/ipfs-cli:${pinner_version}"
+
+        docker run --rm -it --net phill-dev_default docker sh -c \
+            "docker --host ${h}:2377 \
+                run \
+                --rm  -it --net phill-dev_ipfs \
+                -e 'IPFS_HTTP_GATEWAY=http://ipfs:8080' \
+                --entrypoint bash peelvalley/ipfs-cli:${pinner_version} \
+                -c 'source /scripts/functions.sh \
+                && ipfs.pin.recursive /ipns/ipfs-archive.online/Archive/DA'"
+    done
+}
+
+function archive.pin () {
+    local ipfs_pin_addr
+    local path_filter
+
+    ipfs_pin_addr=${1:-$IPFS_PIN_ADDR}
+    path_filter=${2:-${ipfs_pin_addr}/.*/}
+
+    if [[ -z "${ipfs_pin_addr}" ]]
+    then
+        echo "IPFS pin addr is required" >&2
+        return 252
+    fi
+
+    while read -r itemhash pathname
+    do
+        echo "$(date) Pinning folder ${pathname}" >&2
+        ipfs pin add --progress "${itemhash}"
+    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${path_filter}")
+}
+
+function archive.entries () {
+    local ipfs_entries_addr
+    local path_filter
+
+    ipfs_entries_addr=${1:-$IPFS_ENTRIES_ADDR}
+    path_filter=${2:-${ipfs_pin_addr}/.*/}
+
+    if [[ -z "${ipfs_pin_addr}" ]]
+    then
+        echo "IPFS pin addr is required" >&2
+        return 252
+    fi
+
+    while read -r itemhash pathname
+    do
+        echo "$(date) Adding folder ${pathname}" >&2
+        echo "${itemhash}"
+    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_entries_addr}" "${path_filter}")
+}
+
+export -f archive.pin
+export -f archive.entries
