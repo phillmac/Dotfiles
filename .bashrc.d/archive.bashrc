@@ -157,6 +157,10 @@ function archive.pin.remote ()
 {
     local hosts
     local pinner_version=pinner-v1.0.0
+    local archive_addr
+
+    archive_addr=${1:-/ipns/ipfs-archive.online/Archive/DA}
+
 
     hosts=("docker-vps1" "docker-vps2" "docker-vps3")
 
@@ -173,7 +177,7 @@ function archive.pin.remote ()
                 -e 'IPFS_HTTP_GATEWAY=http://ipfs:8080' \
                 --entrypoint bash peelvalley/ipfs-cli:${pinner_version} \
                 -c 'source /scripts/functions.sh \
-                && ipfs.pin.recursive /ipns/ipfs-archive.online/Archive/DA'"
+                && ipfs.pin.recursive ${archive_addr}'"
     done
 }
 
