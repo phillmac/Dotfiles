@@ -156,7 +156,7 @@ function ipfs_archive_add () {
 function archive.pin.remote ()
 {
     local hosts
-    local pinner_version=pinner-v1.0.0
+    local pinner_version=pinner-v1.1.0
     local archive_addr
 
     archive_addr=${1:-/ipns/ipfs-archive.online/Archive/DA}
