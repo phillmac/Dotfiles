@@ -181,6 +181,34 @@ function archive.pin.remote ()
     done
 }
 
+function archive.pin.remote.pvs ()
+{
+    local hosts
+    local pinner_version=pinner-v1.1.0
+    local archive_addr
+
+    archive_addr=${1:-/ipns/ipfs-archive.online/Archive/DA}
+
+
+    hosts=("docker-charon" "docker-titan")
+
+    for h in "${hosts[@]}"
+    do
+        echo "Pining on ${h}"
+        docker run --rm --net pvs-dev_scheduler docker sh -c \
+            "docker --host ${h}:2377 pull peelvalley/ipfs-cli:${pinner_version}"
+
+        docker run --rm -it --net pvs-dev_scheduler docker sh -c \
+            "docker --host ${h}:2377 \
+                run \
+                --rm  -it --net phill-dev_ipfs \
+                -e 'IPFS_HTTP_GATEWAY=http://ipfs:8080' \
+                --entrypoint bash peelvalley/ipfs-cli:${pinner_version} \
+                -c 'source /scripts/functions.sh \
+                && ipfs.pin.recursive ${archive_addr}'"
+    done
+}
+
 function archive.stats.remote ()
 {
     local hosts
