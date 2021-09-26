@@ -224,6 +224,104 @@ function archive.stats.remote ()
     done
 }
 
+function archive.dag.get ()
+{
+    local hosts
+    local dag_addr
+
+    dag_addr=${1:-/ipns/ipfs-archive.online/Archive/DA}
+
+
+    hosts=("docker-vps1" "docker-vps2" "docker-vps3")
+
+    for h in "${hosts[@]}"
+    do
+        echo "Fetching dag on ${h}"
+
+        docker run --rm -it --net phill-dev_default docker sh -c \
+            "docker --host ${h}:2377 exec phill-dev_ipfs_1 ipfs dag get ${dag_addr}"
+    done
+}
+
+function archive.dag.get.pvs ()
+{
+    local hosts
+    local dag_addr
+
+    dag_addr=${1:-/ipns/ipfs-archive.online/Archive/DA}
+
+
+    hosts=("docker-charon" "docker-titan" "docker-io")
+
+    for h in "${hosts[@]}"
+    do
+        echo "Fetching dag on ${h}"
+
+        docker run --rm -it --net pvs-dev_scheduler docker sh -c \
+            "docker --host ${h}:2377 exec phill-dev_ipfs_1 ipfs dag get ${dag_addr}"
+    done
+}
+
+function archive.dht.provide ()
+{
+    local hosts
+    local provide_addr
+    local cid
+
+    provide_addr=${1:-/ipns/ipfs-archive.online/Archive/DA}
+
+    cid=$(ipfs resolve "${provide_addr}" --timeout "${IPFS_RESOLVE_TIMEOUT}" | sed 's/\/ipfs\///g' /dev/stdin)
+
+    hosts=("docker-vps1" "docker-vps2" "docker-vps3")
+
+    for h in "${hosts[@]}"
+    do
+        echo "$(date) Providing ${cid} on ${h}"
+
+        docker run --rm -it --net phill-dev_default docker sh -c \
+            "docker --host ${h}:2377 \
+            run \
+              --rm -it \
+              --net phill-dev_ipfs \
+              peelvalley/ipfs-cli \
+              dht provide \
+                --verbose \
+                --timeout 10m \
+                ${cid}"
+        echo "$(date) Done"
+    done
+}
+
+function archive.dht.provide.pvs ()
+{
+    local hosts
+    local provide_addr
+    local cid
+
+    provide_addr=${1:-/ipns/ipfs-archive.online/Archive/DA}
+
+    cid=$(ipfs resolve "${provide_addr}" --timeout "${IPFS_RESOLVE_TIMEOUT}" | sed 's/\/ipfs\///g' /dev/stdin)
+
+    hosts=("docker-charon" "docker-titan" "docker-io")
+
+    for h in "${hosts[@]}"
+    do
+        echo "$(date) Providing ${cid} on ${h}"
+
+        docker run --rm -it --net pvs-dev_scheduler docker sh -c \
+            "docker --host ${h}:2377 \
+            run \
+              --rm -it \
+              --net phill-dev_ipfs \
+              peelvalley/ipfs-cli \
+              dht provide \
+                --verbose \
+                --timeout 10m \
+                ${cid}"
+        echo "$(date) Done"
+    done
+}
+
 function archive.pin () {
     local ipfs_pin_addr
     local path_filter
