@@ -152,7 +152,6 @@ function ipfs_archive_add () {
     )
 }
 
-
 function archive.pin.remote ()
 {
     local hosts
@@ -220,7 +219,36 @@ function archive.stats.remote ()
         echo "Stats for ${h}"
 
         docker run --rm -it --net phill-dev_default docker sh -c \
-            "docker --host ${h}:2377 exec phill-dev_ipfs_1 ipfs repo stat --human"
+            "docker --host ${h}:2377 \
+                run \
+                    --rm -it \
+                    --net phill-dev_ipfs \
+                    peelvalley/ipfs-cli \
+                        repo stat \
+                            --size-only \
+                            --human"
+    done
+}
+
+function archive.stats.pvs ()
+{
+    local hosts
+
+    hosts=("docker-charon" "docker-titan" "docker-io")
+
+    for h in "${hosts[@]}"
+    do
+        echo "Stats for ${h}"
+
+        docker run --rm -it --net pvs-dev_scheduler docker sh -c \
+            "docker --host ${h}:2377 \
+                run \
+                    --rm -it \
+                    --net phill-dev_ipfs \
+                    peelvalley/ipfs-cli \
+                        repo stat \
+                            --size-only \
+                            --human"
     done
 }
 
@@ -347,19 +375,102 @@ function archive.entries () {
     local path_filter
 
     ipfs_entries_addr=${1:-$IPFS_ENTRIES_ADDR}
-    path_filter=${2:-${ipfs_pin_addr}/.*/}
+    ipfs_entries_addr=${ipfs_entries_addr:-/ipns/ipfs-archive.online/Archive/DA}
+    path_filter=${2:-${ipfs_entries_addr}/.*/}
 
-    if [[ -z "${ipfs_pin_addr}" ]]
+    if [[ -z "${ipfs_entries_addr}" ]]
     then
-        echo "IPFS pin addr is required" >&2
+        echo "IPFS entries addr is required" >&2
         return 252
     fi
 
     while read -r itemhash pathname
     do
-        echo "$(date) Adding folder ${pathname}" >&2
+        echo "$(date) Found item ${itemhash} ${pathname}" >&2
         echo "${itemhash}"
     done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_entries_addr}" "${path_filter}")
+}
+
+function archive.pin.ls ()
+{
+    local docker_host
+    local docker_net
+
+    docker_host=${1:-ARCHIVE_PIN_LS_HOST}
+    docker_net=${2:-ARCHIVE_PIN_LS_NET}
+    while read -r cid pintype
+    do
+        echo "${cid}"
+    done < <(
+        docker \
+            run --rm -it \
+                --net "${docker_net}" \
+                docker sh -c \
+                "docker --host ${docker_host}:2377 \
+                    run \
+                        --rm -it \
+                        --net phill-dev_ipfs \
+                        peelvalley/ipfs-cli \
+                        pin ls --type=recursive"
+    )
+}
+
+function archive.pins.missing () {
+    local hosts
+
+    hosts=("docker-vps1" "docker-vps2" "docker-vps3")
+
+    archive.entries | sort --unique > archive.entries.txt
+
+    for h in "${hosts[@]}"
+    do
+        echo "$(date) Listing pins for ${h}" >&2
+        echo '' > "archive.pins.${h}.txt"
+        archive.pin.ls "${h}" phill-dev_default | sort --unique > "archive.pins.${h}.txt"
+        while read -r pincid
+        do
+            echo "${h} missing item ${pincid}" >&2
+
+            docker run --rm --net phill-dev_default docker sh -c \
+                "docker --host ${h}:2377 \
+                    run \
+                    --rm --net phill-dev_ipfs \
+                    peelvalley/ipfs-cli \
+                        pin add \
+                            --progress \
+                            --timeout 2h \
+                            ${pincid}"
+        done < <( comm -23 archive.entries.txt "archive.pins.${h}.txt")
+    done
+}
+
+function archive.pins.missing.pvs () {
+    local hosts
+
+    hosts=("docker-charon" "docker-titan")
+
+    archive.entries | sort --unique > archive.entries.txt
+
+    for h in "${hosts[@]}"
+    do
+        echo "$(date) Listing pins for ${h}" >&2
+        echo '' > "archive.pins.${h}.txt"
+        archive.pin.ls "${h}" pvs-dev_scheduler | sort --unique > "archive.pins.${h}.txt"
+        while read -r pincid
+        do
+            echo "${h} missing item ${pincid}" >&2
+
+            docker run --rm --net pvs-dev_scheduler docker sh -c \
+                "docker --host ${h}:2377 \
+                    run \
+                    --rm --net phill-dev_ipfs \
+                    peelvalley/ipfs-cli \
+                        pin add \
+                            --progress \
+                            --timeout 2h \
+                            ${pincid}"
+        done < <( comm -23 archive.entries.txt "archive.pins.${h}.txt")
+    done
 }
 
 export -f archive.pin
