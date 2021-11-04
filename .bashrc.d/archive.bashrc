@@ -354,7 +354,7 @@ function archive.pin () {
     local ipfs_pin_addr
     local path_filter
 
-    ipfs_pin_addr=${1:-$IPFS_PIN_ADDR}
+    ipfs_pin_addr=${1:-${IPFS_PIN_ADDR}}
     path_filter=${2:-${ipfs_pin_addr}/.*/}
 
     if [[ -z "${ipfs_pin_addr}" ]]
@@ -374,7 +374,7 @@ function archive.entries () {
     local ipfs_entries_addr
     local path_filter
 
-    ipfs_entries_addr=${1:-$IPFS_ENTRIES_ADDR}
+    ipfs_entries_addr=${1:-${IPFS_ENTRIES_ADDR}}
     ipfs_entries_addr=${ipfs_entries_addr:-/ipns/ipfs-archive.online/Archive/DA}
     path_filter=${2:-${ipfs_entries_addr}/.*/}
 
@@ -396,8 +396,8 @@ function archive.pin.ls ()
     local docker_host
     local docker_net
 
-    docker_host=${1:-ARCHIVE_PIN_LS_HOST}
-    docker_net=${2:-ARCHIVE_PIN_LS_NET}
+    docker_host=${1:-${ARCHIVE_PIN_LS_HOST}}
+    docker_net=${2:-${ARCHIVE_PIN_LS_NET}}
     while read -r cid pintype
     do
         echo "${cid}"
