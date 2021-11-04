@@ -192,21 +192,31 @@ function webtorrent ()
         "${@}"
 }
 
+function webtorrent_create () {
+    docker run \
+    --rm -it \
+    --net none \
+    -v "$(pwd)":/workdir \
+    -w /workdir \
+    --entrypoint create-torrent \
+    phillmac/webtorrent \
+        "${@}"
+}
 
-# function webtorrent_download ()
-# {
-#     docker run \
-#     --rm -it \
-#     --net host \
-#     -v /callisto/Data/Staging/Webtorrent:/workdir \
-#     -w /workdir \
-#     phillmac/webtorrent \
-#         download \
-#         --announce 'wss://tracker.vps1.phillm.net:8000' \
-#         --keep-seeding \
-#         --port 8082 \
-#         "${@}"
-# }
+function webtorrent_seed ()
+{
+    docker run \
+    --rm -it \
+    --net host \
+    -v "$(pwd)":/workdir \
+    -w /workdir \
+    phillmac/webtorrent \
+        download \
+        --announce 'wss://tracker.vps1.phillm.net:8000' \
+        --keep-seeding \
+        --port 8082 \
+        "${@}"
+}
 
 function webtorrent_download ()
 {
