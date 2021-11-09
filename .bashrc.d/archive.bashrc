@@ -375,7 +375,7 @@ function archive.entries () {
     local path_filter
 
     ipfs_entries_addr=${1:-${IPFS_ENTRIES_ADDR}}
-    ipfs_entries_addr=${ipfs_entries_addr:-/ipns/ipfs-archive.online/Archive/DA}
+    ipfs_entries_addr=${ipfs_entries_addr:-/ipns/staging.ipfs-archive.online/Archive/DA}
     path_filter=${2:-${ipfs_entries_addr}/.*/}
 
     if [[ -z "${ipfs_entries_addr}" ]]
