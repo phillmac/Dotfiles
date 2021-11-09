@@ -370,15 +370,19 @@ function archive.pin () {
     done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${path_filter}")
 }
 
+#shellcheck disable=SC2120
 function archive.entries () {
-    local ipfs_entries_addr
+    local entries_addr
     local path_filter
+    local entries_addr_resolved
 
-    ipfs_entries_addr=${1:-${IPFS_ENTRIES_ADDR}}
-    ipfs_entries_addr=${ipfs_entries_addr:-/ipns/staging.ipfs-archive.online/Archive/DA}
-    path_filter=${2:-${ipfs_entries_addr}/.*/}
+    entries_addr=${1:-${IPFS_ENTRIES_ADDR}}
+    entries_addr=${ipfs_entries_addr:-/ipns/staging.ipfs-archive.online/Archive/DA}
+    entries_addr_resolved=$(ipfs resolve --timeout 10m "${ipfs_entries_addr}")
+    path_filter=${2:-${entries_addr_resolved}/.*/}
 
-    if [[ -z "${ipfs_entries_addr}" ]]
+
+    if [[ -z "${entries_addr}" ]]
     then
         echo "IPFS entries addr is required" >&2
         return 252
@@ -388,7 +392,7 @@ function archive.entries () {
     do
         echo "$(date) Found item ${itemhash} ${pathname}" >&2
         echo "${itemhash}"
-    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_entries_addr}" "${path_filter}")
+    done < <(ipfs.ls.recursive.dirs.filtered "${entries_addr}" "${path_filter}")
 }
 
 function archive.pin.ls ()
