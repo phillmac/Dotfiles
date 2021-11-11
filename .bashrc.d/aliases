@@ -74,7 +74,10 @@ function ipfs_find_add_folder() {
     patern="${1}"
     folder="${2}"
 
-    find . -type f -name "${patern}" -exec bash -c "ipfs_add_folder '{}' '${folder}'" \;
+    while read -r fname
+    do
+        ipfs_add_folder "${fname}" "${folder}"
+    done < <(find . -type f -iname "${patern}")
 
 }
 
