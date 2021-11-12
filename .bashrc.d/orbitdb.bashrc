@@ -235,10 +235,10 @@ function db.contents.get () {
 
     host=${2:-${ORBIT_DB_HOST}}
 
-    db.payload.value "${1}" "${host}" | while read hash
+    db.payload.value "${1}" "${host}" | while read -r hash
     do
         ipfs.get.recursive "${hash}"
-        "$(which curl)" "${IPFS_HTTP_GATEWAY}/ipfs/${hash}" > /dev/null
+        curl "${IPFS_HTTP_GATEWAY}/ipfs/${hash}" > /dev/null
     done
 }
 
