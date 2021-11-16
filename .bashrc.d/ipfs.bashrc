@@ -25,13 +25,11 @@ function ipfs.get.recursive () {
 }
 
 function ipfs.ls.recursive () {
-    local entries
     local itemtype
     local itemhash
     local itemname
 
     echo "$(date) Resolving ${*}" >&2
-    entries=$(ipfs.ls "${*}" | ipfs.links.info)
     while read -r itemtype itemhash itemname
     do
         if [[ -n "${itemname}" ]]
@@ -42,7 +40,7 @@ function ipfs.ls.recursive () {
                 ipfs.ls.recursive "${1}/${itemname}"
             fi
         fi
-    done <<< "${entries}"
+    done < <(ipfs.ls "${*}" | ipfs.links.info)
 }
 
 function ipfs.ls.recursive.dirs () {
