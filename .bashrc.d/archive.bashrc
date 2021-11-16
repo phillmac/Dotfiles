@@ -378,11 +378,11 @@ function archive.entries () {
 
     entries_addr=${1:-${IPFS_ENTRIES_ADDR}}
     entries_addr=${ipfs_entries_addr:-/ipns/staging.ipfs-archive.online/Archive/DA}
-    entries_addr_resolved=$(ipfs resolve --timeout 10m "${ipfs_entries_addr}")
+    entries_addr_resolved=$(ipfs resolve --timeout 10m "${entries_addr}")
     path_filter=${2:-${entries_addr_resolved}/.*/}
 
 
-    if [[ -z "${entries_addr}" ]]
+    if [[ -z "${entries_addr_resolved}" ]]
     then
         echo "IPFS entries addr is required" >&2
         return 252
@@ -392,7 +392,7 @@ function archive.entries () {
     do
         echo "$(date) Found item ${itemhash} ${pathname}" >&2
         echo "${itemhash}"
-    done < <(ipfs.ls.recursive.dirs.filtered "${entries_addr}" "${path_filter}")
+    done < <(ipfs.ls.recursive.dirs.filtered "${entries_addr_resolved}" "${path_filter}")
 }
 
 function archive.pin.ls ()
