@@ -348,6 +348,7 @@ export -f ipfs.ls
 export -f ipfs.pin.ls
 export -f ipfs.ls.recursive
 export -f ipfs.ls.recursive.dirs
+export -f ipfs.ls.recursive.files
 export -f ipfs.ls.recursive.dirs.filtered
 export -f ipfs.links.info
 export -f ipfs.get.recursive
