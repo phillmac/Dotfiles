@@ -61,7 +61,7 @@ function ipfs.ls.recursive.dirs () {
     done <<< "${entries}"
 }
 
-function ipfs.ls.recursive.dirs () {
+function ipfs.ls.recursive.files () {
     local itemtype
     local itemhash
     local itemname
@@ -70,10 +70,11 @@ function ipfs.ls.recursive.dirs () {
 
     while read -r itemtype itemhash itemname
     do
-        if (( itemtype == 1))
+        if (( itemtype == 2))
         then
             echo "${itemhash}" "${1}/${itemname}"
-            ipfs.ls.recursive.dirs "${1}/${itemname}"
+        else
+            ipfs.ls.recursive.files "${1}/${itemname}"
         fi
     done < <(ipfs.ls "${*}" | ipfs.links.info)
 }
