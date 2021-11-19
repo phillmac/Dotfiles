@@ -162,7 +162,7 @@ function rclone_move_callisto () {
 }
 
 function rclone () {
-    docker run -it --rm --net host -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint bash peelvalley/rclone-b2
+    docker run -it --rm --net host -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint bash peelvalley/rclone-b2 "${@}"
 }
 
 function load_bashrc.d () {
