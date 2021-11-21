@@ -122,12 +122,10 @@ function ipfs.ls () {
 
     [[ -n "${IPFS_DEBUG}" ]] &&  echo "addr_encoded is ${addr_encoded}" >&2
 
-    url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${addr_encoded}"
+    url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${addr_encoded}?stream=true"
     [[ -n "${IPFS_DEBUG}" ]] &&  echo "url is ${url}" >&2
 
-    result=$(_curl "${url}")
-
-    jq -r ".Objects[].Links" <<< "${result}"
+    jq -r ".Objects[].Links[]" < <(_curl "${url}")
 }
 
 function ipfs.links.info ()
