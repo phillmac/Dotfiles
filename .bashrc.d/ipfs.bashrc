@@ -124,12 +124,12 @@ function ipfs.ls () {
     url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${addr_encoded}&stream=true"
     [[ -n "${IPFS_DEBUG}" ]] &&  echo "url is ${url}" >&2
 
-    jq -r ".Objects[].Links[]" < <(_curl "${url}")
+    jq -r ".Objects[].Links[]" < <(_curl "${url}" < /dev/null | tee result.3.txt)
 }
 
 function ipfs.links.info ()
 {
-    jq -r '.[] | "\(.Type) \(.Hash) \(.Name)"'
+    jq -r '. | "\(.Type) \(.Hash) \(.Name)"'
 }
 
 function ipfs.pin.ls () {
