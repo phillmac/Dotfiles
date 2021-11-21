@@ -58,8 +58,8 @@ function jsawk () {
 }
 
 function ipfs () {
-    if type ipfs; then
-        ipfs "${@}"
+    if which ipfs > /dev/null; then
+        $(which ipfs) "${@}"
     else
         _ipfs "${@}"
     fi
