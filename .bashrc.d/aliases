@@ -57,8 +57,15 @@ function jsawk () {
     docker run --rm -i peelvalley/jsawk bash -c "jsawk ${*}"
 }
 
+function ipfs () {
+    if type ipfs; then
+        ipfs "${@}"
+    else
+        _ipfs "${@}"
+    fi
+}
 
-function ipfs() {
+function _ipfs() {
     if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]; then
         docker run --rm -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
     else
@@ -245,6 +252,7 @@ function webtorrent_download ()
 
 export -f _curl
 export -f ipfs
+export -f _ipfs
 export -f rawurlencode
 export -f ipfs_add_folder
 export -f ipfs_find_add_folder
@@ -253,6 +261,7 @@ export -f video_archive
 export -f load_bashrc.d
 export -f ipfs_cache_hash
 export -f webtorrent
+
 
 alias sshp="ssh -p 35681 -o ServerAliveInterval=10 -o ServerAliveCountMax=3"
 alias dagr="docker run --rm  -v/callisto/Data/Phill/_/DA\\ Artists:/DA -w /DA phillmac/dagr_revamped:latest dagr.py"
