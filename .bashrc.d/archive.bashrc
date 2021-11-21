@@ -376,8 +376,8 @@ function archive.entries () {
     local path_filter
     local entries_addr_resolved
 
-    entries_addr=${1:-${IPFS_ENTRIES_ADDR}}
-    entries_addr=${ipfs_entries_addr:-/ipns/staging.ipfs-archive.online/Archive/DA}
+    entries_addr=${1:-${ARCHIVE_ENTRIES_ADDR}}
+    entries_addr=${entries_addr:-/ipns/staging.ipfs-archive.online/Archive/DA}
     entries_addr_resolved=$(ipfs resolve --timeout 10m "${entries_addr}")
     path_filter=${2:-${entries_addr_resolved}/.*/}
 
