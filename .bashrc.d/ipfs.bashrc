@@ -108,7 +108,6 @@ function ipfs.ls () {
     local addr
     local addr_encoded
     local url
-    local result
 
     addr=${1:-$IPFS_ADDR}
 
