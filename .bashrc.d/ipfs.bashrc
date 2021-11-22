@@ -29,7 +29,11 @@ function ipfs.ls.recursive () {
     local itemhash
     local itemname
 
-    echo "$(date) Resolving ${*}" >&2
+    local ls_recursive_addr
+
+    ls_recursive_addr=${2:-${1}}
+
+    echo "$(date) Listing ${ls_recursive_addr}" >&2
     while read -r itemtype itemhash itemname
     do
         if [[ -n "${itemname}" ]]
@@ -37,28 +41,30 @@ function ipfs.ls.recursive () {
             echo "${itemhash}" "${1}/${itemname}"
             if (( itemtype == 1))
             then
-                ipfs.ls.recursive "${1}/${itemname}"
+                ipfs.ls.recursive "${1}/${itemname}" "${itemhash}"
             fi
         fi
-    done < <(ipfs.ls "${*}" | ipfs.links.info)
+    done < <(ipfs.ls  "${ls_recursive_addr}" | ipfs.links.info)
 }
 
 function ipfs.ls.recursive.dirs () {
-    local entries
     local itemtype
     local itemhash
     local itemname
 
-    echo "$(date) Resolving ${*}" >&2
-    entries=$(ipfs.ls "${*}" | ipfs.links.info)
+    local ls_recursive_dirs_addr
+
+    ls_recursive_dirs_addr=${2:-${1}}
+
+    echo "$(date) Listing ${1}" >&2
     while read -r itemtype itemhash itemname
     do
-        if (( itemtype == 1))
+        if ((itemtype == 1))
         then
             echo "${itemhash}" "${1}/${itemname}"
-            ipfs.ls.recursive.dirs "${1}/${itemname}"
+            ipfs.ls.recursive.dirs "${1}/${itemname}" "${itemhash}"
         fi
-    done <<< "${entries}"
+    done < <(ipfs.ls "${ls_recursive_dirs_addr}" | ipfs.links.info)
 }
 
 function ipfs.ls.recursive.files () {
@@ -66,17 +72,21 @@ function ipfs.ls.recursive.files () {
     local itemhash
     local itemname
 
-    echo "$(date) Resolving ${*}" >&2
+    local ls_recursive_files_addr
+
+    ls_recursive_files_addr=${2:-${1}}
+
+    echo "$(date) Resolving ${1}" >&2
 
     while read -r itemtype itemhash itemname
     do
-        if (( itemtype == 2))
+        if ((itemtype == 2))
         then
             echo "${itemhash}" "${1}/${itemname}"
         else
-            ipfs.ls.recursive.files "${1}/${itemname}"
+            ipfs.ls.recursive.files "${1}/${itemname}" "${itemhash}"
         fi
-    done < <(ipfs.ls "${*}" | ipfs.links.info)
+    done < <(ipfs.ls "${ls_recursive_files_addr}" | ipfs.links.info)
 }
 
 function ipfs.ls.recursive.dirs.filtered () {
@@ -103,28 +113,50 @@ function ipfs.ls.recursive.dirs.filtered () {
     ipfs.ls.recursive.dirs "${addr}" | grep "${filter}"
 }
 
+function ipfs.resolve () {
+    local resolve_addr
+    local resolve_addr_encoded
+    local resolve_url
 
-function ipfs.ls () {
-    local addr
-    local addr_encoded
-    local url
+    resolve_addr=${1}
 
-    addr=${1:-$IPFS_ADDR}
-
-    if [[ -z "${addr}" ]];
+    if [[ -z "${resolve_addr}" ]];
     then
-        echo "IPFS addr is required" >&2
+        echo "resolve addr is required" >&2
         return 252
     fi
 
-    addr_encoded=$(rawurlencode "${addr}")
+    resolve_addr_encoded=$(rawurlencode "${resolve_addr}")
 
-    [[ -n "${IPFS_DEBUG}" ]] &&  echo "addr_encoded is ${addr_encoded}" >&2
+    [[ -n "${IPFS_DEBUG}" ]] &&  echo "resolve_addr_encoded is ${resolve_addr_encoded}" >&2
 
-    url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${addr_encoded}&stream=true"
-    [[ -n "${IPFS_DEBUG}" ]] &&  echo "url is ${url}" >&2
 
-    jq -r ".Objects[].Links[]" < <(_curl "${url}" < /dev/null | tee result.3.txt)
+    resolve_url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/resolve?arg=${1}"
+
+    jq -r '.Path' < <(_curl "${resolve_url}"  )
+}
+
+function ipfs.ls () {
+    local ls_addr
+    local ls_addr_encoded
+    local ls_url
+
+    ls_addr=${1:-$IPFS_ADDR}
+
+    if [[ -z "${ls_addr}" ]];
+    then
+        echo "ls addr is required" >&2
+        return 252
+    fi
+
+    ls_addr_encoded=$(rawurlencode "${ls_addr}")
+
+    [[ -n "${IPFS_DEBUG}" ]] &&  echo "ls_addr_encoded is ${ls_addr_encoded}" >&2
+
+    ls_url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/ls?arg=${ls_addr_encoded}&stream=true"
+    [[ -n "${IPFS_DEBUG}" ]] &&  echo "ls_url is ${ls_url}" >&2
+
+    jq -r ".Objects[].Links[]" < <(_curl "${ls_url}")
 }
 
 function ipfs.links.info ()
