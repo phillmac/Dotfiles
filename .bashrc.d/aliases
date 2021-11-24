@@ -277,3 +277,5 @@ alias orbitdbapi="docker run --rm -it -w /Repos/orbit-db-http-api  -v pvs-dev_ce
 alias orbitdbsprinkle="docker run --rm -d -w /var/www  -v/ananke/D/Source/Phill/Repos:/Repos --net pvs-dev_ipfs --name orbitdb_dash peelvalley/userfrosting"
 alias youtube-dl=youtube_dl
 alias nodejs-dev=nodejs_dev
+
+alias wtdl=webtorrent_download
