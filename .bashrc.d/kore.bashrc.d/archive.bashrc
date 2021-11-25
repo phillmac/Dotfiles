@@ -36,6 +36,10 @@ function db.monitor.logs ()
     done
 }
 
+function reverse-proxy.logs () {
+    docker run --rm -it --net phill-dev_default docker sh -c "docker --host ${1}:2377 logs -f --tail 100 phill-dev_reverse-proxy_1"
+}
+
 function db.open.remote ()
 {
     local hosts
