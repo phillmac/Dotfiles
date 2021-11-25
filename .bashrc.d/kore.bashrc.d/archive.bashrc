@@ -322,6 +322,7 @@ function archive.pins.missing () {
                             --progress \
                             --timeout 2h \
                             ${pincid}"
+            date
         done < <( comm -23 archive.entries.txt "archive.pins.${h}.txt")
     done
 }
@@ -351,6 +352,7 @@ function archive.pins.missing.pvs () {
                             --progress \
                             --timeout 2h \
                             ${pincid}"
+            date
         done < <( comm -23 archive.entries.txt "archive.pins.${h}.txt")
     done
 }
