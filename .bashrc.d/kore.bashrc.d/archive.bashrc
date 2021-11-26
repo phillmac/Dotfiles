@@ -303,6 +303,7 @@ function archive.dht.provide.pvs ()
 
 function archive.pins.missing () {
     local hosts
+    local pinned_count
 
     hosts=("docker-vps1" "docker-vps2" "docker-vps3")
 
@@ -313,21 +314,28 @@ function archive.pins.missing () {
         echo "$(date) Listing pins for ${h}" >&2
         echo '' > "archive.pins.${h}.txt"
         archive.pin.ls "${h}" phill-dev_default | sort --unique > "archive.pins.${h}.txt"
-        while read -r pincid
-        do
-            echo "${h} missing item ${pincid}" >&2
+        pinned_count=$(wc -l  "archive.pins.${h}.txt")
 
-            docker run --rm -it --net phill-dev_default docker sh -c \
-                "docker --host ${h}:2377 \
-                    run \
-                    --rm -it --net phill-dev_ipfs \
-                    peelvalley/ipfs-cli \
-                        pin add \
-                            --progress \
-                            --timeout 2h \
-                            ${pincid}"
-            date
-        done < <( comm -23 archive.entries.txt "archive.pins.${h}.txt")
+        if ((pinned_count <=1))
+        then
+            echo "Error: pin count too low" >&2
+        else
+            while read -r pincid
+            do
+                echo "${h} missing item ${pincid}" >&2
+
+                docker run --rm -it --net phill-dev_default docker sh -c \
+                    "docker --host ${h}:2377 \
+                        run \
+                        --rm -it --net phill-dev_ipfs \
+                        peelvalley/ipfs-cli \
+                            pin add \
+                                --progress \
+                                --timeout 2h \
+                                ${pincid}"
+                date
+            done < <( comm -23 archive.entries.txt "archive.pins.${h}.txt")
+        fi
     done
 }
 
