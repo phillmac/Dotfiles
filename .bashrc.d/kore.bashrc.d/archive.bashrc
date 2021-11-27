@@ -316,7 +316,7 @@ function archive.pins.missing () {
         archive.pin.ls "${h}" phill-dev_default | sort --unique > "archive.pins.${h}.txt"
         pinned_count=$(wc -l  "archive.pins.${h}.txt")
 
-        if ((pinned_count <=1))
+        if ((pinned_count <= 1))
         then
             echo "Error: pin count too low" >&2
         else
@@ -355,10 +355,10 @@ function archive.pins.missing.pvs () {
         do
             echo "${h} missing item ${pincid}" >&2
 
-            docker run --rm -it --net pvs-dev_scheduler docker sh -c \
+            docker run --rm -i --net pvs-dev_scheduler docker sh -c \
                 "docker --host ${h}:2377 \
                     run \
-                    --rm -it --net phill-dev_ipfs \
+                    --rm -i --net phill-dev_ipfs \
                     peelvalley/ipfs-cli \
                         pin add \
                             --progress \
