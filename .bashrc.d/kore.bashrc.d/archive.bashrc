@@ -314,7 +314,7 @@ function archive.pins.missing () {
         echo "$(date) Listing pins for ${h}" >&2
         echo '' > "archive.pins.${h}.txt"
         archive.pin.ls "${h}" phill-dev_default | sort --unique > "archive.pins.${h}.txt"
-        pinned_count=$(wc -l  "archive.pins.${h}.txt")
+        pinned_count=$(wc -l  < "archive.pins.${h}.txt")
 
         if ((pinned_count <= 1))
         then
