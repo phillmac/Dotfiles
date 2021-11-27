@@ -324,10 +324,10 @@ function archive.pins.missing () {
             do
                 echo "${h} missing item ${pincid}" >&2
 
-                docker run --rm -i --net phill-dev_default docker sh -c \
+                docker run --rm --net phill-dev_default docker sh -c \
                     "docker --host ${h}:2377 \
                         run \
-                        --rm -i --net phill-dev_ipfs \
+                        --rm --net phill-dev_ipfs \
                         peelvalley/ipfs-cli \
                             pin add \
                                 --progress \
@@ -355,10 +355,10 @@ function archive.pins.missing.pvs () {
         do
             echo "${h} missing item ${pincid}" >&2
 
-            docker run --rm -i --net pvs-dev_scheduler docker sh -c \
+            docker run --rm --net pvs-dev_scheduler docker sh -c \
                 "docker --host ${h}:2377 \
                     run \
-                    --rm -i --net phill-dev_ipfs \
+                    --rm --net phill-dev_ipfs \
                     peelvalley/ipfs-cli \
                         pin add \
                             --progress \
