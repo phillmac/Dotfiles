@@ -1,6 +1,6 @@
 #! /bin/bash
 
-function charon-wtdl ()
+function charon_wtdl ()
 {
     docker \
             run --rm -it \
@@ -21,4 +21,5 @@ function charon-wtdl ()
     webtorrent_download "${1}"
 }
 
-alias wtdl-charon=charon-wtdl
+alias wtdl-charon=charon_wtdl
+alias cwtdl=charon_wtdl
