@@ -19,6 +19,12 @@ function upload-car ()
     ( cd /titan/E/ipfs-export/split && rclone move --verbose . --include "${1}.car.*" "ipfs-deep-archive:ipfs-deep-archive/${1}/" )
 }
 
+function export-split-car ()
+{
+    ( cd /titan/E/ipfs-export/split && ipfs dag export -p "${1}" | split -b 10M -a 3 --verbose - "${1}.car." )
+}
+
+
 
 export IPFS_GET_BATCH_COUNT
 export IPFS_GET_TIMEOUT
@@ -29,3 +35,4 @@ export IPFS_HTTP_GATEWAY
 
 export -f split-car
 export -f upload-car
+export -f export-split-car
