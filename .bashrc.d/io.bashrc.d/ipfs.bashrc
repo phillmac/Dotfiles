@@ -61,7 +61,7 @@ function ipfs-wasabi.public.pins.missing ()
             )
             date
             ((progress+=1))
-    done < <( )
+    done < missing.cids.txt
 
 }
 
