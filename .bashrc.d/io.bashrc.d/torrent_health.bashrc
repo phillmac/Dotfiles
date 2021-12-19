@@ -1,6 +1,6 @@
 #!/bin/bash
 
-function update_scimag ()
+function update_fiction ()
 {
     docker run --rm --net phill-dev_redis -e "REDIS_HOST=redis" -e "REDIS_PORT=6379" phillmac/torrent-health-scraper scripts/update.sh 'https://libgen.rs/fiction/repository_torrent/' fiction
 }
