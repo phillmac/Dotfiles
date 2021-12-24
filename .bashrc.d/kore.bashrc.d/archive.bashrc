@@ -307,7 +307,7 @@ function archive.pins.missing () {
 
     hosts=("docker-vps1" "docker-vps2" "docker-vps3")
 
-    archive.entries | sort --unique > archive.entries.txt
+    archive.entries "${1}" | sort --unique > archive.entries.txt
 
     for h in "${hosts[@]}"
     do
@@ -344,7 +344,7 @@ function archive.pins.missing.pvs () {
 
     hosts=("docker-charon" "docker-titan")
 
-    archive.entries | sort --unique > archive.entries.txt
+    archive.entries "${1}" | sort --unique > archive.entries.txt
 
     for h in "${hosts[@]}"
     do
