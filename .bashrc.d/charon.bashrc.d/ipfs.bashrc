@@ -9,9 +9,29 @@ IPFS_PIN_SLEEP="1h"
 
 IPFS_HTTP_GATEWAY="127.0.0.1:8080"
 
+
+# function charon.ipfs.preload ()
+# {
+#     local tmppipe
+
+#     tmppipe=$(mktemp -u)
+#     mkfifo -m 600 "${tmppipe}"
+#     echo "Created ${tmppipe}"
+
+#     tmux split ssh -p 35681 io.phillm.net 'mbuffer -I 40471 | docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false'
+#     tmux select-layout even-vertical
+#     tmux split mbuffer -t -i "${tmppipe}" \
+#         -O 192.168.20.51:40471
+#     tmux select-layout even-vertical
+#     echo "Exporting ${*}"
+#     ipfs dag export -p "${@}" > "${tmppipe}"
+# }
+
 export IPFS_GET_BATCH_COUNT
 export IPFS_GET_TIMEOUT
 export IPFS_PIN_TIMEOUT
 export IPFS_RESOLVE_TIMEOUT
 export IPFS_PIN_SLEEP
 export IPFS_HTTP_GATEWAY
+
+# export -f charon.ipfs.preload
