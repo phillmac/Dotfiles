@@ -105,7 +105,6 @@ function archive.pin.ls ()
 
 export -f masonry.publish
 export -f archive.ipns.update
-export -f archive.publish.dev
 export -f archive.pin
 export -f archive.entries
 export -f archive.pin.ls
