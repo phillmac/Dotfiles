@@ -37,22 +37,6 @@ function archive.ipns.update () {
         peelvalley/cloudflare scripts/update-ipns.py
 }
 
-function archive.publish.dev ()
-{
-    local masonry_cid
-    local dev_cid
-
-    masonry_cid=$(masonry.publish -Q)
-
-    ipfs files rm -r /dev.ipfs-archive.online/galleries
-    ipfs files cp "/ipfs/${masonry_cid}" /dev.ipfs-archive.online/galleries
-
-    dev_cid=$(ipfs files stat --hash /dev.ipfs-archive.online)
-
-    archive.ipns.update dev "${dev_cid}"
-
-}
-
 function archive.pin () {
     local ipfs_pin_addr
     local path_filter
