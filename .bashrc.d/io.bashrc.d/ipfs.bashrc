@@ -28,7 +28,7 @@ function ipfs-backblaze ()
 function ipfs-wasabi.public.pins.missing ()
 {
     ipfs.ls.recursive.files "${1}" "${2}" | tee public.entries.txt | cut -d ' ' -f 1 | sort --unique > public.entries.cids.txt
-    ipfs-wasabi pin ls --type=recursive | sort --unique > ipfs-wasabi.pins.txt
+    ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > ipfs-wasabi.pins.txt
     comm -23 public.entries.cids.txt ipfs-wasabi.pins.txt > wasabi.missing.cids.txt
     cids_count=$(wc -l < wasabi.missing.cids.txt)
     ((progress=1))
@@ -51,7 +51,7 @@ function ipfs-wasabi.public.pins.missing ()
 function ipfs-wasabi.archive.pins.missing ()
 {
     archive.entries "${1}" | sort --unique > archive.entries.txt
-    ipfs-wasabi pin ls --type=recursive | sort --unique > ipfs-wasabi.pins.txt
+    ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > ipfs-wasabi.pins.txt
     comm -23 archive.entries.txt ipfs-wasabi.pins.txt > wasabi.missing.cids.txt
     cids_count=$(wc -l < wasabi.missing.cids.txt)
     ((progress=1))
