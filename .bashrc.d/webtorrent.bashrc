@@ -3,7 +3,7 @@
 function webtorrent ()
 {
     docker run \
-    --rm -it \
+    --rm \
     --net host \
     phillmac/webtorrent \
         --announce 'wss://tracker.vps1.phillm.net:8000' \

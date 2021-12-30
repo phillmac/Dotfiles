@@ -8,7 +8,7 @@ function charon_wtdl ()
                 docker sh -c \
                 "docker --host docker-charon:2377 \
                     run \
-                    --rm -it \
+                    --rm \
                     --net host \
                     -v /callisto/Data/Staging/Webtorrent:/workdir \
                     -w /workdir \
