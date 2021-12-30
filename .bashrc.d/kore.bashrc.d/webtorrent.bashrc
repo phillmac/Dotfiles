@@ -3,7 +3,7 @@
 function charon_wtdl ()
 {
     docker \
-            run --rm -it \
+            run --rm \
                 --net pvs-dev_scheduler \
                 docker sh -c \
                 "docker --host docker-charon:2377 \
