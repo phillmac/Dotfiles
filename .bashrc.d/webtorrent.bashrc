@@ -15,7 +15,7 @@ function webtorrent ()
 function webtorrent_download ()
 {
     docker run \
-    --rm -it \
+    --rm \
     --net host \
     -v /callisto/Data/Staging/Webtorrent:/workdir \
     -w /workdir \
