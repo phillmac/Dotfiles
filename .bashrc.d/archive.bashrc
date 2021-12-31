@@ -34,6 +34,10 @@ function masonry.combine ()
     echo "https://ipfs.io/ipfs/${result}"
     echo "https://cf-ipfs/ipfs/${result}"
 
+    curl "http://vps1.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://vps2.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://vps3.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
+
 }
 
 function archive.ipns.update () {
