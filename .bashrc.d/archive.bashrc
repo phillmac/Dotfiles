@@ -13,6 +13,27 @@ function masonry.publish ()
     fi
 }
 
+function masonry.combine ()
+{
+    local masonry_cid
+    local settings_cid
+    local empty_dir
+    local intermediate
+    local result
+
+    empty_dir=$(ipfs object new unixfs-dir)
+    echo 'Adding masonry'
+    masonry_cid=$(masonry.publish -Q)
+    echo 'Adding settings'
+    settings_cid=$(cd /ananke/D/Source/Phill/Repos/Phill/masonry-settings && ipfs add -r -Q --pin=false .)
+
+    intermediate=$(ipfs object patch "${empty_dir}" add-link gallery "${masonry_cid}")
+    echo "Intermediate dir ${intermediate}"
+    result=$(ipfs object patch "${intermediate}" add-link settings "${settings_cid}")
+
+    echo "https://ipfs.io/ipfs/${result}"
+}
+
 function archive.ipns.update () {
 
     local update_ipns_record
