@@ -32,6 +32,8 @@ function masonry.combine ()
     result=$(ipfs object patch "${intermediate}" add-link settings "${settings_cid}")
 
     echo "https://ipfs.io/ipfs/${result}"
+    echo "https://cf-ipfs/ipfs/${result}"
+
 }
 
 function archive.ipns.update () {
