@@ -13,7 +13,7 @@ function masonry.publish ()
     fi
 }
 
-function masonry.combine ()
+function masonry.dev.combine ()
 {
     local masonry_cid
     local settings_cid
@@ -37,6 +37,10 @@ function masonry.combine ()
     curl "http://vps1.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
     curl "http://vps2.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
     curl "http://vps3.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://external5.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://external1.ddns.peelvalley.com.au:8081/api/v0/get?arg=${result}" > /dev/null
+    curl "http://external1.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://192.168.30.57:8080/api/v0/get?arg=${result}" > /dev/null
 
 }
 
