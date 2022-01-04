@@ -32,7 +32,7 @@ function masonry.dev.combine ()
     result=$(ipfs object patch "${intermediate}" add-link settings "${settings_cid}")
 
     echo "https://ipfs.io/ipfs/${result}"
-    echo "https://cf-ipfs/ipfs/${result}"
+    echo "https://cf-ipfs.com/ipfs/${result}"
 
     curl "http://vps1.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
     curl "http://vps2.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
