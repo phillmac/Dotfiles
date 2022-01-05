@@ -2,21 +2,25 @@
 
 function charon_wtdl ()
 {
-    docker \
-            run --rm \
-                --net pvs-dev_scheduler \
-                docker sh -c \
-                "docker --host docker-charon:2377 \
-                    run \
-                    --rm \
-                    --net host \
-                    -v /callisto/Data/Staging/Webtorrent:/workdir \
-                    -w /workdir \
-                    phillmac/webtorrent \
-                        download \
-                        --port 8085 \
-                        --announce 'wss://tracker.vps1.phillm.net:8000' \
-                        ${1}"
+    ssh -p 35681 192.168.30.57 \
+        docker run \
+            --rm \
+            --net host \
+            -v /home/phill/webtorrent_dl:/workdir \
+            -w /workdir \
+            phillmac/webtorrent "${1}"
+
+    ssh -p 35681 192.168.30.57 \
+        docker run \
+            --rm \
+            --net host \
+            -v /home/phill/webtorrent_dl:/workdir \
+            -v /root:/root \
+            -w /workdir \
+            peelvalley/rclone-b2 \
+                '"rclone move --verbose \
+                /workdir/ \
+                kore-ssh:/callisto/Data/Staging/Webtorrent/"'
 
     webtorrent_download "${1}"
 }
