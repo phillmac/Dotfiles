@@ -2,16 +2,14 @@
 
 function charon_wtdl ()
 {
-    ssh -p 35681 192.168.30.57 \
+    sshp 192.168.30.57 \
         docker run \
             --rm \
             --net host \
             -v /home/phill/webtorrent_dl:/workdir \
             -w /workdir \
-            phillmac/webtorrent "${1}"
-
-    ssh -p 35681 192.168.30.57 \
-        docker run \
+            phillmac/webtorrent "${1}" \
+         && docker run \
             --rm \
             --net host \
             -v /home/phill/webtorrent_dl:/workdir \
