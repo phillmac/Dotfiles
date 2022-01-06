@@ -1,25 +1,9 @@
 #! /bin/bash
 
-function charon_wtdl ()
+function charon_wtdl_remote ()
 {
     sshp 192.168.30.57 \
-        docker run \
-            --rm \
-            --net host \
-            -v /home/phill/webtorrent_dl:/workdir \
-            -w /workdir \
-            phillmac/webtorrent "${1}" \
-         && docker run \
-            --rm \
-            --net host \
-            -v /home/phill/webtorrent_dl:/workdir \
-            -v /root:/root \
-            -w /workdir \
-            peelvalley/rclone-b2 \
-                '"rclone move --verbose \
-                /workdir/ \
-                kore-ssh:/callisto/Data/Staging/Webtorrent/"'
-
+        "source .bashrc.d/charon.bashrc.d/webtrrent.bashrc && charon_wtdl ${1}"
     webtorrent_download "${1}"
 }
 
