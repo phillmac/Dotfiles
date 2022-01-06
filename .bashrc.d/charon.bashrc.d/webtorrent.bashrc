@@ -2,7 +2,7 @@
 
 function charon_wtdl ()
 {
-    workdir=$(mktemp)
+    workdir=$(mktemp -d)
     echo "workdir is ${workdir}"
     docker run \
         --rm \
