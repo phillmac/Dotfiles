@@ -3,7 +3,7 @@
 function charon_wtdl_remote ()
 {
     sshp 192.168.30.57 \
-        "source .bashrc.d/charon.bashrc.d/webtrrent.bashrc && charon_wtdl ${1}"
+        "source .bashrc.d/charon.bashrc.d/webtorrent.bashrc && charon_wtdl ${1}"
     webtorrent_download "${1}"
 }
 
