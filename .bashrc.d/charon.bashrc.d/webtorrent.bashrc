@@ -23,5 +23,4 @@ function charon_wtdl ()
         && rmdir -v "${workdir}"
 }
 
-alias wtdl-charon=charon_wtdl
-alias cwtdl=charon_wtdl
+export -f charon_wtdl
