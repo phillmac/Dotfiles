@@ -50,9 +50,9 @@ function ipfs-wasabi.public.pins.missing ()
 
 function ipfs-wasabi.archive.pins.missing ()
 {
-    archive.entries "${1}" | sort --unique > archive.entries.txt
+    archive.entries "${1}" | sort --unique > archive.entries.cids.txt
     ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > ipfs-wasabi.pins.txt
-    comm -23 archive.entries.txt ipfs-wasabi.pins.txt > wasabi.missing.cids.txt
+    comm -23  archive.entries.cids.txt ipfs-wasabi.pins.txt > wasabi.missing.cids.txt
     cids_count=$(wc -l < wasabi.missing.cids.txt)
     ((progress=1))
     while read -r pincid
