@@ -99,16 +99,18 @@ function archive.entries () {
     entries_addr_resolved=$(ipfs resolve --timeout 10m "${entries_addr}")
     path_filter=${2:-${entries_addr_resolved}/.*/}
 
-
     if [[ -z "${entries_addr_resolved}" ]]
     then
         echo "IPFS entries addr is required" >&2
         return 252
     fi
 
+    echo '' > archive.entries.txt
+
     while read -r itemhash pathname
     do
         echo "$(date) Found item ${itemhash} ${pathname}" >&2
+        echo "${itemhash} ${pathname}" >> archive.entries.txt
         echo "${itemhash}"
     done < <(ipfs.ls.recursive.dirs.filtered "${entries_addr_resolved}" "${path_filter}")
 }
