@@ -6,7 +6,13 @@ function export-split-car ()
 }
 
 IPFS_HTTP_GATEWAY="http://192.168.42.32:8080"
+IPFS_PIN_TIMEOUT="24h"
+IPFS_RESOLVE_TIMEOUT="15m"
+IPFS_PIN_SLEEP="1h"
 
 export IPFS_HTTP_GATEWAY
+export IPFS_PIN_TIMEOUT
+export IPFS_RESOLVE_TIMEOUT
+export IPFS_PIN_SLEEP
 
 export -f export-split-car
