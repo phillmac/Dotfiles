@@ -21,7 +21,7 @@ function public.pins.missing () {
 
     while read -r cid _fpath
     do
-        grep "${cid}" public.files.txt
+        grep "${cid}" public.files.txt >&2
         ipfs pin add --progress --timeout "${pin_timeout}" "${cid}"
     done < <(comm -23  public.files.cids.txt pins.txt )
 
