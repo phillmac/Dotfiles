@@ -45,6 +45,7 @@ function public.pins.monitor () {
         fi
         echo "Pinning ${public_hash}" >&2
         public.pins.missing
+        rlast=${public_hash}
         date
     done
 }
