@@ -2,6 +2,7 @@
 
 function charon_wtdl ()
 {
+    echo "TORRENT_NAME is \"${TORRENT_NAME}\""
     workdir=$(mktemp -d)
     echo "workdir is ${workdir}"
     docker run \
@@ -11,7 +12,7 @@ function charon_wtdl ()
         -v /root:/root \
         -w /workdir \
         peelvalley/rclone-b2 \
-            "rclone copy --verbose --include '${1}' \
+            "rclone copy --verbose --include \"${TORRENT_NAME}\" \
             kore-ssh:/callisto/Data/Staging/Webtorrent/ \
             /workdir/" \
      && docker run \
@@ -19,7 +20,7 @@ function charon_wtdl ()
         --net host \
         -v "${workdir}":/workdir \
         -w /workdir \
-        phillmac/webtorrent "${1}" \
+        phillmac/webtorrent "\"${TORRENT_NAME}\"" \
      && docker run \
         --rm \
         --net host \
@@ -30,7 +31,7 @@ function charon_wtdl ()
             "rclone move --verbose \
             /workdir/ \
             kore-ssh:/callisto/Data/Staging/Webtorrent/" \
-     && rm -v "${workdir}"/*.torrent \
+     && rm -v "${workdir}/${TORRENT_NAME}" \
      && rmdir -v "${workdir}"
 }
 
