@@ -2,7 +2,6 @@
 
 function charon_wtdl ()
 {
-    echo "TORRENT_NAME is \"${TORRENT_NAME}\""
     workdir=$(mktemp -d)
     echo "workdir is ${workdir}"
     docker run \
@@ -12,15 +11,18 @@ function charon_wtdl ()
         -v /root:/root \
         -w /workdir \
         peelvalley/rclone-b2 \
-            "rclone copy --verbose --include \"${TORRENT_NAME}\" \
-            kore-ssh:/callisto/Data/Staging/Webtorrent/ \
-            /workdir/" \
+            'rclone copy --verbose \
+                --include *.torrent \
+                kore-ssh:/callisto/Data/Staging/Webtorrent/ \
+                /workdir/' \
+     && echo "$(date) Downloading" \
      && docker run \
         --rm \
         --net host \
         -v "${workdir}":/workdir \
         -w /workdir \
-        phillmac/webtorrent "\"${TORRENT_NAME}\"" \
+        --entrypoint bash \
+        phillmac/webtorrent -c 'webtorrent-hybrid ./*.torrent' \
      && docker run \
         --rm \
         --net host \
@@ -29,10 +31,10 @@ function charon_wtdl ()
         -w /workdir \
         peelvalley/rclone-b2 \
             "rclone move --verbose \
-            /workdir/ \
-            kore-ssh:/callisto/Data/Staging/Webtorrent/" \
-     && rm -v "${workdir}/${TORRENT_NAME}" \
-     && rmdir -v "${workdir}"
+                --exclude '*.torrent' \
+                /workdir/ \
+                kore-ssh:/callisto/Data/Staging/Webtorrent/" \
+     && rm -frv "${workdir}"
 }
 
 export -f charon_wtdl
