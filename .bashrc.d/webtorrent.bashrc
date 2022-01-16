@@ -54,9 +54,10 @@ function webtorrent_seed ()
 
 function webtorrent_add_wasabi ()
 {
-    if which ipfs-wasabi > /dev/null
+    if [[ "${SHORT_HOST}" == "io" ]]
     then
-        ipfs-wasabi add "${1}/*.mkv"
+        source "${BASH_RC_HOST_DIR}/ipfs.bashrc"
+        ipfs-wasabi add -p "${1}/*.mkv"
     fi
 }
 
