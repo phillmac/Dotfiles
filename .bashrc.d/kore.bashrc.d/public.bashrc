@@ -23,7 +23,7 @@ function public.anime.add ()
     && mv -v  /callisto/Data/Staging/Webtorrent/*"${1}"* "/callisto/Data/Upload/TV-Shows/Anime/${1}"
 }
 
-public.list.preload ()
+function public.list.preload ()
 {
     local cid
     cid=$(curl -s --fail 'https://ipfs-admin.phillm.net/api/v0/files/stat?hash=true&arg=/Public' | jq -r .Hash)
@@ -32,3 +32,75 @@ public.list.preload ()
     IPFS_HTTP_GATEWAY=192.168.20.51:8080 ipfs.ls.recursive "${cid}"
     IPFS_HTTP_GATEWAY=192.168.35.51:8080 ipfs.ls.recursive "${cid}"
 }
+
+
+function get_anime_names () {
+    python3 -c \
+'
+import re
+from glob import iglob
+
+pattern = re.compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}\s*\([0-9]{3,}p\))|\.mkv)")
+names = set()
+for fname in iglob("./*.mkv"):
+    names.add(pattern.sub("", fname).strip())
+for n in names: print(n)
+'
+}
+
+
+function fetch_queued_torrent () {
+    python3 -c \
+'
+from glob import iglob
+from os import rename
+from os.path import basename
+
+
+existing = next(iglob("./*.torrent"), None)
+if existing is None:
+    tpath = next(iglob("../Queue/*.torrent"), None)
+    if not tpath is None:
+        tname = basename(tpath)
+        newpath = f"./{tname}"
+        print(f"Moving '\''{tpath}'\'' to '\''{newpath}'\''")
+        rename(tpath, newpath)
+    else:
+        print("Queue is empty")
+        exit(1)
+else:
+    print(f"Found existing torrent '\''{existing}'\''")
+'
+}
+
+function public.torrents.monitor ()
+{
+    while :
+    do
+        sleep 5m &
+        if ( cd /callisto/Data/Staging/Webtorrent && fetch_queued_torrent )
+        then
+            io_wtdl_remote \
+            && mv -vf /callisto/Data/Staging/Webtorrent/*.torrent /callisto/Data/Phill/Downloads/Torrents \
+            && (
+                cd /callisto/Data/Staging/Webtorrent && {
+                    while read -r anime_name
+                    do
+                        if [[ "${anime_name}" ]]
+                        then
+                            public.anime.add  "${anime_name}" \
+                            && public.list.preload
+                        fi
+                    done < <( get_anime_names )
+                }
+            )
+        fi
+        wait
+    done
+}
+
+export -f public.anime.add
+export -f public.list.preload
+export -f fetch_queued_torrent
+export -f get_anime_names
+export -f public.torrents.monitor
