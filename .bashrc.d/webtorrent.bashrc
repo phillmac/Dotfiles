@@ -56,7 +56,7 @@ function webtorrent_add_wasabi ()
 {
     if which ipfs-wasabi > /dev/null
     then
-    ipfs-wasabi add "${1}/*.mkv"
+        ipfs-wasabi add "${1}/*.mkv"
     fi
 }
 
