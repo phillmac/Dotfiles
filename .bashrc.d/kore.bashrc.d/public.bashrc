@@ -78,23 +78,25 @@ function public.torrents.monitor ()
     while :
     do
         sleep 5m &
-        if ( cd /callisto/Data/Staging/Webtorrent && fetch_queued_torrent )
-        then
-            io_wtdl_remote \
-            && mv -vf /callisto/Data/Staging/Webtorrent/*.torrent /callisto/Data/Phill/Downloads/Torrents \
-            && (
-                cd /callisto/Data/Staging/Webtorrent && {
-                    while read -r anime_name
-                    do
-                        if [[ "${anime_name}" ]]
-                        then
-                            public.anime.add  "${anime_name}" \
-                            && public.list.preload
-                        fi
-                    done < <( get_anime_names )
-                }
-            )
-        fi
+        (
+            cd /callisto/Data/Staging/Webtorrent && {
+                if fetch_queued_torrent
+                then
+                    io_wtdl_remote \
+                    && mv -vf ./*.torrent /callisto/Data/Phill/Downloads/Torrents \
+                    && {
+                        while read -r anime_name
+                        do
+                            if [[ "${anime_name}" ]]
+                            then
+                                public.anime.add  "${anime_name}" \
+                                && public.list.preload
+                            fi
+                        done < <( get_anime_names )
+                    }
+                fi
+            }
+        )
         wait
     done
 }
