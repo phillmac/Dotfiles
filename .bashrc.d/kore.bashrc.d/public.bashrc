@@ -90,9 +90,10 @@ function public.torrents.monitor ()
             cd /callisto/Data/Staging/Webtorrent && {
                 if fetch_queued_torrent
                 then
-                    io_wtdl_remote \
-                    && mv -vf ./*.torrent /callisto/Data/Phill/Downloads/Torrents \
-                    && {
+                    io_wtdl_remote
+                    if compgen -G './*.mkv'
+                    then
+                        mv -vf ./*.torrent /callisto/Data/Phill/Downloads/Torrents
                         while read -r anime_name
                         do
                             if [[ "${anime_name}" ]]
@@ -101,7 +102,7 @@ function public.torrents.monitor ()
                                 && public.list.preload
                             fi
                         done < <( get_anime_names )
-                    }
+                    fi
                 fi
             }
         )
