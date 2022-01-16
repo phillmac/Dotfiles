@@ -54,7 +54,7 @@ function webtorrent_seed ()
 
 function webtorrent_download_remote ()
 {
-    workdir=$(mktemp -d)
+    workdir=$(mktemp -d --tmpdir=/dev/shm)
     echo "workdir is ${workdir}"
     docker run \
         --rm \
