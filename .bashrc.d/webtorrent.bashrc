@@ -83,7 +83,7 @@ function webtorrent_download_remote ()
         -w /workdir \
         peelvalley/rclone-b2 \
             "rclone move \
-                --verbose \
+                -vvv \
                 --retries 120 \
                 --retries-sleep 30s \
                 --exclude '*.torrent' \
