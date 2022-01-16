@@ -85,7 +85,7 @@ function webtorrent_download_remote ()
         -w /workdir \
         --entrypoint bash \
         phillmac/webtorrent -c 'webtorrent-hybrid ./*.torrent' \
-    && webtorrent_add_wasabi "${workdir}"\
+     && webtorrent_add_wasabi "${workdir}" \
      && docker run \
         --rm \
         --net host \
