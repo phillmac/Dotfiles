@@ -160,7 +160,7 @@ function video_archive () {
     docker run --rm --net host -v /root:/root -v /callisto/Data/Upload/Movies:/Movies peelvalley/rclone-b2 "rclone move --verbose --transfers 1 --bwlimit 0.3125M --delete-empty-src-dirs /Movies  b2-phill:Video-Archive2/Movies"
 }
 
-rclone_staging () {
+function rclone_staging () {
     docker run -it --rm --net host -v /root:/root -v /callisto/Data/Staging:/Staging -w /Staging --entrypoint bash -it peelvalley/rclone-b2
 }
 
