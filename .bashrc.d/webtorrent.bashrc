@@ -82,7 +82,10 @@ function webtorrent_download_remote ()
         -v /root:/root \
         -w /workdir \
         peelvalley/rclone-b2 \
-            "rclone move --verbose \
+            "rclone move \
+                --verbose \
+                --retries 120 \
+                --retries-sleep 30s \
                 --exclude '*.torrent' \
                 /workdir/ \
                 kore-ssh:/callisto/Data/Staging/Webtorrent/" \
