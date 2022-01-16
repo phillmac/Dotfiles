@@ -34,11 +34,11 @@ function public.list.preload ()
     cid=$( public.root.hash )
     echo "Janus" && IPFS_HTTP_GATEWAY=192.168.42.208:8080 ipfs.ls.recursive "${cid}"
     echo "Charon" && IPFS_HTTP_GATEWAY=192.168.30.57:8080 ipfs.ls.recursive "${cid}"
-    echo "Io" IPFS_HTTP_GATEWAY=192.168.20.51:8080 ipfs.ls.recursive "${cid}"
-    echo "Titan" IPFS_HTTP_GATEWAY=192.168.35.51:8080 ipfs.ls.recursive "${cid}"
-    echo "VPS1" IPFS_HTTP_GATEWAY=https://vps1.phillm.net ipfs.ls.recursive "${cid}"
-    echo "VPS2" IPFS_HTTP_GATEWAY=https://vps2.phillm.net ipfs.ls.recursive "${cid}"
-    echo "VPS3" IPFS_HTTP_GATEWAY=https://vps3.phillm.net ipfs.ls.recursive "${cid}"
+    echo "Io" && IPFS_HTTP_GATEWAY=192.168.20.51:8080 ipfs.ls.recursive "${cid}"
+    echo "Titan" && IPFS_HTTP_GATEWAY=192.168.35.51:8080 ipfs.ls.recursive "${cid}"
+    echo "VPS1" && IPFS_HTTP_GATEWAY=https://vps1.phillm.net ipfs.ls.recursive "${cid}"
+    echo "VPS2" && IPFS_HTTP_GATEWAY=https://vps2.phillm.net ipfs.ls.recursive "${cid}"
+    echo "VPS3" && IPFS_HTTP_GATEWAY=https://vps3.phillm.net ipfs.ls.recursive "${cid}"
 }
 
 
