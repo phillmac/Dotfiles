@@ -48,7 +48,7 @@ function get_anime_names () {
 import re
 from glob import iglob
 
-pattern = re.compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}\s*\([0-9]{3,}p\))|\.mkv)")
+pattern = re.compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\))|\.mkv)[")
 names = set()
 for fname in iglob("./*.mkv"):
     names.add(pattern.sub("", fname).strip())
