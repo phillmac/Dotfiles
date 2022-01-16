@@ -52,6 +52,14 @@ function webtorrent_seed ()
         "${@}"
 }
 
+function webtorrent_add_wasabi ()
+{
+    if which ipfs-wasabi > /dev/null
+    then
+    ipfs-wasabi add "${1}/*.mkv"
+    fi
+}
+
 function webtorrent_download_remote ()
 {
     workdir=$(mktemp -d --tmpdir=/dev/shm)
@@ -75,6 +83,7 @@ function webtorrent_download_remote ()
         -w /workdir \
         --entrypoint bash \
         phillmac/webtorrent -c 'webtorrent-hybrid ./*.torrent' \
+    && webtorrent_add_wasabi "${workdir}"\
      && docker run \
         --rm \
         --net host \
