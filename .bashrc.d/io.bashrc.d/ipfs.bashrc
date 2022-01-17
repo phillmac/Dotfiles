@@ -89,7 +89,7 @@ function ipfs-wasabi.public.pins.monitor () {
     do
         public_hash=$(public.root.hash)
         echo "$(date) rlast: '${rlast}' public_hash: '${public_hash}'" >&2
-        if ! check_lockout_time || [[ "${rlast}" == "${public_hash}" ]]
+        if [[ "${rlast}" == "${public_hash}" ]]
         then
             echo "$(date) Waiting" >&2
             sleep "${sleep_delay}"
