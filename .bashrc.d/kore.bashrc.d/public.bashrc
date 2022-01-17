@@ -99,7 +99,7 @@ function public.torrents.monitor ()
                             if [[ "${anime_name}" ]]
                             then
                                 public.anime.add  "${anime_name}" \
-                                && public.list.preload
+                                && public.list.preload > "${HOME}/public.list.preload.log.txt" 2>&1 &
                             fi
                         done < <( get_anime_names )
                     fi
