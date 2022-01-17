@@ -59,6 +59,7 @@ function webtorrent_add_wasabi ()
     then
         source "${BASH_RC_HOST_DIR}/ipfs.bashrc"
         ipfs-wasabi add -p "${1}"/*.mkv
+        echo
     fi
 }
 
