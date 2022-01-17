@@ -84,7 +84,7 @@ function ipfs_find_add_folder() {
     while read -r fname
     do
         ipfs_add_folder "${fname}" "${folder}"
-    done < <(find . -type f -iname "${patern}")
+    done < <(find . -type f '(' -iname "${patern}*.mkv" -o -iname "${patern}*.mp4" ')')
 
 }
 
