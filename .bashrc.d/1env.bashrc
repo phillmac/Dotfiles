@@ -1,3 +1,4 @@
+#! /bin/bash
 shorthost=$(cut -d"." -f1 <<<"$HOSTNAME")
 SHORT_HOST=${shorthost,,}
 BASH_RC_DIR="${HOME}/.bashrc.d"
