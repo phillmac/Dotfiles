@@ -20,7 +20,7 @@ function public.anime.add ()
         cd /callisto/Data/Staging/Webtorrent \
         && ipfs_find_add_folder "*${1}*" "/Public/Anime/${1}"
     ) \
-    && mv -v  /callisto/Data/Staging/Webtorrent/*"${1}"*.mkv "/callisto/Data/Upload/TV-Shows/Anime/${1}"
+    && find /callisto/Data/Staging/Webtorrent/ -type f '(' -iname "${1}*.mkv" -o -iname "${1}*.mp4" ')' -print0 | xargs -0 -I {} mv -v {} "/callisto/Data/Upload/TV-Shows/Anime/${1}"
 }
 
 
