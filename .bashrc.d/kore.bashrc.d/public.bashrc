@@ -39,6 +39,7 @@ function public.list.preload ()
     echo "VPS1" && IPFS_HTTP_GATEWAY=https://vps1.phillm.net ipfs.ls.recursive "${cid}"
     echo "VPS2" && IPFS_HTTP_GATEWAY=https://vps2.phillm.net ipfs.ls.recursive "${cid}"
     echo "VPS3" && IPFS_HTTP_GATEWAY=https://vps3.phillm.net ipfs.ls.recursive "${cid}"
+    echo "$(date) Done"
 }
 
 
