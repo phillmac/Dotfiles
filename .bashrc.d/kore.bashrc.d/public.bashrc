@@ -80,6 +80,18 @@ else:
     print(f"Found existing torrent '\''{existing}'\''")
 '
 }
+function public.anime.detect.add ()
+{
+    while read -r anime_name
+    do
+        if [[ "${anime_name}" ]]
+        then
+            public.anime.add  "${anime_name}" \
+            && public.list.preload > "${HOME}/public.list.preload.log.txt" 2>&1 &
+        fi
+    done < <( get_anime_names )
+}
+
 
 function public.torrents.monitor ()
 {
@@ -94,14 +106,7 @@ function public.torrents.monitor ()
                     if compgen -G './*.mkv'
                     then
                         mv -vf ./*.torrent /callisto/Data/Phill/Downloads/Torrents
-                        while read -r anime_name
-                        do
-                            if [[ "${anime_name}" ]]
-                            then
-                                public.anime.add  "${anime_name}" \
-                                && public.list.preload > "${HOME}/public.list.preload.log.txt" 2>&1 &
-                            fi
-                        done < <( get_anime_names )
+                        public.anime.detect.add
                     fi
                 fi
             }
