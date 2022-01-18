@@ -46,6 +46,12 @@ function source_env_files () {
                 ;;
             'desktop-pstlv07' )
                 ;;
+            'carpo' )
+                alias_pvs_dev_carpo
+                alias_pvs_dev_update
+                alias_phill_dev_carpo
+                alias_phill_dev_update
+                ;;
             'charon' )
                 alias_pvs_dev_charon
                 alias_pvs_dev_update
