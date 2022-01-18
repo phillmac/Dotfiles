@@ -42,15 +42,15 @@ function rawurlencode () {
   local encoded=""
   local pos c o
 
-  for (( pos=0 ; pos<strlen ; pos++ )); do
-     c=${string:$pos:1}
-     case "$c" in
-        [-_.~a-zA-Z0-9] ) o="${c}" ;;
-        * )               printf -v o '%%%02x' "'$c"
-     esac
-     encoded+="${o}"
-  done
-  echo "${encoded}"
+    for (( pos=0 ; pos<strlen ; pos++ )); do
+        c=${string:$pos:1}
+        case "$c" in
+            [-_.~a-zA-Z0-9] ) o="${c}" ;;
+            * )               printf -v o '%%%02x' "'$c"
+        esac
+        encoded+="${o}"
+    done
+    echo "${encoded}"
 }
 
 function jsawk () {
@@ -147,6 +147,39 @@ function ipfs_provide_folder() {
     done < <(ipfs files ls -l "/${folder}")
 }
 
+function clone_repo () {
+    if [[ ! -d  "${HOME}/source/repos" ]]
+    then
+        mkdir -p "${HOME}/source/repos"
+    fi
+    case "${1}" in
+        "phill-dev" )
+            if [[ ! -d  "${HOME}/source/repos/phill" ]]
+            then
+                mkdir -p "${HOME}/source/repos/phill"
+            fi
+            cd "${HOME}/source/repos/phill" && git clone ssh://kalyke.peelvalley.com.au:22/Phill/_git/Dev-Env
+            ;;
+        "pvs-dev" )
+            if [[ ! -d  "${HOME}/source/repos/pvs" ]]
+            then
+                mkdir -p "${HOME}/source/repos/pvs"
+            fi
+            cd "${HOME}/source/repos/pvs" && git clone ssh://kalyke.peelvalley.com.au:22/PVS/_git/Dev-Env
+            ;;
+        "pvte-dev" )
+            if [[ ! -d  "${HOME}/source/repos/pvte" ]]
+            then
+                mkdir -p "${HOME}/source/repos/pvte"
+            fi
+            cd "${HOME}/source/repos/pvte" && git clone ssh://kalyke.peelvalley.com.au:22/PVTE/_git/Dev-Env
+            ;;
+        * )
+            echo "Unkown repo ${1}" ;;
+
+    esac
+}
+
 function youtube_dl () {
     docker run --rm -v /callisto/Data:/workdir -w/workdir python bash -c "apt update && apt install ffmpeg -y && pip install youtube-dl && youtube-dl ${*}"
 }
@@ -224,3 +257,5 @@ alias orbitdbapi="docker run --rm -it -w /Repos/orbit-db-http-api  -v pvs-dev_ce
 alias orbitdbsprinkle="docker run --rm -d -w /var/www  -v/ananke/D/Source/Phill/Repos:/Repos --net pvs-dev_ipfs --name orbitdb_dash peelvalley/userfrosting"
 alias youtube-dl=youtube_dl
 alias nodejs-dev=nodejs_dev
+
+alias clone-repo=clone_repo
