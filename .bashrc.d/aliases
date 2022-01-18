@@ -77,17 +77,20 @@ function _ipfs() {
 function ipfs_find_add_folder() {
     local patern
     local folder
+    local files_count
+
+    files_count=0
 
     patern="${1}"
     folder="${2}"
 
     while read -r fname
     do
+        ((files_count++))
         ipfs_add_folder "${fname}" "${folder}"
     done < <(find . -type f '(' -iname "${patern}*.mkv" -o -iname "${patern}*.mp4" ')')
-
+    echo "Added ${files_count} files" >&2
 }
-
 
 function ipfs_add_folder() {
     local file
@@ -106,18 +109,18 @@ function ipfs_add_folder() {
         if [[ "${fname}" = "${existing}" ]]; then
             isExisting=true
         fi
-    done < <(ipfs files ls "/${folder}")
+    done < <(ipfs files ls "${folder}")
 
     if [[ ${isExisting} = true ]]; then
-        echo "Skiping existing file ${fname}"
+        echo "Skiping existing file ${fname}" >&2
         return
     fi
 
-    echo "Adding ${fname}"
+    echo "Adding ${fname} to ${folder}" >&2
 
     file_hash=$(ipfs add --pin=false -Q "${file}")
 
-    ipfs files cp "/ipfs/${file_hash}" "/${folder}/${fname}"
+    ipfs files cp "/ipfs/${file_hash}" "${folder}/${fname}"
 
 }
 
