@@ -158,21 +158,21 @@ function clone_repo () {
             then
                 mkdir -p "${HOME}/source/repos/phill"
             fi
-            cd "${HOME}/source/repos/phill" && git clone ssh://kalyke.peelvalley.com.au:22/Phill/_git/Dev-Env
+            (cd "${HOME}/source/repos/phill" && git clone ssh://kalyke.peelvalley.com.au:22/Phill/_git/Dev-Env)
             ;;
         "pvs-dev" )
             if [[ ! -d  "${HOME}/source/repos/pvs" ]]
             then
                 mkdir -p "${HOME}/source/repos/pvs"
             fi
-            cd "${HOME}/source/repos/pvs" && git clone ssh://kalyke.peelvalley.com.au:22/PVS/_git/Dev-Env
+            (cd "${HOME}/source/repos/pvs" && git clone ssh://kalyke.peelvalley.com.au:22/PVS/_git/Dev-Env)
             ;;
         "pvte-dev" )
             if [[ ! -d  "${HOME}/source/repos/pvte" ]]
             then
                 mkdir -p "${HOME}/source/repos/pvte"
             fi
-            cd "${HOME}/source/repos/pvte" && git clone ssh://kalyke.peelvalley.com.au:22/PVTE/_git/Dev-Env
+            (cd "${HOME}/source/repos/pvte" && git clone ssh://kalyke.peelvalley.com.au:22/PVTE/_git/Dev-Env)
             ;;
         * )
             echo "Unkown repo ${1}" ;;
