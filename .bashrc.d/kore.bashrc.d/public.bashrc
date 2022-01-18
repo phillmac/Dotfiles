@@ -84,10 +84,13 @@ function public.anime.detect.add ()
 {
     while read -r anime_name
     do
-        if [[ "${anime_name}" ]]
+        if [[ -n "${anime_name}" ]]
         then
+            echo "Adding files to ${anime_name}" >&2
             public.anime.add  "${anime_name}" \
             && public.list.preload > "${HOME}/public.list.preload.log.txt" 2>&1 &
+        else
+            echo "Empty anime name" >&2
         fi
     done < <( get_anime_names )
 }
