@@ -109,8 +109,7 @@ function public.torrents.monitor ()
             cd /callisto/Data/Staging/Webtorrent && {
                 if fetch_queued_torrent
                 then
-                    io_wtdl_remote
-                    if compgen -G './*.mkv'
+                    if io_wtdl_remote && compgen -G './*.mkv'
                     then
                         mv -vf ./*.torrent /callisto/Data/Phill/Downloads/Torrents
                         public.anime.detect.add
