@@ -112,16 +112,19 @@ function ipfs_add_folder() {
     done < <(ipfs files ls "${folder}")
 
     if [[ ${isExisting} = true ]]; then
-        echo "Skiping existing file ${fname}" >&2
+        echo "Skiping existing file ${fname} in folder ${folder}" >&2
         return
     fi
 
-    echo "Adding ${fname} to ${folder}" >&2
+    echo "$(date) Adding ${fname}" >&2
 
     file_hash=$(ipfs add --pin=false -Q "${file}")
 
+    echo "$(date) Copying  ${file_hash} for ${fname} to ${folder}" >&2
+
     ipfs files cp "/ipfs/${file_hash}" "${folder}/${fname}"
 
+    echo "$(date) Done" >&2
 }
 
 function ipfs_provide_folder() {
