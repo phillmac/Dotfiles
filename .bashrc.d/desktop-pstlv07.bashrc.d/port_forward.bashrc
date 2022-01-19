@@ -1,6 +1,6 @@
 #! /bin/bash
 
-function port_foraward () {
+function port_forward () {
     while :
     do
         sshp -vN phill@external1.ddns.peelvalley.com.au \
