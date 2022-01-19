@@ -89,7 +89,7 @@ function ipfs_find_add_folder() {
         ((files_count++))
         ipfs_add_folder "${fname}" "${folder}"
     done < <(find . -type f '(' -iname "${patern}*.mkv" -o -iname "${patern}*.mp4" ')')
-    echo "Added ${files_count} files" >&2
+    echo "Found ${files_count} files" >&2
 }
 
 function ipfs_add_folder() {
