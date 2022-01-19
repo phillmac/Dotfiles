@@ -139,8 +139,9 @@ function public.anime.torrents.monitor ()
     done
 }
 
+export -f unstage_video_files
 export -f public.anime.add
 export -f public.list.preload
 export -f fetch_queued_torrent
 export -f get_anime_names
-export -f public.torrents.monitor
+export -f public.anime.torrents.monitor
