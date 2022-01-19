@@ -8,7 +8,6 @@ from glob import iglob
 from os import rename
 from os.path import basename
 
-
 mkvs = iglob("/callisto/Data/Staging/Webtorrent/*.mkv")
 mp4s = iglob("/callisto/Data/Staging/Webtorrent/*.mp4")
 for fitem in (*mkvs, *mp4s):
@@ -84,7 +83,6 @@ function fetch_queued_torrent () {
 from glob import iglob
 from os import rename
 from os.path import basename
-
 
 existing = next(iglob("./*.torrent"), None)
 if existing is None:
