@@ -118,7 +118,7 @@ function public.anime.detect.add ()
 }
 
 
-function public.torrents.monitor ()
+function public.anime.torrents.monitor ()
 {
     while :
     do
