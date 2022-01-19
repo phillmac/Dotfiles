@@ -1,5 +1,24 @@
 #! /bin/bash
 
+function unstage_video_files ()
+{
+    python3 -c \
+'
+from glob import iglob
+from os import rename
+from os.path import basename
+
+
+mkvs = iglob("/callisto/Data/Staging/Webtorrent/*.mkv")
+mp4s = iglob("/callisto/Data/Staging/Webtorrent/*.mp4")
+for fitem in (*mkvs, *mp4s):
+    fname = basename(fitem)
+    newpath = f"/callisto/Data/Upload/TV-Shows/Anime/{fname}"
+    print(f"Moving '\''{fitem}'\'' to '\''{newpath}'\''")
+    rename(fitem, newpath)
+'
+}
+
 function public.anime.add ()
 {
     local anime_has_dir
@@ -20,7 +39,7 @@ function public.anime.add ()
         cd /callisto/Data/Staging/Webtorrent \
         && ipfs_find_add_folder "*${1}*" "/Public/Anime/${1}"
     )
-    find /callisto/Data/Staging/Webtorrent/ -type f '(' -iname "${1}*.mkv" -o -iname "${1}*.mp4" ')' -print0 | xargs -0 -I {} mv -v {} "/callisto/Data/Upload/TV-Shows/Anime/${1}"
+    unstage_video_files
 }
 
 
@@ -82,6 +101,7 @@ else:
     print(f"Found existing torrent '\''{existing}'\''")
 '
 }
+
 function public.anime.detect.add ()
 {
     while read -r anime_name
