@@ -10,9 +10,13 @@ from os.path import basename
 
 mkvs = iglob("/callisto/Data/Staging/Webtorrent/*.mkv")
 mp4s = iglob("/callisto/Data/Staging/Webtorrent/*.mp4")
+
+pattern = re.compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\))|\.mkv)")
+
 for fitem in (*mkvs, *mp4s):
     fname = basename(fitem)
-    newpath = f"/callisto/Data/Upload/TV-Shows/Anime/{fname}"
+    dir_name = pattern.sub("", fname).strip()
+    newpath = f"/callisto/Data/Upload/TV-Shows/Anime/{dirname}/{fname}"
     print(f"Moving '\''{fitem}'\'' to '\''{newpath}'\''")
     rename(fitem, newpath)
 '
