@@ -22,7 +22,9 @@ function public.anime.add ()
 {
     local anime_has_dir
     local has_season
+
     has_season=$(grep -E ".*S+[0-9])" <<<"${1}" )
+
     if [[ -n ${has_season} ]]
     then
         anime_has_dir=$(ipfs files ls "/Public/Anime" | grep "${1}" | grep -v '.*S+[0-9]')
