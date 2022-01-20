@@ -21,7 +21,14 @@ for fitem in (*mkvs, *mp4s):
 function public.anime.add ()
 {
     local anime_has_dir
-    anime_has_dir=$(ipfs files ls "/Public/Anime" | grep "${1}")
+    local has_season
+    has_season=$(grep -E ".*S+[0-9])" <<<"${1}" )
+    if [[ -n ${has_season} ]]
+    then
+        anime_has_dir=$(ipfs files ls "/Public/Anime" | grep "${1}" | grep -v '.*S+[0-9]')
+    else
+        anime_has_dir=$(ipfs files ls "/Public/Anime" | grep "${1}")
+    fi
 
     if [[ -z "${anime_has_dir}" ]]
     then
