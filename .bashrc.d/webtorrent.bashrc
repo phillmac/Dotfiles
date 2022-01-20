@@ -66,10 +66,14 @@ function webtorrent_add_wasabi ()
 function webtorrent_download_remote ()
 {
     set -e
+
     workdir=$(mktemp -d --tmpdir=/dev/shm)
+
     trap 'rm -frv -- "${workdir}"' ERR
     trap 'rm -frv -- "${workdir}"' EXIT
+
     echo "workdir is ${workdir}"
+
     docker run \
         --rm \
         --net host \
@@ -81,7 +85,9 @@ function webtorrent_download_remote ()
                 --include *.torrent \
                 kore-ssh:/callisto/Data/Staging/Webtorrent/ \
                 /workdir/'
-    echo "$(date) Downloading" \
+
+    echo "$(date) Downloading"
+
     docker run \
         --rm \
         --net host \
@@ -89,8 +95,11 @@ function webtorrent_download_remote ()
         -w /workdir \
         --entrypoint bash \
         phillmac/webtorrent -c 'webtorrent-hybrid ./*.torrent'
-    ls -la "${workdir}" \
-    webtorrent_add_wasabi "${workdir}" \
+
+    ls -la "${workdir}"
+
+    webtorrent_add_wasabi "${workdir}"
+
     docker run \
         --rm \
         --net host \
