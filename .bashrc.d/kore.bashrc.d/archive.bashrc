@@ -389,3 +389,24 @@ function archive.pins.missing.pvs () {
         done < <( comm -23 archive.entries.txt "archive.pins.${h}.txt")
     done
 }
+
+
+
+function archive.root.hash () {
+    curl -s --fail 'https://ipfs-admin.phillm.net/api/v0/files/stat?hash=true&arg=/ipfs-archive.online' | jq -r .Hash
+}
+
+function archive.list.preload ()
+{
+    local cid
+    cid=$( archive.root.hash )
+    echo "Janus" && IPFS_HTTP_GATEWAY=192.168.42.208:8080 ipfs.ls.recursive "${cid}"
+    echo "Carpo" && IPFS_HTTP_GATEWAY=192.168.50.53:8080 ipfs.ls.recursive "${cid}"
+    echo "Charon" && IPFS_HTTP_GATEWAY=192.168.30.57:8080 ipfs.ls.recursive "${cid}"
+    echo "Io" && IPFS_HTTP_GATEWAY=http://192.168.20.33:8080 ipfs.ls.recursive "${cid}"
+    echo "Titan" && IPFS_HTTP_GATEWAY=192.168.35.51:8080 ipfs.ls.recursive "${cid}"
+    echo "VPS1" && IPFS_HTTP_GATEWAY=https://vps1.phillm.net ipfs.ls.recursive "${cid}"
+    echo "VPS2" && IPFS_HTTP_GATEWAY=https://vps2.phillm.net ipfs.ls.recursive "${cid}"
+    echo "VPS3" && IPFS_HTTP_GATEWAY=https://vps3.phillm.net ipfs.ls.recursive "${cid}"
+    echo "$(date) Done"
+}
