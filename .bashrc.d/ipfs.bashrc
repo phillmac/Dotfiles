@@ -176,6 +176,19 @@ function containsElement ()
   return 1
 }
 
+function ipfs.pins.prune2 ()
+{
+    while read -r cid
+    do
+        echo "Pin cid: ${cid}"
+        ipfs ls "${cid}"
+        date
+        read -r unpin < choice
+        [[ "${unpin}" == y ]] && ipfs pin rm "${cid}"
+        date
+    done < <(ipfs pin ls --type=recursive | cut -f 1 -d ' '| sort)
+}
+
 function ipfs.pins.prune () {
     local pinHash
     local pinItem
