@@ -53,7 +53,6 @@ function public.anime.add ()
         cd /callisto/Data/Staging/Webtorrent \
         && ipfs_find_add_folder "*${1}*" "/Public/Anime/${1}"
     )
-    unstage_video_files
 }
 
 
@@ -129,7 +128,8 @@ function public.anime.detect.add ()
         else
             echo "Empty anime name" >&2
         fi
-    done < <( get_anime_names )
+    done < <( get_anime_names | sort )
+    unstage_video_files
 }
 
 
