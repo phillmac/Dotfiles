@@ -17,7 +17,7 @@ pattern = re.compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\]
 for fitem in (*mkvs, *mp4s):
     fname = basename(fitem)
     dir_name = pattern.sub("", fname).strip()
-    newpath = f"/callisto/Data/Upload/TV-Shows/Anime/{dirname}/{fname}"
+    newpath = f"/callisto/Data/Upload/TV-Shows/Anime/{dir_name}/{fname}"
     print(f"Moving '\''{fitem}'\'' to '\''{newpath}'\''")
     rename(fitem, newpath)
 '
