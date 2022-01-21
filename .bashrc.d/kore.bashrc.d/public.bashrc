@@ -4,6 +4,7 @@ function unstage_video_files ()
 {
     python3 -c \
 '
+import re
 from glob import iglob
 from os import rename
 from os.path import basename
