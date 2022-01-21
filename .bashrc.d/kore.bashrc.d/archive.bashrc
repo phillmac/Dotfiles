@@ -328,7 +328,7 @@ function archive.pins.missing () {
 
     hosts=("docker-vps1" "docker-vps2" "docker-vps3")
 
-    archive.entries "${1}" | sort --unique > archive.entries.txt
+    archive.entries "${1}" | sort --unique > archive.cids.txt
 
     for h in "${hosts[@]}"
     do
@@ -355,7 +355,7 @@ function archive.pins.missing () {
                                 --timeout 2h \
                                 ${pincid}"
                 date
-            done < <( comm -23 archive.entries.txt "archive.pins.${h}.txt")
+            done < <( comm -23 archive.cids.txt "archive.pins.${h}.txt")
         fi
     done
 }
@@ -365,7 +365,7 @@ function archive.pins.missing.pvs () {
 
     hosts=("docker-charon" "docker-titan")
 
-    archive.entries "${1}" | sort --unique > archive.entries.txt
+    archive.entries "${1}" | sort --unique > archive.cids.txt
 
     for h in "${hosts[@]}"
     do
@@ -386,7 +386,7 @@ function archive.pins.missing.pvs () {
                             --timeout 2h \
                             ${pincid}"
             date
-        done < <( comm -23 archive.entries.txt "archive.pins.${h}.txt")
+        done < <( comm -23 archive.cids.txt "archive.pins.${h}.txt")
     done
 }
 
