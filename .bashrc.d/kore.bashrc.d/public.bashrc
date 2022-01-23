@@ -150,6 +150,7 @@ function public.anime.torrents.monitor ()
                 fi
             }
         )
+        echo "$(date) Waiting"
         wait
     done
 }
