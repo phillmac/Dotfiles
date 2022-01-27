@@ -69,13 +69,13 @@ function archive.ipns.update () {
 }
 
 function archive.pin () {
-    local ipfs_pin_addr
+    local pin_addr
     local path_filter
 
-    ipfs_pin_addr=${1:-${IPFS_PIN_ADDR}}
-    path_filter=${2:-${ipfs_pin_addr}/.*/}
+    pin_addr=${1:-${ARCHIVE_PIN_ADDR}}
+    path_filter=${2:-${pin_addr}/.*/}
 
-    if [[ -z "${ipfs_pin_addr}" ]]
+    if [[ -z "${pin_addr}" ]]
     then
         echo "IPFS pin addr is required" >&2
         return 252
@@ -85,7 +85,7 @@ function archive.pin () {
     do
         echo "$(date) Pinning folder ${pathname}" >&2
         ipfs pin add --progress "${itemhash}"
-    done < <(ipfs.ls.recursive.dirs.filtered "${ipfs_pin_addr}" "${path_filter}")
+    done < <(ipfs.ls.recursive.dirs.filtered "${pin_addr}" "${path_filter}")
 }
 
 #shellcheck disable=SC2120
