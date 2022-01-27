@@ -16,6 +16,11 @@ function split-car ()
 
 function upload-car ()
 {
+    ( cd /titan/E/ipfs-export && rclone move --verbose . --include "${1}.car" "ipfs-deep-archive:ipfs-deep-archive/${1}/" )
+}
+
+function upload-split-car ()
+{
     ( cd /titan/E/ipfs-export/split && rclone move --verbose . --include "${1}.car.*" "ipfs-deep-archive:ipfs-deep-archive/${1}/" )
 }
 
