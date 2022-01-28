@@ -23,7 +23,7 @@ function _curl () {
     then
         curl --verbose --retry "${retries}" --max-time "${maxtime}" "${@}"
     else
-        curl --silent "${@}"
+        curl --silent --fail "${@}"
     fi
     echo
 }
