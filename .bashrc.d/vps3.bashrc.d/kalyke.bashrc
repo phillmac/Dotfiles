@@ -1,0 +1,5 @@
+#!/bin/bash
+
+KALYKE_SSH_PORT=2222
+
+export KALYKE_SSH_PORT

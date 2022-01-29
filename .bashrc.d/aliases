@@ -154,31 +154,38 @@ function ipfs_provide_folder() {
 }
 
 function clone_repo () {
+    local kalyke_ssh_port
+
+    kalyke_ssh_port=${2:-${KALYKE_SSH_PORT}}
+    kalyke_ssh_port=${kalyke_ssh_port:-22}
+
     if [[ ! -d  "${HOME}/source/repos" ]]
     then
         mkdir -p "${HOME}/source/repos"
     fi
+
+
     case "${1}" in
         "phill-dev" )
             if [[ ! -d  "${HOME}/source/repos/phill" ]]
             then
                 mkdir -p "${HOME}/source/repos/phill"
             fi
-            (cd "${HOME}/source/repos/phill" && git clone ssh://kalyke.peelvalley.com.au:22/Phill/_git/Dev-Env)
+            (cd "${HOME}/source/repos/phill" && git clone "ssh://kalyke.peelvalley.com.au:${kalyke_ssh_port}/Phill/_git/Dev-Env")
             ;;
         "pvs-dev" )
             if [[ ! -d  "${HOME}/source/repos/pvs" ]]
             then
                 mkdir -p "${HOME}/source/repos/pvs"
             fi
-            (cd "${HOME}/source/repos/pvs" && git clone ssh://kalyke.peelvalley.com.au:22/PVS/_git/Dev-Env)
+            (cd "${HOME}/source/repos/pvs" && git clone "ssh://kalyke.peelvalley.com.au:${kalyke_ssh_port}/PVS/_git/Dev-Env")
             ;;
         "pvte-dev" )
             if [[ ! -d  "${HOME}/source/repos/pvte" ]]
             then
                 mkdir -p "${HOME}/source/repos/pvte"
             fi
-            (cd "${HOME}/source/repos/pvte" && git clone ssh://kalyke.peelvalley.com.au:22/PVTE/_git/Dev-Env)
+            (cd "${HOME}/source/repos/pvte" && git clone "ssh://kalyke.peelvalley.com.au:${kalyke_ssh_port}/PVTE/_git/Dev-Env")
             ;;
         * )
             echo "Unkown repo ${1}" ;;

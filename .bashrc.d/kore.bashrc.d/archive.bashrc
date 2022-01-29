@@ -362,31 +362,40 @@ function archive.pins.missing () {
 
 function archive.pins.missing.pvs () {
     local hosts
+    local pin_count
+    local archive_addr
 
-    hosts=("docker-charon" "docker-titan")
+    hosts=("docker-charon" "docker-titan" "docker-carpo")
 
-    archive.entries "${1}" | sort --unique > archive.cids.txt
+    archive_addr=${1:-$(archive.root.hash)}
+
+    archive.entries "${archive_addr}" | sort --unique > archive.cids.txt
 
     for h in "${hosts[@]}"
     do
         echo "$(date) Listing pins for ${h}" >&2
-        echo '' > "archive.pins.${h}.txt"
         archive.pin.ls "${h}" pvs-dev_scheduler | sort --unique > "archive.pins.${h}.txt"
-        while read -r pincid
-        do
-            echo "${h} missing item ${pincid}" >&2
+        pin_count=$(wc -l < "archive.pins.${h}.txt")
+        if ((pin_count > 0))
+        then
+            while read -r pincid
+            do
+                echo "${h} missing item ${pincid}" >&2
 
-            docker run --rm --net pvs-dev_scheduler docker sh -c \
-                "docker --host ${h}:2377 \
-                    run \
-                    --rm --net phill-dev_ipfs \
-                    peelvalley/ipfs-cli \
-                        pin add \
-                            --progress \
-                            --timeout 2h \
-                            ${pincid}"
-            date
-        done < <( comm -23 archive.cids.txt "archive.pins.${h}.txt")
+                docker run --rm --net pvs-dev_scheduler docker sh -c \
+                    "docker --host ${h}:2377 \
+                        run \
+                        --rm --net phill-dev_ipfs \
+                        peelvalley/ipfs-cli \
+                            pin add \
+                                --progress \
+                                --timeout 2h \
+                                ${pincid}"
+                date
+            done < <( comm -23 archive.cids.txt "archive.pins.${h}.txt")
+        else
+            echo "Pincount is 0. Skipping pins for host ${h}" >&2
+        fi
     done
 }
 
