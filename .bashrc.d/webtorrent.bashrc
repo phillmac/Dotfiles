@@ -116,7 +116,49 @@ function webtorrent_download_remote ()
                 kore-ssh:/callisto/Data/Staging/Webtorrent/"
 }
 
+function webtorrent_download_remote_staging ()
+{
+    set -e
+
+    workdir=$(mktemp -d --tmpdir=/dev/shm)
+
+    trap 'rm -frv -- "${workdir}"' ERR
+    trap 'rm -frv -- "${workdir}"' EXIT
+
+    echo "workdir is ${workdir}"
+
+    echo "$(date) Downloading"
+
+    docker run \
+        --rm \
+        --net host \
+        -v "${workdir}":/workdir \
+        -w /workdir \
+        --entrypoint bash \
+        phillmac/webtorrent -c "webtorrent-hybrid ${1}"
+
+    ls -la "${workdir}"
+
+    webtorrent_add_wasabi "${workdir}"
+
+    docker run \
+        --rm \
+        --net host \
+        -v "${workdir}":/workdir \
+        -v /root:/root \
+        -w /workdir \
+        peelvalley/rclone-b2 \
+            "rclone move \
+                -vvv \
+                --retries 120 \
+                --retries-sleep 30s \
+                --exclude '*.torrent' \
+                /workdir/ \
+                kore-ssh:/callisto/Data/Staging/"
+}
+
 export -f webtorrent_download_remote
+export -f webtorrent_download_remote_staging
 export -f webtorrent
 export -f webtorrent_create
 export -f webtorrent_download
