@@ -120,7 +120,7 @@ function webtorrent_download_remote_staging ()
 {
     set -e
 
-    workdir=$(mktemp -d --tmpdir=/dev/shm)
+    workdir=$(mktemp -d)
 
     trap 'rm -frv -- "${workdir}"' ERR
     trap 'rm -frv -- "${workdir}"' EXIT
