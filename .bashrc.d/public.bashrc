@@ -4,7 +4,7 @@ function public.root.hash () {
     curl -s --fail 'https://ipfs-admin.phillm.net/api/v0/files/stat?hash=true&arg=/Public' | jq -r .Hash
 }
 
-function public.pins.missing () {
+function public.pins.missing.local () {
     local public_hash
     local cid
     local _fpath
@@ -46,12 +46,12 @@ function public.pins.monitor () {
             continue
         fi
         echo "Pinning ${public_hash}" >&2
-        public.pins.missing
+        public.pins.missing.local
         rlast=${public_hash}
         echo "$(date) Done" >&2
     done
 }
 
 export -f public.root.hash
-export -f public.pins.missing
+export -f public.pins.missing.local
 export -f public.pins.monitor
