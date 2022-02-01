@@ -18,14 +18,14 @@ function monitor_metis_site_vpn ()
             echo "$(date) ok"
         else
             ((retest_fail_count=0))
-            while ((retest_fail_count < 5))
+            while ((retest_fail_count < 10))
             do
                 if test_metis_site_vpn 15
                 then
+                    break
+                else
                     echo "$(date) fails ${retest_fail_count}"
                     ((retest_fail_count++))
-                else
-                    break
                 fi
             done
 
