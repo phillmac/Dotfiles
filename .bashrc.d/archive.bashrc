@@ -136,8 +136,35 @@ function archive.pin.ls ()
     )
 }
 
+function archive.pins.missing.local () {
+    local pinned_count
+
+    archive.entries "${1}" | sort --unique > archive.entries.cids.txt
+
+    docker exec phill-dev_ipfs_1 ipfs pin ls --type=recursive | sort --unique > "ipfs.pins.txt"
+    pinned_count=$(wc -l  < "ipfs.pins.txt")
+
+    if ((pinned_count <= 1))
+    then
+        echo "Error: pin count too low" >&2
+    else
+        while read -r pincid
+        do
+            echo "Missing pin item ${pincid}" >&2
+
+            docker exec phill-dev_ipfs_1 \
+                ipfs pin add \
+                    --progress \
+                    --timeout 2h \
+                    "${pincid}"
+            date
+        done < <( comm -23  archive.entries.cids.txt ipfs.pins.txt)
+    fi
+}
+
 export -f masonry.publish
 export -f archive.ipns.update
 export -f archive.pin
 export -f archive.entries
 export -f archive.pin.ls
+export -f archive.pins.missing.local
