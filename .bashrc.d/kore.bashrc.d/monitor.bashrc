@@ -18,7 +18,7 @@ function monitor_metis_site_vpn ()
             echo "$(date) ok"
         else
             ((retest_fail_count=0))
-            while ((retest_fail_count < 10))
+            while :
             do
                 if test_metis_site_vpn 15
                 then
@@ -27,13 +27,13 @@ function monitor_metis_site_vpn ()
                     echo "$(date) fails ${retest_fail_count}"
                     ((retest_fail_count++))
                 fi
+                if ! ((retest_fail_count < 10))
+                then
+                    echo 'Reseting VPN connection'
+                    #ssh -p 35682 pfsense2 '/usr/local/sbin/pfSsh.php playback svc stop openvpn server 4'
+                    break
+                fi
             done
-
-            if ((retest_fail_count==5))
-            then
-                echo 'Reseting VPN connection'
-                #ssh -p 35682 pfsense2 '/usr/local/sbin/pfSsh.php playback svc stop openvpn server 4'
-            fi
         fi
         wait
     done
