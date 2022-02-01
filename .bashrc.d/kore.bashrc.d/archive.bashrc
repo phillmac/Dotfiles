@@ -325,10 +325,15 @@ function archive.dht.provide.pvs ()
 function archive.pins.missing () {
     local hosts
     local pinned_count
+    local archive_addr
+    local entry
 
     hosts=("docker-vps1" "docker-vps2" "docker-vps3")
 
-    archive.entries "${1}" | sort --unique > archive.cids.txt
+    archive_addr=${1:-$(archive.root.hash)/Archive/DA}
+
+    archive.entries "${archive_addr}" | sort --unique > archive.entries.cids.txt
+
 
     for h in "${hosts[@]}"
     do
@@ -355,7 +360,7 @@ function archive.pins.missing () {
                                 --timeout 2h \
                                 ${pincid}"
                 date
-            done < <( comm -23 archive.cids.txt "archive.pins.${h}.txt")
+            done < <( comm -23 archive.entries.cids.txt "archive.pins.${h}.txt")
         fi
     done
 }
@@ -364,12 +369,13 @@ function archive.pins.missing.pvs () {
     local hosts
     local pin_count
     local archive_addr
+    local entry
 
     hosts=("docker-charon" "docker-titan" "docker-carpo")
 
-    archive_addr=${1:-$(archive.root.hash)}
+    archive_addr=${1:-$(archive.root.hash)/Archive/DA}
 
-    archive.entries "${archive_addr}" | sort --unique > archive.cids.txt
+    archive.entries "${archive_addr}" | sort --unique > archive.entries.cids.txt
 
     for h in "${hosts[@]}"
     do
@@ -380,7 +386,8 @@ function archive.pins.missing.pvs () {
         then
             while read -r pincid
             do
-                echo "${h} missing item ${pincid}" >&2
+                entry=$(grep "${pincid}" archive.entries.txt)
+                echo "${h} missing item ${entry}" >&2
 
                 docker run --rm --net pvs-dev_scheduler docker sh -c \
                     "docker --host ${h}:2377 \
@@ -392,7 +399,7 @@ function archive.pins.missing.pvs () {
                                 --timeout 2h \
                                 ${pincid}"
                 date
-            done < <( comm -23 archive.cids.txt "archive.pins.${h}.txt")
+            done < <( comm -23 archive.entries.cids.txt "archive.pins.${h}.txt")
         else
             echo "Pincount is 0. Skipping pins for host ${h}" >&2
         fi
