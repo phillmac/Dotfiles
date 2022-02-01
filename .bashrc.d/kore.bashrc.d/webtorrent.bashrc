@@ -28,6 +28,20 @@ function io_wtdl_remote ()
     echo "$(date) Done"
 }
 
+function io_wtdl_remote_staging ()
+{
+    sshp 192.227.67.212 \
+        "nohup bash -c 'source .bashrc.d/webtorrent.bashrc && webtorrent_download_remote_staging ${1}'" \
+     && docker run \
+        --rm \
+        --net host \
+        -v /callisto/Data/Staging:/workdir \
+        -w /workdir \
+        --entrypoint bash \
+        phillmac/webtorrent -c "webtorrent-hybrid ${1}"
+    echo "$(date) Done"
+}
+
 
 alias wtdl-charon=charon_wtdl_remote
 alias cwtdl=charon_wtdl_remote
