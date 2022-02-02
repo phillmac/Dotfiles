@@ -142,7 +142,7 @@ function archive.pins.missing.local () {
 
     archive.entries "${1}" | sort --unique > archive.entries.cids.txt
 
-    ipfs pin ls --type=recursive | sort --unique > "ipfs.pins.txt"
+    ipfs pin ls --type=recursive | sort --unique > "ipfs.pins.local.txt"
     pinned_count=$(wc -l  < "ipfs.pins.txt")
 
     if ((pinned_count <= 1))
@@ -159,7 +159,7 @@ function archive.pins.missing.local () {
                 --timeout 2h \
                 "${pincid}"
             date
-        done < <( comm -23  archive.entries.cids.txt ipfs.pins.txt)
+        done < <( comm -23  archive.entries.cids.txt ipfs.pins.local.txt)
     fi
 }
 
