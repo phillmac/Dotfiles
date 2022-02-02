@@ -142,7 +142,7 @@ function archive.pins.missing.local () {
 
     archive.entries "${1}" | sort --unique > archive.entries.cids.txt
 
-    ipfs pin ls --type=recursive | sort --unique > "ipfs.pins.local.txt"
+    ipfs pin ls --type=recursive | cut -f 1 -d ' ' | sort --unique > "ipfs.pins.local.txt"
     pinned_count=$(wc -l  < "ipfs.pins.txt")
 
     if ((pinned_count <= 1))
