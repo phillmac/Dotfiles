@@ -138,6 +138,7 @@ function archive.pin.ls ()
 
 function archive.pins.missing.local () {
     local pinned_count
+    local entry
 
     archive.entries "${1}" | sort --unique > archive.entries.cids.txt
 
@@ -150,7 +151,8 @@ function archive.pins.missing.local () {
     else
         while read -r pincid
         do
-            echo "Missing pin item ${pincid}" >&2
+            entry=$(grep "${pincid}" archive.entries.txt)
+            echo "Missing pin item ${entry}" >&2
 
             ipfs pin add \
                 --progress \
