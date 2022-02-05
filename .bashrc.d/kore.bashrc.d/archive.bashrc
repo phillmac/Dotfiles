@@ -408,10 +408,6 @@ function archive.pins.missing.pvs () {
 
 
 
-function archive.root.hash () {
-    curl -s --fail 'https://ipfs-admin.phillm.net/api/v0/files/stat?hash=true&arg=/ipfs-archive.online' | jq -r .Hash
-}
-
 function archive.list.preload ()
 {
     local cid
