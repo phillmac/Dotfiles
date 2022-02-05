@@ -136,11 +136,18 @@ function archive.pin.ls ()
     )
 }
 
+function archive.root.hash () {
+    curl -s --fail 'https://ipfs-admin.phillm.net/api/v0/files/stat?hash=true&arg=/ipfs-archive.online' | jq -r .Hash
+}
+
 function archive.pins.missing.local () {
     local pinned_count
     local entry
+    local archive_addr
 
-    archive.entries "${1}" | sort --unique > archive.entries.cids.txt
+    archive_addr=${1:-$(archive.root.hash)/Archive/DA}
+
+    archive.entries "${archive_addr}" | sort --unique > archive.entries.cids.txt
 
     ipfs pin ls --type=recursive | cut -f 1 -d ' ' | sort --unique > ipfs.pins.local.txt
     pinned_count=$(wc -l  < ipfs.pins.local.txt)
@@ -168,4 +175,5 @@ export -f archive.ipns.update
 export -f archive.pin
 export -f archive.entries
 export -f archive.pin.ls
+export -f archive.root.hash
 export -f archive.pins.missing.local
