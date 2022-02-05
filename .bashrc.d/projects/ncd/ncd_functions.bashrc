@@ -9,31 +9,12 @@ function ncd_push () {
     && sshp phill@kore.peelvalley.com.au docker exec -u www-data pvte-dev_ncd_dev_1 bash -c "'cd app/sprinkles/ncd && git fetch && git checkout origin/$(git branch --show-current)'")
 }
 
-
 function ncd_reset() {
   (cd "${SOURCE_DIR}/Phill/Repos/PVTE/NCDSprinkle" \
    && git reset --hard
   )
 }
 
-
-function start_release () {
-version_tag=$1
-  if [[ -z "${version_tag}" ]]; then
-    echo "Version tag is required"
-  else
-    git flow release start "${version_tag}"
-  fi
-}
-
-function finish_release () {
-  version_tag=$1
-  if [[ -z "${version_tag}" ]]; then
-    echo "Version tag is required"
-    return 252
-  fi
-  git flow release finish "${version_tag}" --message "Version ${version_tag}"
-}
 
 function build_ncd_image () {
   version_tag=$1
