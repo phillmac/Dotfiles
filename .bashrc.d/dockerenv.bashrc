@@ -13,6 +13,7 @@ function source_env_files () {
             "pvte/Prod-Env"
             "scouts/Dev-Env"
             "epra/Dev-Env"
+            "siteguard/Dev-Env"
             )
 
     for repo in "${repo_dirs_list[@]}"; do
@@ -43,6 +44,8 @@ function source_env_files () {
                 alias_kapcd_dev_update
                 alias_phill_dev_io
                 alias_phill_dev_update
+                alias_sg_dev_carpo
+                alias_sg_dev_update
                 ;;
             'desktop-pstlv07' )
                 ;;
