@@ -52,6 +52,22 @@ function public.pins.monitor () {
     done
 }
 
+function public.list.preload ()
+{
+    local cid
+    cid=$( public.root.hash )
+    echo "Janus\n\n" && IPFS_HTTP_GATEWAY=192.168.42.208:8080 ipfs.ls.recursive "${cid}"
+    echo "Carpo\n\n" && IPFS_HTTP_GATEWAY=192.168.50.53:8080 ipfs.ls.recursive "${cid}"
+    echo "Charon\n\n" && IPFS_HTTP_GATEWAY=192.168.30.57:8080 ipfs.ls.recursive "${cid}"
+    echo "Io\n\n" && IPFS_HTTP_GATEWAY=http://192.168.20.33:8080 ipfs.ls.recursive "${cid}"
+    echo "Titan\n\n" && IPFS_HTTP_GATEWAY=192.168.35.51:8080 ipfs.ls.recursive "${cid}"
+    echo "VPS1\n\n" && IPFS_HTTP_GATEWAY=https://vps1.phillm.net ipfs.ls.recursive "${cid}"
+    echo "VPS2\n\n" && IPFS_HTTP_GATEWAY=https://vps2.phillm.net ipfs.ls.recursive "${cid}"
+    echo "VPS3\n\n" && IPFS_HTTP_GATEWAY=https://vps3.phillm.net ipfs.ls.recursive "${cid}"
+    echo "$(date) Done"
+}
+
 export -f public.root.hash
 export -f public.pins.missing.local
 export -f public.pins.monitor
+export -f public.list.preload
