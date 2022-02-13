@@ -75,17 +75,17 @@ function fetch_queued_torrent () {
     python3 -c \
 '
 from glob import iglob
-from os import rename
+from shutil import move
 from os.path import basename
 
 existing = next(iglob("./*.torrent"), None)
 if existing is None:
-    tpath = next(iglob("../Queue/*.torrent"), None)
+    tpath = next(iglob("/ananke/D/Queue/Anime/*.torrent"), None)
     if not tpath is None:
         tname = basename(tpath)
         newpath = f"./{tname}"
         print(f"Moving '\''{tpath}'\'' to '\''{newpath}'\''")
-        rename(tpath, newpath)
+        move(tpath, newpath)
     else:
         print("Queue is empty")
         exit(1)
