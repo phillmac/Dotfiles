@@ -4,6 +4,55 @@ function public.root.hash () {
     curl -s --fail 'https://ipfs-admin.phillm.net/api/v0/files/stat?hash=true&arg=/Public' | jq -r .Hash
 }
 
+function public.anime.names ()
+{
+    ipfs.ls "$(public.root.hash)/Anime" | jq -r .Name
+}
+
+function public.anime.episodes ()
+{
+    local resolved
+
+    resolved=$(ipfs.resolve "'$(public.root.hash)/Anime/${1}'")
+    echo "Resolved is ${resolved}" >&2
+    
+    ipfs.ls "${resolved}" | jq -r .Name
+}
+
+function public.anime.hasep ()
+{
+    local anime_has_dir
+
+    anime_has_dir=1
+
+    while read -r file_name
+    do
+        if [[ *"${file_name}"* == "${2}" ]]
+        then
+            anime_has_dir=0
+        fi
+    done < <(public.anime.episodes)
+
+    return ${anime_has_dir}
+}
+
+function public.anime.hasdir ()
+{
+    local anime_has_dir
+
+    anime_has_dir=1
+
+    while read -r dir_name
+    do
+        if [[ "${dir_name}" == "${1}" ]]
+        then
+            anime_has_dir=0
+        fi
+    done < <(public.anime.names)
+
+    return ${anime_has_dir}
+}
+
 function public.pins.missing.local () {
     local public_hash
     local entry
