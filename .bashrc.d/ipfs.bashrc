@@ -131,7 +131,7 @@ function ipfs.resolve () {
     [[ -n "${IPFS_DEBUG}" ]] &&  echo "resolve_addr_encoded is ${resolve_addr_encoded}" >&2
 
 
-    resolve_url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/resolve?arg=${1}"
+    resolve_url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/resolve?arg=${resolve_addr_encoded}"
 
     jq -r '.Path' < <(_curl "${resolve_url}"  )
 }
