@@ -31,7 +31,7 @@ function public.anime.hasep ()
         then
             anime_has_ep=0
         fi
-    done < <(public.anime.episodes ${1]})
+    done < <(public.anime.episodes "${1}")
 
     return ${anime_has_ep}
 }
