@@ -133,7 +133,7 @@ function ipfs.resolve () {
 
     resolve_url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/resolve?arg=${resolve_addr_encoded}"
 
-    jq -r '.Path' < <(_curl "${resolve_url}"  )
+    jq -r '.Path' < <(_curl "${resolve_url}"  ) | sed 's/\/ipfs\///g' /dev/stdin
 }
 
 function ipfs.ls () {
