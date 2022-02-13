@@ -94,7 +94,7 @@ function webtorrent_download_remote ()
         -v "${workdir}":/workdir \
         -w /workdir \
         --entrypoint bash \
-        phillmac/webtorrent -c 'webtorrent-hybrid ./*.torrent'
+        phillmac/webtorrent -c 'webtorrent ./*.torrent'
 
     ls -la "${workdir}"
 
@@ -135,7 +135,7 @@ function webtorrent_download_remote_staging ()
         -v "${workdir}":/workdir \
         -w /workdir \
         --entrypoint bash \
-        phillmac/webtorrent -c "webtorrent-hybrid ${1}"
+        phillmac/webtorrent -c "webtorrent ${1}"
 
     ls -la "${workdir}"
 

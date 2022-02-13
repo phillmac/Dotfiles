@@ -10,7 +10,7 @@ function charon_wtdl_remote ()
         -v /callisto/Data/Staging/Webtorrent:/workdir \
         -w /workdir \
         --entrypoint bash \
-        phillmac/webtorrent -c 'webtorrent-hybrid ./*.torrent'
+        phillmac/webtorrent -c 'webtorrent ./*.torrent'
     echo "$(date) Done"
 }
 
@@ -24,7 +24,7 @@ function io_wtdl_remote ()
         -v /callisto/Data/Staging/Webtorrent:/workdir \
         -w /workdir \
         --entrypoint bash \
-        phillmac/webtorrent -c 'webtorrent-hybrid ./*.torrent'
+        phillmac/webtorrent -c 'webtorrent ./*.torrent'
     echo "$(date) Done"
 }
 
@@ -38,7 +38,7 @@ function io_wtdl_remote_staging ()
         -v /callisto/Data/Staging:/workdir \
         -w /workdir \
         --entrypoint bash \
-        phillmac/webtorrent -c "webtorrent-hybrid ${1}"
+        phillmac/webtorrent -c "webtorrent ${1}"
     echo "$(date) Done"
 }
 
