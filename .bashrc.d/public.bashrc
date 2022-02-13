@@ -14,26 +14,26 @@ function public.anime.episodes ()
     local resolved
 
     resolved=$(ipfs.resolve "$(public.root.hash)/Anime/${1}")
-    echo "Resolved is ${resolved}" >&2
+    # echo "Resolved is ${resolved}" >&2
     
     ipfs.ls "${resolved}" | jq -r .Name
 }
 
 function public.anime.hasep ()
 {
-    local anime_has_dir
+    local anime_has_ep
 
-    anime_has_dir=1
+    anime_has_ep=1
 
     while read -r file_name
     do
         if [[ *"${file_name}"* == "${2}" ]]
         then
-            anime_has_dir=0
+            anime_has_ep=0
         fi
-    done < <(public.anime.episodes)
+    done < <(public.anime.episodes ${1]})
 
-    return ${anime_has_dir}
+    return ${anime_has_ep}
 }
 
 function public.anime.hasdir ()
