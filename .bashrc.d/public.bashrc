@@ -6,25 +6,27 @@ function public.root.hash () {
 
 function public.pins.missing.local () {
     local public_hash
-    local cid
-    local _fpath
-    local pin_timeout
+    local entry
+    local pincid
 
-
-    pin_timeout=${IPFS_PIN_TIMEOUT}
 
     public_hash=$(public.root.hash)
 
-    ipfs.ls.recursive.files "${public_hash}" |  tee public.files.txt | cut -f 1 -d ' ' | sort -u > public.files.cids.txt
+    ipfs.ls.recursive.files "${public_hash}"  | tee public.files.txt | cut -d ' ' -f 1 | sort --unique > public.files.cids.txt
 
     ipfs pin ls --type=recursive | cut -f1 -d ' ' | sort -u > pins.txt
 
-    while read -r cid _fpath
-    do
-        grep "${cid}" public.files.txt >&2
-        ipfs pin add --progress --timeout "${pin_timeout}" "${cid}"
-    done < <(comm -23  public.files.cids.txt pins.txt )
+    comm -23 public.files.cids.txt pins.txt > public.missing.cids.txt
+    cids_count=$(wc -l < public.missing.cids.txt)
+    ((progress=1))
 
+    while read -r pincid
+    do
+        entry=$(grep "${pincid}" public.files.txt)
+        echo "$(date)  Missing item ${entry} [${progress}/${cids_count}]" >&2
+        ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${pincid}"
+        ((progress+=1))
+    done < public.missing.cids.txt
 }
 
 
@@ -47,6 +49,29 @@ function public.pins.monitor () {
         fi
         echo "Pinning ${public_hash}" >&2
         public.pins.missing.local
+        rlast=${public_hash}
+        echo "$(date) Done" >&2
+    done
+}
+
+function public.pins.monitor () {
+    local public_hash
+    local rlast
+    local sleep_delay
+    sleep_delay=${1:-$IPFS_PIN_SLEEP}
+
+    while :
+    do
+        public_hash=$(public.root.hash)
+        echo "$(date) rlast: '${rlast}' public_hash: '${public_hash}'" >&2
+        if [[ "${rlast}" == "${public_hash}" ]]
+        then
+            echo "$(date) Waiting" >&2
+            sleep "${sleep_delay}"
+            continue
+        fi
+        echo "Pinning ${public_hash}" >&2
+        public.pins.missing.local "${public_hash}"
         rlast=${public_hash}
         echo "$(date) Done" >&2
     done
