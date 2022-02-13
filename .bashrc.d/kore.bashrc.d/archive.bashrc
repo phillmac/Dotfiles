@@ -270,7 +270,7 @@ function archive.dht.provide ()
 
     provide_addr=${1:-/ipns/ipfs-archive.online/Archive/DA}
 
-    cid=$(ipfs resolve "${provide_addr}" --timeout "${IPFS_RESOLVE_TIMEOUT}" | sed 's/\/ipfs\///g' /dev/stdin)
+    cid=$(ipfs.resolve "${provide_addr}")
 
     hosts=("docker-vps1" "docker-vps2" "docker-vps3")
 
@@ -300,7 +300,7 @@ function archive.dht.provide.pvs ()
 
     provide_addr=${1:-/ipns/ipfs-archive.online/Archive/DA}
 
-    cid=$(ipfs resolve "${provide_addr}" --timeout "${IPFS_RESOLVE_TIMEOUT}" | sed 's/\/ipfs\///g' /dev/stdin)
+    cid=$(ipfs.resolve "${provide_addr}")
 
     hosts=("docker-charon" "docker-titan" "docker-io")
 

@@ -300,7 +300,7 @@ function ipfs.pin.dirs.filtered () {
 
     while true
     do
-        if rnew=$(ipfs resolve --timeout "${resolve_timeout}" "${ipns}")
+        if rnew=$(ipfs.resolve "${ipns}")
         then
             if ! check_lockout_time || [[ "${rlast}" == "${rnew}" ]]
             then
@@ -339,7 +339,7 @@ function ipfs.pin.monitor () {
     fi
     while true
     do
-        if rnew=$(ipfs resolve --timeout "${resolve_timeout}" "${ipns}")
+        if rnew=$(ipfs.resolve "${ipns}")
         then
             if ! check_lockout_time || [[ "${rlast}" == "${rnew}" ]]
             then
@@ -373,7 +373,7 @@ function getIPNSBase58BTC() {
         return 252
     fi
 
-    cid=$(ipfs resolve "${ipns}" --timeout "${IPFS_RESOLVE_TIMEOUT}" | sed 's/\/ipfs\///g' /dev/stdin)
+    cid=$(ipfs.resolve "${ipns}")
     ipfs cid format -b base58btc "${cid}"
 }
 

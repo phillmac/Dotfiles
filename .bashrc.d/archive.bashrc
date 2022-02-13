@@ -96,7 +96,7 @@ function archive.entries () {
 
     entries_addr=${1:-${ARCHIVE_ENTRIES_ADDR}}
     entries_addr=${entries_addr:-/ipns/staging.ipfs-archive.online/Archive/DA}
-    entries_addr_resolved=$(ipfs resolve --timeout 10m "${entries_addr}")
+    entries_addr_resolved=$(ipfs.resolve "${entries_addr}")
     path_filter=${2:-${entries_addr_resolved}/.*/}
 
     if [[ -z "${entries_addr_resolved}" ]]
