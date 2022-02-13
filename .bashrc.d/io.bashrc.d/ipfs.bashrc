@@ -27,14 +27,14 @@ function ipfs-backblaze ()
 
 function ipfs-wasabi.public.pins.missing ()
 {
-    ipfs.ls.recursive.files "${1}" "${2}" | tee public.entries.txt | cut -d ' ' -f 1 | sort --unique > public.entries.cids.txt
-    ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > ipfs-wasabi.pins.txt
-    comm -23 public.entries.cids.txt ipfs-wasabi.pins.txt > wasabi.missing.cids.txt
-    cids_count=$(wc -l < wasabi.missing.cids.txt)
+    ipfs.ls.recursive.files "${1}" "${2}" | tee public.files.txt | cut -d ' ' -f 1 | sort --unique > public.files.cids.txt
+    ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > wasabi.pins.txt
+    comm -23 public.files.cids.txt wasabi.pins.txt > wasabi.public.missing.txt
+    cids_count=$(wc -l < wasabi.public.missing.txt)
     ((progress=1))
     while read -r pincid
         do
-            echo 'ipfs-wasabi missing item ' "$(grep "${pincid}" public.entries.txt) [${progress}/${cids_count}]" >&2
+            echo "$(date) ipfs-wasabi missing item $(grep ${pincid} public.files.txt) [${progress}/${cids_count}]" >&2
             ipfs-wasabi dag import < <(
                 docker run \
                     --rm \
@@ -42,22 +42,21 @@ function ipfs-wasabi.public.pins.missing ()
                     curlimages/curl curl \
                         "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}"
             )
-            date
             ((progress+=1))
-    done < wasabi.missing.cids.txt
+    done < wasabi.public.missing.txt
 
 }
 
 function ipfs-wasabi.archive.pins.missing ()
 {
     archive.entries "${1}" | sort --unique > archive.entries.cids.txt
-    ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > ipfs-wasabi.pins.txt
-    comm -23  archive.entries.cids.txt ipfs-wasabi.pins.txt > wasabi.missing.cids.txt
-    cids_count=$(wc -l < wasabi.missing.cids.txt)
+    ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > wasabi.pins.txt
+    comm -23  archive.entries.cids.txt wasabi.pins.txt > wasabi.archive.missing.txt
+    cids_count=$(wc -l < wasabi.archive.missing.txt)
     ((progress=1))
     while read -r pincid
         do
-            echo 'ipfs-wasabi missing item ' "$(grep "${pincid}" archive.entries.txt) [${progress}/${cids_count}]" >&2
+            echo '(date) ipfs-wasabi missing item ' "$(grep "${pincid}" archive.entries.txt) [${progress}/${cids_count}]" >&2
             ipfs-wasabi dag import < <(
                 docker run \
                     --rm \
@@ -65,9 +64,8 @@ function ipfs-wasabi.archive.pins.missing ()
                     curlimages/curl curl \
                         "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}"
             )
-            date
             ((progress+=1))
-    done < wasabi.missing.cids.txt
+    done < wasabi.archive.missing.txt
 
 }
 
