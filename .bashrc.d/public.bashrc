@@ -30,8 +30,6 @@ function public.anime.hasep ()
         if [[ "${2}" == *"${file_name}"* ]]
         then
             anime_has_ep=0
-        else
-            echo "${file_name} != ${2}"
         fi
     done < <(public.anime.episodes "${1}")
 
