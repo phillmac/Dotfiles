@@ -4,15 +4,15 @@ function unstage_video_files ()
 {
     python3 -c \
 '
-import re
 from glob import iglob
 from os import rename
 from os.path import basename
+from re import compile
 
 mkvs = iglob("/callisto/Data/Staging/Webtorrent/*.mkv")
 mp4s = iglob("/callisto/Data/Staging/Webtorrent/*.mp4")
 
-pattern = re.compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\))|\.mkv)")
+pattern = compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\))|\.mkv)")
 
 for fitem in (*mkvs, *mp4s):
     fname = basename(fitem)
@@ -25,20 +25,10 @@ for fitem in (*mkvs, *mp4s):
 
 function public.anime.add ()
 {
-    local anime_has_dir
     local dir_name
+ 
 
-    anime_has_dir='FALSE'
-
-    while read -r dir_name
-    do
-        if [[ "${dir_name}" == "${1}" ]]
-        then
-            anime_has_dir='TRUE'
-        fi
-    done < <(ipfs files ls '/Public/Anime')
-
-    if [[ "${anime_has_dir}" != 'TRUE' ]]
+    if public.anime.hasdir "${1}"
     then
         echo "Creating ipfs mfs dir /Public/Anime/${1}"
         ipfs files mkdir "/Public/Anime/${1}"
@@ -55,19 +45,110 @@ function public.anime.add ()
     )
 }
 
-
 function get_anime_names () {
     python3 -c \
 '
-import re
 from glob import iglob
+from re import compile
 
-pattern = re.compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\))|\.mkv)")
+pattern = compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\))|\.mkv)")
 names = set()
 for fname in iglob("./*.mkv"):
     names.add(pattern.sub("", fname).strip())
 for n in names: print(n)
 '
+}
+
+
+function get_most_recent_torrent () {
+    python3 -c \
+'
+from pathlib import Path
+from re import compile
+
+files = Path.cwd().glob("*720*.torrent")
+newest = max(files, key=lambda x: x.stat().st_ctime)
+pattern = compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\))|\.mkv.torrent)")
+print(pattern.sub("", newest.name).strip())
+'
+}
+
+function monitor_anime_rss_alt () {
+    
+    while :
+    do
+        sleep 6h & 
+        ( 
+            cd /callisto/Data/Phill/Sync/Staging/Torrents/ && \
+            for feedurl in 'https://subsplease.org/rss/?t&r=sd' 'https://subsplease.org/rss/?t&r=1080'
+            do
+                while read -r url
+                do 
+                    wget -nc --content-disposition "${url}";
+                done < <(
+                    grep -o 'https://nyaa.si/view/[0-9]*/torrent' < <(
+                        curl -s --fail "${feedurl}"
+                    )
+                )
+            done
+        )
+        date
+        wait
+    done
+}
+
+function monitor_anime_rss ()
+{
+    local anime_name
+    local last_anime_name
+    local fname
+
+    while :
+    do 
+        sleep 15m & 
+        ( 
+            cd /callisto/Data/Phill/Sync/Staging/Torrents/ && {
+                while read -r url
+                do
+                    echo "Fetching ${url}" >&2
+                    wget -q -nc --content-disposition "${url}"
+                    anime_name=$(get_most_recent_torrent)
+                    echo "Anime name is ${anime_name}" >&2
+                    if [[ "${last_anime_name}" != "${anime_name}" ]]
+                    then
+                        last_anime_name="${anime_name}"
+                        if public.anime.hasdir "${anime_name}"
+                        then
+                            for fname in *"${anime_name}"*720p*
+                            do
+                                if ! public.anime.hasep "${anime_name}" "${fname}"
+                                then
+                                    if [[ ! -f "/callisto/Data/Staging/Webtorrent/${fname}" ]]
+                                    then
+                                        mv -v "${fname}" /ananke/D/Queue/Anime
+                                    else
+                                        echo "${fname} already being proccessed" >&2
+                                    fi
+                                else
+                                    echo "${fname} already downloaded" >&2
+                                fi
+                            done
+                        else
+                            echo "${anime_name} not in public anime" >&2
+                        fi
+                    else
+                        echo "Skipping ${anime_name}" >&2
+                    fi
+                done < <(
+                    grep -o 'https://nyaa.si/view/[0-9]*/torrent' < <(
+                            curl -s --fail 'https://subsplease.org/rss/?t&r=720'
+                        )
+                    )
+            }
+        )
+        date
+        wait
+    done
 }
 
 
