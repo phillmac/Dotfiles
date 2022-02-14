@@ -141,6 +141,30 @@ function public.list.preload ()
     echo "$(date) Done"
 }
 
+function public.anime.archiveone () {
+
+    SOURCE=kore-ssh:/callisto/Data/Upload/TV-Shows/Anime
+    DEST=b2-phill:Video-Archive2/TV-Shows/Anime
+    FILES=$(mktemp --tmpdir=/dev/shm)
+
+    trap 'rm -fv -- "${FILES}"*' ERR
+    trap 'rm -fv -- "${FILES}"*' EXIT
+
+    rclone lsf --files-only --recursive "${SOURCE}" | tee "${FILES}"
+
+    while [ -s "${FILES}" ]; do
+        # Get the first 1
+        head -n 1 "${FILES}" > "${FILES}-batch"
+        # Cut the 1 off the top of `${FILES}`
+        tail -n +2 "${FILES}" > "${FILES}-new"
+        mv -v "${FILES}-new" "${FILES}"
+
+        # Now transfer the data
+        rclone move -vvv --files-from-raw "${FILES}-batch" "${SOURCE}" "${DEST}"
+        read -p "Press enter to continue"
+    done
+}
+
 export -f public.root.hash
 export -f public.pins.missing.local
 export -f public.pins.monitor
