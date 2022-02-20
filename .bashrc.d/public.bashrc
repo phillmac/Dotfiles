@@ -39,7 +39,7 @@ function public.anime.hasep ()
 function public.pin.add.local () {
     if [[ -n "${PUBLIC_DAG_EXPORT_GATEWAY}" ]]
     then
-        curl "${PUBLIC_DAG_EXPORT_GATEWAY}/${IPFS_API}/dag/export?arg=${1}" | docker exec phill-dev_ipfs_1 ipfs dag import
+        curl "${PUBLIC_DAG_EXPORT_GATEWAY}/${IPFS_API}/dag/export?arg=${1}" | docker exec -i phill-dev_ipfs_1 ipfs dag import
     else
         ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${1}"
     fi
