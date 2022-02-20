@@ -79,7 +79,7 @@ function public.pins.missing.local () {
 }
 
 
-function public.pins.monitor () {
+function public.pins.monitor.lockout () {
     local public_hash
     local rlast
     local sleep_delay
