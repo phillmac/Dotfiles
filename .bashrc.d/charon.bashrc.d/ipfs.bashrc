@@ -8,6 +8,7 @@ IPFS_RESOLVE_TIMEOUT="15m"
 IPFS_PIN_SLEEP="1h"
 
 IPFS_HTTP_GATEWAY="127.0.0.1:8080"
+PUBLIC_DAG_EXPORT_GATEWAY=http://external7.ddns.peelvalley.com.au:8080
 
 
 # function charon.ipfs.preload ()
@@ -33,5 +34,6 @@ export IPFS_PIN_TIMEOUT
 export IPFS_RESOLVE_TIMEOUT
 export IPFS_PIN_SLEEP
 export IPFS_HTTP_GATEWAY
+export PUBLIC_DAG_EXPORT_GATEWAY
 
 # export -f charon.ipfs.preload
