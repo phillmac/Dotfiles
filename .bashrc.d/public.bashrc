@@ -36,6 +36,15 @@ function public.anime.hasep ()
     return ${anime_has_ep}
 }
 
+function public.pin.add.local () {
+    If [[ -n "${PUBLIC_DAG_EXPORT_GATEWAY}"]]
+    then
+        curl "${PUBLIC_DAG_EXPORT_GATEWAY}/${IPFS_API}/dag/export?arg=${1}" | docker exec phill-dev_ipfs_1 ipfs dag import
+    else
+        ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${1}"
+    fi
+}
+
 function public.anime.hasdir ()
 {
     local anime_has_dir
@@ -73,7 +82,7 @@ function public.pins.missing.local () {
     do
         entry=$(grep "${pincid}" public.files.txt)
         echo "$(date)  Missing item ${entry} [${progress}/${cids_count}]" >&2
-        ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${pincid}"
+        public.pin.add.local "${pincid}"
         ((progress+=1))
     done < public.missing.cids.txt
 }
