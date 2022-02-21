@@ -1,3 +1,5 @@
+#! /bin/bash
+
 function verify_torrent ()
 {
     python3 -c '
@@ -219,5 +221,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-'
+' "${@}"
 }
