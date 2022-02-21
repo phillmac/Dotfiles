@@ -1,0 +1,223 @@
+function verify_torrent ()
+{
+    python3 -c '
+
+import argparse
+import itertools
+import hashlib
+import os
+
+
+# functions for decoding bencoded data
+# original version from the bittorrent bencode module
+# updated for python 3
+
+# decode the four bencode types
+# note that these functions often call each other recursively
+
+def decode_int(x, f):
+    f += 1
+    newf = x.index(b"e", f)
+    n = int(x[f:newf])
+
+    if x[f] == ord("-"):
+        if x[f + 1] == "0":
+            raise ValueError
+    elif x[f] == ord("0") and newf != f+1:
+        raise ValueError
+
+    return n, newf+1
+
+
+def decode_string(x, f):
+    colon = x.index(b":", f)
+    n = int(x[f:colon])
+
+    if x[f] == ord("0") and colon != f+1:
+        raise ValueError
+
+    colon += 1
+    encoded_string = x[colon:colon+n]
+    try:
+        r = encoded_string.decode()
+    except UnicodeDecodeError:
+        r = encoded_string
+
+    return r, colon+n
+
+
+def decode_list(x, f):
+    r, f = [], f+1
+
+    while x[f] != ord("e"):
+        v, f = decode_func[chr(x[f])](x, f)
+        r.append(v)
+
+    return r, f+1
+
+
+def decode_dict(x, f):
+    r, f = {}, f+1
+
+    while x[f] != ord("e"):
+        k, f = decode_string(x, f)
+        r[k], f = decode_func[chr(x[f])](x, f)
+
+    return r, f+1
+
+
+# define a dictionary mapping bencode keys to decoding functions
+decode_func = {str(i): decode_string for i in range(10)}
+decode_func.update(l=decode_list, d=decode_dict, i=decode_int)
+
+
+def bdecode(x):
+    """ Decode a bencoded string. """
+
+    try:
+        r, l = decode_func[chr(x[0])](x, 0)
+    except (IndexError, KeyError, ValueError):
+        raise ValueError("not a valid bencoded string")
+    if l != len(x):
+        raise ValueError("invalid bencoded value (data after valid prefix)")
+
+    return r
+
+
+def pieces_generator(files, piece_length):
+    """
+    Generate pieces of files.
+
+    This is a little tricky for multi-file torrents because pieces may overlap
+    file boundaries.  The first piece of a file may complete the final partial
+    piece from the previous file, and some small files (e.g. nfo) use less than
+    one piece.
+
+    Arguments:
+        files -- list of files to break into pieces
+        piece_length -- size of pieces in bytes
+
+    Yields:
+        bytes objects with specified size
+
+    """
+
+    piece = None
+
+    for file in files:
+        print("  " + file)
+
+        with open(file, "rb") as f:
+            # if there is an existing piece [from a previous file]
+            # read only enough to complete the piece
+            if piece:
+                piece += f.read(piece_length - len(piece))
+
+                # only yield if the piece is complete
+                if len(piece) == piece_length:
+                    yield piece
+                else:
+                    continue
+
+            # now read full pieces normally
+            while True:
+                piece = f.read(piece_length)
+
+                # only yield if the piece is complete
+                if len(piece) == piece_length:
+                    yield piece
+                else:
+                    break
+
+    # yield the final piece
+    if piece:
+        yield piece
+
+
+def check_torrent(fn, prefix=None):
+    """
+    Verify torrent integrity.
+
+    Arguments:
+        fn -- path to torrent file
+        prefix -- path to downloaded files
+
+    Returns:
+        True or False
+
+    """
+
+    print(fn)
+
+    # read full torrent file as bytes
+    with open(fn, "rb") as f:
+        data = f.read()
+
+    # decode torrent
+    metainfo = bdecode(data)
+    info = metainfo["info"]
+
+    # extract filename[s] to verify
+    if "files" in info:
+        # multi-file torrent
+        file_dicts = info["files"]
+        files = [os.path.join(*d["path"]) for d in file_dicts]
+    else:
+        # single-file torrent
+        files = [info["name"]]
+
+    # prepend file prefix
+    if prefix is not None:
+        files = [os.path.join(prefix, fl) for fl in files]
+
+    # construct iterable of hashed file pieces
+    piece_length = info["piece length"]
+    pieces = pieces_generator(files, piece_length)
+    hashed_pieces = (hashlib.sha1(piece).digest() for piece in pieces)
+
+    # construct iterable of hashes from torrent
+    allhashes = info["pieces"]
+    hashes = (allhashes[i:i+20] for i in range(0, len(allhashes), 20))
+
+    # zip together the two iterables into pairs of hashes
+    # use zip_longest instead of regular zip to capture more possible errors
+    # e.g. if the files have trailing data this will fail
+    pairs = itertools.zip_longest(hashed_pieces, hashes)
+
+    # check that all pairs of hashes are identical
+    # all() will exit on the first failure
+    # i.e. it wont check the entire torrent if the first piece fails
+    success = all(h1 == h2 for h1, h2 in pairs)
+
+    print("passed" if success else "FAILED", end="\n\n")
+
+    return success
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Verify torrent integrity.")
+    parser.add_argument("files", nargs="+", metavar="torrent_file",
+                        help="Torrent file[s] to check.")
+    parser.add_argument("-p", "--prefix", help="Path to downloaded files.")
+    parser.add_argument("-n", "--no-delete",
+                        dest="delete", action="store_false",
+                        help="Dont delete torrent files \
+                        upon successful verification.")
+    args = parser.parse_args()
+
+    success = [check_torrent(fn, prefix=args.prefix) for fn in args.files]
+
+    print("{}/{} passed".format(success.count(True), len(success)))
+
+    if args.delete:
+        for fn, s in zip(args.files, success):
+            if s:
+                os.remove(fn)
+
+    return all(success)
+
+
+if __name__ == "__main__":
+    main()
+'
+}
