@@ -3,13 +3,13 @@
 function charon_wtdl_remote ()
 {
     if sshp 192.168.30.57 \
-        "nohup bash -c 'source .bashrc.d/webtorrent.bashrc && webtorrent_download_remote'" \
+        "nohup bash -c 'source .bashrc.d/webtorrent.bashrc && webtorrent_download_remote'"
     then 
         if verify_torrent --no-delete ./*.torrent --prefix /callisto/Data/Staging/Webtorrent
         then
             echo "$(date) Done" >&2
         else
-            echo '$(date) Local verify failed'
+            echo "$(date) Local verify failed"
             return 1
         fi
     else
@@ -21,13 +21,13 @@ function charon_wtdl_remote ()
 function io_wtdl_remote ()
 {
     if sshp 192.227.67.212 \
-        "nohup bash -c 'source .bashrc.d/webtorrent.bashrc && webtorrent_download_remote'" \
+        "nohup bash -c 'source .bashrc.d/webtorrent.bashrc && webtorrent_download_remote'"
     then 
         if verify_torrent --no-delete ./*.torrent --prefix /callisto/Data/Staging/Webtorrent
         then
             echo "$(date) Done" >&2
         else
-            echo '$(date) Local verify failed'
+            echo "$(date) Local verify failed"
             return 1
         fi
     else
