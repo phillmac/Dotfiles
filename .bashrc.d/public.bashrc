@@ -107,7 +107,7 @@ function public.pins.missing.local.lockout () {
     do
         while ! check_lockout_time
         do
-            echo "$(date) Waiting for lockout time to expire" > &2
+            echo "$(date) Waiting for lockout time to expire" >&2
             sleep 15m
         done
         entry=$(grep "${pincid}" public.files.txt)
