@@ -203,11 +203,18 @@ function public.anime.torrents.monitor ()
             cd /callisto/Data/Staging/Webtorrent && {
                 if fetch_queued_torrent
                 then
-                    if io_wtdl_remote && compgen -G './*.mkv'
+                    if io_wtdl_remote
                     then
-                        mv -vf ./*.torrent /callisto/Data/Phill/Downloads/Torrents
-                        public.anime.detect.add
-                    fi
+                        if compgen -G './*.mkv'
+                        then
+                            mv -vf ./*.torrent /callisto/Data/Phill/Downloads/Torrents
+                            public.anime.detect.add
+                        else
+                            echo "$(date) Unable to find video file" >&2
+                        fi
+                    else
+                        echo "$(date) Caught remote download fail" >&2
+                    fi                       
                 fi
             }
         )
