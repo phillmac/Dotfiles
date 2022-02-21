@@ -2,30 +2,38 @@
 
 function charon_wtdl_remote ()
 {
-    sshp 192.168.30.57 \
+    if sshp 192.168.30.57 \
         "nohup bash -c 'source .bashrc.d/webtorrent.bashrc && webtorrent_download_remote'" \
-     && docker run \
-        --rm \
-        --net host \
-        -v /callisto/Data/Staging/Webtorrent:/workdir \
-        -w /workdir \
-        --entrypoint bash \
-        phillmac/webtorrent -c 'webtorrent ./*.torrent'
-    echo "$(date) Done"
+    then 
+        if verify_torrent --no-delete ./*.torrent --prefix /callisto/Data/Staging/Webtorrent
+        then
+            echo "$(date) Done" >&2
+        else
+            echo '$(date) Local verify failed'
+            return 1
+        fi
+    else
+        echo "$(date) Remote download failed" >&2
+        return 1
+    fi
 }
 
 function io_wtdl_remote ()
 {
-    sshp 192.227.67.212 \
+    if sshp 192.227.67.212 \
         "nohup bash -c 'source .bashrc.d/webtorrent.bashrc && webtorrent_download_remote'" \
-     && docker run \
-        --rm \
-        --net host \
-        -v /callisto/Data/Staging/Webtorrent:/workdir \
-        -w /workdir \
-        --entrypoint bash \
-        phillmac/webtorrent -c 'webtorrent ./*.torrent'
-    echo "$(date) Done"
+    then 
+        if verify_torrent --no-delete ./*.torrent --prefix /callisto/Data/Staging/Webtorrent
+        then
+            echo "$(date) Done" >&2
+        else
+            echo '$(date) Local verify failed'
+            return 1
+        fi
+    else
+        echo "$(date) Remote download failed" >&2
+        return 1
+    fi
 }
 
 function io_wtdl_remote_staging ()
