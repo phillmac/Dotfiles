@@ -58,7 +58,7 @@ function webtorrent_add_wasabi ()
     if [[ "${SHORT_HOST}" == "io" ]]
     then
         source "${BASH_RC_HOST_DIR}/ipfs.bashrc"
-        ipfs-wasabi add --ignore '*.torrent' -p -r -w --pin=false "${1}"/*
+        ipfs-wasabi add -p -r -w --pin=false "${1}"/*
         echo
     fi
 }
@@ -97,6 +97,7 @@ function webtorrent_download_remote ()
         phillmac/webtorrent -c 'webtorrent ./*.torrent'
 
     ls -la "${workdir}"
+    rm -vf "${workdir}"/*.torrent
 
     webtorrent_add_wasabi "${workdir}"
 
@@ -138,6 +139,7 @@ function webtorrent_download_remote_staging ()
         phillmac/webtorrent -c "webtorrent ${1}"
 
     ls -la "${workdir}"
+    rm -vf "${workdir}"/*.torrent
 
     webtorrent_add_wasabi "${workdir}"
 
