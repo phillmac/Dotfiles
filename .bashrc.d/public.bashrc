@@ -207,6 +207,10 @@ function public.anime.archiveone () {
 
 function public.anime.archiveone.reverse () {
 
+    local SOURCE
+    local DEST
+    local FILES
+    
     SOURCE=kore-ssh:/callisto/Data/Upload/TV-Shows/Anime
     DEST=b2-phill:Video-Archive2/TV-Shows/Anime
     FILES=$(mktemp --tmpdir=/dev/shm)
@@ -217,6 +221,7 @@ function public.anime.archiveone.reverse () {
     rclone lsf --files-only --recursive "${SOURCE}" | tee "${FILES}"
 
     while [ -s "${FILES}" ]; do
+
         # Get the first 1
         tail -n 1 "${FILES}" > "${FILES}-batch"
         # Cut the 1 off the top of `${FILES}`
@@ -226,6 +231,7 @@ function public.anime.archiveone.reverse () {
         # Now transfer the data
         rclone move -vvv --files-from-raw "${FILES}-batch" "${SOURCE}" "${DEST}"
         read -p "Press enter to continue"
+        rclone lsf --files-only --recursive "${SOURCE}" | tee "${FILES}"
     done
 }
 
