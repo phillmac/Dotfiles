@@ -222,11 +222,8 @@ function public.anime.archiveone.reverse () {
 
     while [ -s "${FILES}" ]; do
 
-        # Get the first 1
+        # Get the last 1
         tail -n 1 "${FILES}" > "${FILES}-batch"
-        # Cut the 1 off the top of `${FILES}`
-        head -n -1 "${FILES}" > "${FILES}-new"
-        mv -v "${FILES}-new" "${FILES}"
 
         # Now transfer the data
         rclone move -vvv --files-from-raw "${FILES}-batch" "${SOURCE}" "${DEST}"
