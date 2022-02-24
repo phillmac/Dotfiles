@@ -28,7 +28,7 @@ function public.anime.add ()
     local dir_name
  
 
-    if public.anime.hasdir "${1}"
+    if ! public.anime.hasdir "${1}"
     then
         echo "Creating ipfs mfs dir /Public/Anime/${1}"
         ipfs files mkdir "/Public/Anime/${1}"
