@@ -3,7 +3,7 @@
 function charon_wtdl_remote ()
 {
     if sshp 192.168.30.57 \
-        "nohup bash -c 'source .bashrc.d/webtorrent.bashrc && webtorrent_download_remote'"
+        "nohup bash -c 'source .bashrc.d/150webtorrent.bashrc && webtorrent_download_remote'"
     then 
         if verify_torrent --no-delete ./*.torrent --prefix /callisto/Data/Staging/Webtorrent
         then
@@ -21,7 +21,7 @@ function charon_wtdl_remote ()
 function io_wtdl_remote ()
 {
     if sshp 192.227.67.212 \
-        "nohup bash -c 'source .bashrc.d/webtorrent.bashrc && webtorrent_download_remote'"
+        "nohup bash -c 'source .bashrc.d/150webtorrent.bashrc && webtorrent_download_remote'"
     then 
         if verify_torrent --no-delete ./*.torrent --prefix /callisto/Data/Staging/Webtorrent
         then
@@ -39,7 +39,7 @@ function io_wtdl_remote ()
 function io_wtdl_remote_staging ()
 {
     sshp 192.227.67.212 \
-        "nohup bash -c 'source .bashrc.d/webtorrent.bashrc && webtorrent_download_remote_staging ${1}'" \
+        "nohup bash -c 'source .bashrc.d/150webtorrent.bashrc && webtorrent_download_remote_staging ${1}'" \
      && docker run \
         --rm \
         --net host \
