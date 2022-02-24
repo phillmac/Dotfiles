@@ -15,7 +15,7 @@ function public.anime.episodes ()
 
     resolved=$(ipfs.resolve "$(public.root.hash)/Anime/${1}")
     # echo "Resolved is ${resolved}" >&2
-    
+
     ipfs.ls "${resolved}" | jq -r .Name
 }
 
