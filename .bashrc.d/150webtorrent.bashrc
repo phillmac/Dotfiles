@@ -54,7 +54,7 @@ function webtorrent_seed ()
 
 function webtorrent_add_wasabi ()
 {
-    source "${HOME}/.bashrc.d/1env.bashrc"
+    source "${HOME}/.bashrc.d/010env.bashrc"
     if [[ "${SHORT_HOST}" == "io" ]]
     then
         source "${BASH_RC_HOST_DIR}/ipfs.bashrc"
