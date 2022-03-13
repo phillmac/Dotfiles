@@ -4,7 +4,7 @@ function charon_wtdl_remote ()
 {
     if sshp 192.168.30.57 \
         "nohup bash -c 'source .bashrc.d/150webtorrent.bashrc && webtorrent_download_remote'"
-    then 
+    then
         if verify_torrent --no-delete ./*.torrent --prefix /callisto/Data/Staging/Webtorrent
         then
             echo "$(date) Done" >&2
@@ -22,7 +22,7 @@ function io_wtdl_remote ()
 {
     if sshp 192.227.67.212 \
         "nohup bash -c 'source .bashrc.d/150webtorrent.bashrc && webtorrent_download_remote'"
-    then 
+    then
         if verify_torrent --no-delete ./*.torrent --prefix /callisto/Data/Staging/Webtorrent
         then
             echo "$(date) Done" >&2
