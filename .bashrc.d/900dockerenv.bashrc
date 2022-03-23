@@ -106,6 +106,8 @@ function source_env_files () {
                 alias_phill_dev_vps3
                 alias_phill_dev_update
                 ;;
+            'vps4' )
+                ;;
             'ubuntu-nuc' )
                 alias_phill_dev_ubuntu_nuc
                 alias_phill_dev_update
