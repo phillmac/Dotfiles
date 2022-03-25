@@ -89,7 +89,7 @@ function ipfs-wasabi.public.pins.monitor () {
 
     while :
     do
-        public_hash=$(public.root.hash)
+        public_hash=$(curl -s --fail https://oasiscraft.org/root-hash.json | jq -r '.Hash')
         echo "$(date) rlast: '${rlast}' public_hash: '${public_hash}'" >&2
         if [[ "${rlast}" == "${public_hash}" ]]
         then
