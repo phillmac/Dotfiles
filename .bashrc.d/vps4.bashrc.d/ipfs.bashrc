@@ -40,7 +40,7 @@ function ipfs-wasabi.public.pins.missing ()
                 --rm \
                 --net host \
                 curlimages/curl curl --fail \
-                    "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}" > "${pincid}"
+                    "http://192.227.67.212:8080/api/v0/dag/export?arg=${pincid}" > "${pincid}"
             do
                 sleep 30m
             done
