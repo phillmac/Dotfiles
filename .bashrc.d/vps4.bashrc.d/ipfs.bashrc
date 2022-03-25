@@ -44,7 +44,7 @@ function ipfs-wasabi.public.pins.missing ()
             do
                 sleep 30m
             done
-            ipfs-wasabi dag import < "${pincid}"
+            ipfs-wasabi dag import < <( mbuffer < "${pincid}")
             rm -v "${pincid}"
             ((progress+=1))
     done < wasabi.public.missing.txt
