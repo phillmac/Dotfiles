@@ -57,7 +57,8 @@ function webtorrent_add_wasabi ()
     source "${HOME}/.bashrc.d/010env.bashrc"
     if [[ "${SHORT_HOST}" == "io" ]]
     then
-        source "${BASH_RC_HOST_DIR}/250ipfs.bashrc"
+        source "${HOME}/.bashrc.d/250ipfs.bashrc"
+        source "${BASH_RC_HOST_DIR}/ipfs.bashrc"
         ( cd "${1}" && ipfs add --progress=false --pin=false -w ./* )
         ipfs-wasabi add -p -r -w --pin=false "${1}"/*
         echo
@@ -82,7 +83,7 @@ function webtorrent_download_remote ()
         -v /root:/root \
         -w /workdir \
         peelvalley/rclone-b2 \
-            'rclone copy -vvv \
+            'rclone copy - \
                 --include *.torrent \
                 --checksum \
                 kore-ssh:/callisto/Data/Staging/Webtorrent/ \
