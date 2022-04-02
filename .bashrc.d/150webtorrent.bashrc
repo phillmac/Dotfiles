@@ -52,7 +52,7 @@ function webtorrent_seed ()
         "${@}"
 }
 
-function webtorrent_add_wasabi ()
+function webtorrent_add_ipfs ()
 {
     source "${HOME}/.bashrc.d/010env.bashrc"
     if [[ "${SHORT_HOST}" == "io" ]]
@@ -60,7 +60,7 @@ function webtorrent_add_wasabi ()
         source "${HOME}/.bashrc.d/020aliases.bashrc"
         source "${BASH_RC_HOST_DIR}/ipfs.bashrc"
         ( cd "${1}" && _ipfs add --progress=false --pin=false -w ./* )
-        ipfs-wasabi add -p -r -w --pin=false "${1}"/*
+        # ipfs-wasabi add -p -r -w --pin=false "${1}"/*
         echo
     fi
 }
@@ -103,7 +103,7 @@ function webtorrent_download_remote ()
     ls -la "${workdir}"
     rm -vf "${workdir}"/*.torrent
 
-    webtorrent_add_wasabi "${workdir}"
+    webtorrent_add_ipfs "${workdir}"
 
     docker run \
         --rm \
