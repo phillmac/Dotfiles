@@ -57,9 +57,9 @@ function webtorrent_add_wasabi ()
     source "${HOME}/.bashrc.d/010env.bashrc"
     if [[ "${SHORT_HOST}" == "io" ]]
     then
-        source "${HOME}/.bashrc.d/250ipfs.bashrc"
+        source "${HOME}/.bashrc.d/20aliases.bashrc"
         source "${BASH_RC_HOST_DIR}/ipfs.bashrc"
-        ( cd "${1}" && ipfs add --progress=false --pin=false -w ./* )
+        ( cd "${1}" && _ipfs add --progress=false --pin=false -w ./* )
         ipfs-wasabi add -p -r -w --pin=false "${1}"/*
         echo
     fi
