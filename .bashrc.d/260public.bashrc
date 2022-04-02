@@ -39,7 +39,18 @@ function public.anime.hasep ()
 function public.pin.add.local () {
     if [[ -n "${PUBLIC_DAG_EXPORT_GATEWAY}" ]]
     then
-        curl "${PUBLIC_DAG_EXPORT_GATEWAY}/${IPFS_API}/dag/export?arg=${1}" | docker exec -i phill-dev_ipfs_1 ipfs dag import
+       while ! docker run \
+                --rm \
+                --net host \
+                curlimages/curl curl --fail \
+                    "${PUBLIC_DAG_EXPORT_GATEWAY}/${IPFS_API}/dag/export?arg=${1}" > "${1}"
+        do
+            sleep 30m
+        done
+
+        docker exec -i phill-dev_ipfs_1 ipfs dag import < <( mbuffer < "${1}")
+        rm -v "${1}"
+
     else
         ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${1}"
     fi
@@ -210,7 +221,7 @@ function public.anime.archiveone.reverse () {
     local SOURCE
     local DEST
     local FILES
-    
+
     SOURCE=kore-ssh:/callisto/Data/Upload/TV-Shows/Anime
     DEST=b2-phill:Video-Archive2/TV-Shows/Anime
     FILES=$(mktemp --tmpdir=/dev/shm)
