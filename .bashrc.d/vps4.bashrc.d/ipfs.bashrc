@@ -35,7 +35,7 @@ function ipfs-wasabi.public.pins.missing ()
     while read -r pincid
         do
             echo "$(date) ipfs-wasabi missing item $(grep ${pincid} public.files.txt) [${progress}/${cids_count}]" >&2
-            
+
             while ! docker run \
                 --rm \
                 --net host \
@@ -61,13 +61,16 @@ function ipfs-wasabi.archive.pins.missing ()
     while read -r pincid
         do
             echo '(date) ipfs-wasabi missing item ' "$(grep "${pincid}" archive.entries.txt) [${progress}/${cids_count}]" >&2
-            ipfs-wasabi dag import < <(
-                docker run \
+            while ! docker run \
                     --rm \
                     --net host \
                     curlimages/curl curl \
-                        "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}"
-            )
+                        "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}" > "${pincid}"
+            do
+                sleep 30m
+            done
+            ipfs-wasabi dag import < <( mbuffer < "${pincid}")
+            rm -v "${pincid}"
             ((progress+=1))
     done < wasabi.archive.missing.txt
 
