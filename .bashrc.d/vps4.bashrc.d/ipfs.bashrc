@@ -62,10 +62,10 @@ function ipfs-wasabi.archive.pins.missing ()
         do
             echo '(date) ipfs-wasabi missing item ' "$(grep "${pincid}" archive.entries.txt) [${progress}/${cids_count}]" >&2
             while ! docker run \
-                    --rm \
-                    --net host \
-                    curlimages/curl curl \
-                        "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}" > "${pincid}"
+                --rm \
+                --net host \
+                curlimages/curl curl \
+                    "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}" > "${pincid}"
             do
                 sleep 30m
             done
