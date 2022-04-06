@@ -39,6 +39,7 @@ function ipfs-wasabi.public.pins.missing ()
             while ! docker run \
                 --rm \
                 --net host \
+                --log-driver none \
                 curlimages/curl curl --fail \
                     "http://192.227.67.212:8080/api/v0/dag/export?arg=${pincid}" > "${pincid}"
             do
@@ -64,6 +65,7 @@ function ipfs-wasabi.archive.pins.missing ()
             while ! docker run \
                 --rm \
                 --net host \
+                --log-driver none \
                 curlimages/curl curl \
                     "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}" > "${pincid}"
             do
