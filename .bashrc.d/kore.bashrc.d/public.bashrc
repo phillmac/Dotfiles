@@ -26,7 +26,7 @@ for fitem in (*mkvs, *mp4s):
 function public.anime.add ()
 {
     local dir_name
- 
+
 
     if ! public.anime.hasdir "${1}"
     then
@@ -74,16 +74,16 @@ print(pattern.sub("", newest.name).strip())
 }
 
 function monitor_anime_rss_alt () {
-    
+
     while :
     do
-        sleep 6h & 
-        ( 
+        sleep 6h &
+        (
             cd /callisto/Data/Phill/Sync/Staging/Torrents/ && \
             for feedurl in 'https://subsplease.org/rss/?t&r=sd' 'https://subsplease.org/rss/?t&r=1080'
             do
                 while read -r url
-                do 
+                do
                     wget -nc --content-disposition "${url}";
                 done < <(
                     grep -o 'https://nyaa.si/view/[0-9]*/torrent' < <(
@@ -102,16 +102,40 @@ function monitor_anime_rss ()
     local anime_name
     local last_anime_name
     local fname
+    local downloaded
+    local found
 
     while :
-    do 
-        sleep 15m & 
-        ( 
+    do
+        sleep 15m &
+        (
+            downloaded=()
             cd /callisto/Data/Phill/Sync/Staging/Torrents/ && {
                 while read -r url
                 do
+                    mapfile -t downloaded < public.anime.torrents.downloaded
+                    echo "Downloaded count ${#downloaded[@]}" >&2
+                    found="no"
+                    for i in "${downloaded[@]}"
+                    do
+                        if [[ "${i}" == "${url}" ]];
+                        then
+                            found='yes'
+                            break
+                        fi
+                    done
+
+                    if [[ "${found}" == 'yes' ]]
+                    then
+                        echo "Skipping already downloaded ${url}" >&2
+                        continue
+                    else
+                        echo "Found: ${found}" >&2
+                    fi
+
                     echo "Fetching ${url}" >&2
                     wget -q -nc --content-disposition "${url}"
+                    echo "${url}" >> public.anime.torrents.downloaded
                     anime_name=$(get_most_recent_torrent)
                     echo "Anime name is ${anime_name}" >&2
                     if [[ "${last_anime_name}" != "${anime_name}" ]]
@@ -214,7 +238,7 @@ function public.anime.torrents.monitor ()
                         fi
                     else
                         echo "$(date) Caught remote download fail" >&2
-                    fi                       
+                    fi
                 fi
             }
         )
@@ -225,7 +249,6 @@ function public.anime.torrents.monitor ()
 
 export -f unstage_video_files
 export -f public.anime.add
-export -f public.list.preload
 export -f fetch_queued_torrent
 export -f get_anime_names
 export -f public.anime.torrents.monitor

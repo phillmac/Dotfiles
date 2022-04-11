@@ -52,13 +52,15 @@ function webtorrent_seed ()
         "${@}"
 }
 
-function webtorrent_add_wasabi ()
+function webtorrent_add_ipfs ()
 {
     source "${HOME}/.bashrc.d/010env.bashrc"
     if [[ "${SHORT_HOST}" == "io" ]]
     then
+        source "${HOME}/.bashrc.d/020aliases.bashrc"
         source "${BASH_RC_HOST_DIR}/ipfs.bashrc"
-        ipfs-wasabi add -p -r -w --pin=false "${1}"/*
+        ( cd "${1}" && _ipfs add --progress=false --pin=false -w ./* )
+        # ipfs-wasabi add -p -r -w --pin=false "${1}"/*
         echo
     fi
 }
@@ -81,8 +83,10 @@ function webtorrent_download_remote ()
         -v /root:/root \
         -w /workdir \
         peelvalley/rclone-b2 \
-            'rclone copy --verbose \
+            'rclone copy \
+                -vvv \
                 --include *.torrent \
+                --checksum \
                 kore-ssh:/callisto/Data/Staging/Webtorrent/ \
                 /workdir/'
 
@@ -99,7 +103,7 @@ function webtorrent_download_remote ()
     ls -la "${workdir}"
     rm -vf "${workdir}"/*.torrent
 
-    webtorrent_add_wasabi "${workdir}"
+    webtorrent_add_ipfs "${workdir}"
 
     docker run \
         --rm \
@@ -110,6 +114,7 @@ function webtorrent_download_remote ()
         peelvalley/rclone-b2 \
             "rclone move \
                 -vvv \
+                --checksum \
                 --retries 120 \
                 --retries-sleep 30s \
                 --exclude '*.torrent' \

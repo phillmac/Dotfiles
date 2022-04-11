@@ -34,11 +34,12 @@ function ipfs-wasabi.public.pins.missing ()
     ((progress=1))
     while read -r pincid
         do
-            echo "$(date) ipfs-wasabi missing item $(grep ${pincid} public.files.txt) [${progress}/${cids_count}]" >&2
-            
+            echo "$(date) ipfs-wasabi missing item $(grep "${pincid}" public.files.txt) [${progress}/${cids_count}]" >&2
+
             while ! docker run \
                 --rm \
                 --net host \
+                --log-driver none \
                 curlimages/curl curl --fail \
                     "http://192.227.67.212:8080/api/v0/dag/export?arg=${pincid}" > "${pincid}"
             do
@@ -60,14 +61,18 @@ function ipfs-wasabi.archive.pins.missing ()
     ((progress=1))
     while read -r pincid
         do
-            echo '(date) ipfs-wasabi missing item ' "$(grep "${pincid}" archive.entries.txt) [${progress}/${cids_count}]" >&2
-            ipfs-wasabi dag import < <(
-                docker run \
-                    --rm \
-                    --net host \
-                    curlimages/curl curl \
-                        "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}"
-            )
+            echo "$(date) ipfs-wasabi missing item " "$(grep "${pincid}" archive.entries.txt) [${progress}/${cids_count}]" >&2
+            while ! docker run \
+                --rm \
+                --net host \
+                --log-driver none \
+                curlimages/curl curl \
+                    "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}" > "${pincid}"
+            do
+                sleep 30m
+            done
+            ipfs-wasabi dag import < <( mbuffer < "${pincid}")
+            rm -v "${pincid}"
             ((progress+=1))
     done < wasabi.archive.missing.txt
 
