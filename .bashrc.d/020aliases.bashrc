@@ -219,7 +219,7 @@ function rclone () {
     then
         docker run -it --rm --net host -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
     else
-        docker run -i --rm --net host -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
+        docker run --rm --net host -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
     fi
 
 }
