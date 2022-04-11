@@ -215,8 +215,9 @@ function rclone_move_callisto () {
 }
 
 function rclone () {
-    if [[ -t 1 ]]
+    if [[ -t 1 ]] && [[ -t 2]]
     then
+        echo 'Detected TTY' >&2
         docker run -it --rm --net host -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
     else
         docker run --rm --net host -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
