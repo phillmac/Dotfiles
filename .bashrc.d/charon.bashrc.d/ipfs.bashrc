@@ -42,6 +42,12 @@ function export-split-car-files ()
 
 }
 
+function export-split-car-dirs ()
+{
+    ipfs.ls.recursive.dirs "${1}" | while read -r  cid info; do export-split-car $cid; done
+
+}
+
 export IPFS_GET_BATCH_COUNT
 export IPFS_GET_TIMEOUT
 export IPFS_PIN_TIMEOUT
