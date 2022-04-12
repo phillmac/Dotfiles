@@ -36,6 +36,12 @@ function export-split-car ()
     ( cd /selene/Sync/Upload/Titan_E/split && ipfs dag export -p "${1}" | split -b 10M -a 3 --verbose - "${1}.car." )
 }
 
+function export-split-car-files ()
+{
+    ipfs.ls.recursive.files "${1}" | while read -r  cid info; do export-split-car $cid; done
+
+}
+
 export IPFS_GET_BATCH_COUNT
 export IPFS_GET_TIMEOUT
 export IPFS_PIN_TIMEOUT
