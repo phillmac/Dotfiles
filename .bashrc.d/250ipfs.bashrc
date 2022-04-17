@@ -132,7 +132,7 @@ function ipfs.ls.recursive.hashes () {
         elif [[ -n "${itemhash}" ]]
         then
             echo "${itemhash}" "${1}/${itemhash}"
-            ipfs.ls.recursive.hashes "${1}/${itemhash}" "${itemhash}"
+            ipfs.dag.get.links "${itemhash}"
         fi
     done < <(ipfs.ls  "${ls_recursive_addr}" | ipfs.links.info)
 }
@@ -181,6 +181,53 @@ function ipfs.ls () {
     [[ -n "${IPFS_DEBUG}" ]] &&  echo "ls_url is ${ls_url}" >&2
 
     jq -r ".Objects[].Links[]" < <(_curl "${ls_url}")
+}
+
+
+function ipfs.dag.get () {
+    local ls_addr
+    local ls_addr_encoded
+    local ls_url
+
+    ls_addr=${1:-$IPFS_ADDR}
+
+    if [[ -z "${ls_addr}" ]];
+    then
+        echo "ls addr is required" >&2
+        return 252
+    fi
+
+    ls_addr_encoded=$(rawurlencode "${ls_addr}")
+
+    [[ -n "${IPFS_DEBUG}" ]] &&  echo "ls_addr_encoded is ${ls_addr_encoded}" >&2
+
+    get_url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/dag/get?arg=${ls_addr_encoded}"
+    [[ -n "${IPFS_DEBUG}" ]] &&  echo "get_url is ${get_url}" >&2
+
+   _curl "${get_url}"
+}
+
+function ipfs.dag.get.links () {
+    local ls_addr
+    local ls_addr_encoded
+    local get_url
+
+    ls_addr=${1:-$IPFS_ADDR}
+
+    if [[ -z "${ls_addr}" ]];
+    then
+        echo "ls addr is required" >&2
+        return 252
+    fi
+
+    ls_addr_encoded=$(rawurlencode "${ls_addr}")
+
+    [[ -n "${IPFS_DEBUG}" ]] &&  echo "ls_addr_encoded is ${ls_addr_encoded}" >&2
+
+    get_url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/dag/get?arg=${ls_addr_encoded}"
+    [[ -n "${IPFS_DEBUG}" ]] &&  echo "get_url is ${get_url}" >&2
+
+    jq -r '.Links[].Hash["/"]' < <(_curl "${get_url}")
 }
 
 function ipfs.links.info ()
