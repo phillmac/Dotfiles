@@ -113,6 +113,30 @@ function ipfs.ls.recursive.dirs.filtered () {
     ipfs.ls.recursive.dirs "${addr}" | grep "${filter}"
 }
 
+function ipfs.ls.recursive.hashes () {
+    local itemtype
+    local itemhash
+    local itemname
+
+    local ls_recursive_addr
+
+    ls_recursive_addr=${2:-${1}}
+
+    echo "$(date) Listing ${ls_recursive_addr}" >&2
+    while read -r itemtype itemhash itemname
+    do
+        if [[ -n "${itemname}" ]]
+        then
+            echo "${itemhash}" "${1}/${itemname}"
+            ipfs.ls.recursive.hashes "${1}/${itemname}" "${itemhash}"
+        elif [[ -n "${itemhash}" ]]
+        then
+            echo "${itemhash}" "${1}/${itemhash}"
+            ipfs.ls.recursive.hashes "${1}/${itemhash}" "${itemhash}"
+        fi
+    done < <(ipfs.ls  "${ls_recursive_addr}" | ipfs.links.info)
+}
+
 function ipfs.resolve () {
     local resolve_addr
     local resolve_addr_encoded
