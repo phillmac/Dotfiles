@@ -43,6 +43,7 @@ function ipfs-wasabi.public.pins.missing ()
                 curlimages/curl curl --fail \
                     "http://192.227.67.212:8080/api/v0/dag/export?arg=${pincid}" > "${pincid}"
             do
+                echo $(date) >&2
                 sleep 30m
             done
             ipfs-wasabi dag import < <( mbuffer < "${pincid}")
@@ -69,6 +70,7 @@ function ipfs-wasabi.archive.pins.missing ()
                 curlimages/curl curl \
                     "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}" > "${pincid}"
             do
+                echo $(date) >&2
                 sleep 30m
             done
             ipfs-wasabi dag import < <( mbuffer < "${pincid}")
