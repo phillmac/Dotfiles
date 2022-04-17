@@ -70,12 +70,12 @@ function archive.split.dir ()
     ( set -e;
     shopt -s nullglob;
     while read -r cid info; do
-        echo "Archiving ${cid}" 1>&2;
+        echo "Archiving ${cid}" >&2;
         mvfiles=("/titan/E/Sync/Upload/Selene/split/${cid}.car."*);
         if (( ${#mvfiles[@]} )); then
             mv -vf "/titan/E/Sync/Upload/Selene/split/${cid}.car."* /titan/E/ipfs-export/split/;
         else
-            echo "Unable to move any archives for ${cid}" 1>&2;
+            echo "Unable to move any archives for ${cid}" >&2;
         fi;
         archivefiles=("/titan/E/ipfs-export/split/${cid}.car."*);
         if (( ${#archivefiles[@]} )); then
@@ -83,10 +83,10 @@ function archive.split.dir ()
                 upload-split-car "${cid}";
                 ipfs pin rm "${cid}";
             else
-                echo "Archive integrity check failed for ${cid}" 1>&2;
+                echo "Archive integrity check failed for ${cid}" >&2;
             fi;
         else
-            echo "Unable to find any archives for ${cid}" 1>&2;
+            echo "Unable to find any archives for ${cid}" >&2;
         fi;
     done < <( ipfs.ls.recursive "${archive_cid}" && echo "${archive_cid}" ) )
 }
