@@ -180,16 +180,16 @@ function public.list.preload ()
 {
     local cid
     cid=$( public.root.hash )
-    echo  "Janus        $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.42.208:8080       ipfs.ls.recursive "${cid}" 2> /dev/null))"
-    echo "Carpo         $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.50.51:8080        ipfs.ls.recursive "${cid}" 2> /dev/null))"
-    echo "Charon        $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.30.57:8080        ipfs.ls.recursive "${cid}" 2> /dev/null))"
-    echo "Io            $(wc -l < <(IPFS_HTTP_GATEWAY=http://192.168.20.33:8080 ipfs.ls.recursive "${cid}" 2> /dev/null))"
-    # echo "Io Wasabi     $(wc -l < <(IPFS_HTTP_GATEWAY=http://192.168.20.33:8080 ipfs.ls.recursive "${cid}" 2> /dev/null))"
-    echo "Titan         $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.35.51:8080        ipfs.ls.recursive "${cid}" 2> /dev/null))"
-    echo "VPS1          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps1.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
-    echo "VPS2          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps2.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
-    echo "VPS3          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps3.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
-    echo "VPS3          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps3.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
+    echo  "$(date) Janus        $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.42.208:8080       ipfs.ls.recursive "${cid}" 2> /dev/null))"
+    echo "$(date) Carpo         $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.50.51:8080        ipfs.ls.recursive "${cid}" 2> /dev/null))"
+    echo "$(date) Charon        $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.30.57:8080        ipfs.ls.recursive "${cid}" 2> /dev/null))"
+    echo "$(date) Io            $(wc -l < <(IPFS_HTTP_GATEWAY=http://192.168.20.33:8080 ipfs.ls.recursive "${cid}" 2> /dev/null))"
+    # echo "$(date) Io Wasabi     $(wc -l < <(IPFS_HTTP_GATEWAY=http://192.168.20.33:8080 ipfs.ls.recursive "${cid}" 2> /dev/null))"
+    echo "$(date) Titan         $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.35.51:8080        ipfs.ls.recursive "${cid}" 2> /dev/null))"
+    echo "$(date) VPS1          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps1.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
+    echo "$(date) VPS2          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps2.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
+    echo "$(date) VPS3          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps3.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
+    echo "$(date) VPS3          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps3.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
     echo "$(date) Done"
 }
 
