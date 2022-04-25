@@ -74,6 +74,15 @@ function _ipfs() {
 
 }
 
+function ipfs-exec () {
+    if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]; then
+        docker run --rm -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none --entrypoint bash peelvalley/ipfs-cli "${@}"
+    else
+        docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none --entrypoint bash peelvalley/ipfs-cli "${@}"
+    fi
+
+}
+
 function ipfs_find_add_folder() {
     local patern
     local folder
