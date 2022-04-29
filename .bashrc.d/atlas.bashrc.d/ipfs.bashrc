@@ -33,7 +33,7 @@ function find-split-car ()
 {
     (
         set -e
-        cd /titan/E/ipfs-export/split && find -name "*${1}*" | sort
+        cd /titan/E/ipfs-export/split && find . -name "*${1}*" | sort
     )
 }
 
@@ -69,7 +69,7 @@ function archive.split.dir ()
     archive_cid=${1};
     ( set -e;
     shopt -s nullglob;
-    while read -r cid info; do
+    while read -r cid _info; do
         echo "Archiving ${cid}" >&2;
         mvfiles=("/titan/E/Sync/Upload/Selene/split/${cid}.car."*);
         if (( ${#mvfiles[@]} )); then
