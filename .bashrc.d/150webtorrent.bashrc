@@ -52,6 +52,20 @@ function webtorrent_seed ()
         "${@}"
 }
 
+function webtorrent_download_local ()
+{
+    docker run \
+    --rm -it \
+    --net host \
+    -v "$(pwd)":/workdir \
+    -w /workdir \
+    phillmac/webtorrent \
+        download \
+        --announce 'wss://tracker.vps1.phillm.net:8000' \
+        --port 8085 \
+        "${@}"
+}
+
 function webtorrent_add_ipfs ()
 {
     source "${HOME}/.bashrc.d/010env.bashrc"
