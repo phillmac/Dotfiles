@@ -47,7 +47,7 @@ function read-split-car ()
         do
             if [[ -n "${fname}" ]]
             then
-                echo "Reading ${fname}" >> "${HOME}"/split-car-read.log.txt
+                echo "${fname}" >> "${HOME}"/split-car-read.log.txt
                 cat "${fname}"
             fi
         done < <(
