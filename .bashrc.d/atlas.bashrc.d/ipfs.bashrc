@@ -41,11 +41,13 @@ function read-split-car ()
 {
     (
         set -e
+        echo '' > "${HOME}"/split-car-read.log.txt
         cd /titan/E/ipfs-export/split &&
         while read -r fname
         do
             if [[ -n "${fname}" ]]
             then
+                echo "Reading ${fname}" >> "${HOME}"/split-car-read.log.txt
                 cat "${fname}"
             fi
         done < <(

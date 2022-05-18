@@ -25,9 +25,6 @@ for fitem in (*mkvs, *mp4s):
 
 function public.anime.add ()
 {
-    local dir_name
-
-
     if ! public.anime.hasdir "${1}"
     then
         echo "Creating ipfs mfs dir /Public/Anime/${1}"
