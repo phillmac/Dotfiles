@@ -113,7 +113,7 @@ function ipfs.ls.recursive.dirs.filtered () {
     ipfs.ls.recursive.dirs "${addr}" | grep "${filter}"
 }
 
-function ipfs.ls.recursive.hashes () {
+function ipfs.ls.recursive.blocks () {
     local itemtype
     local itemhash
     local itemname
@@ -128,7 +128,7 @@ function ipfs.ls.recursive.hashes () {
         if [[ -n "${itemname}" ]]
         then
             echo "${itemhash}" "${1}/${itemname}"
-            ipfs.ls.recursive.hashes "${1}/${itemname}" "${itemhash}"
+            ipfs.ls.recursive.blocks "${1}/${itemname}" "${itemhash}"
         elif [[ -n "${itemhash}" ]]
         then
             echo "${itemhash}" "${1}/${itemhash}"
@@ -456,6 +456,10 @@ function ipfs.preload ()
     docker exec -i phill-dev_ipfs_1 ipfs dag export "${@}" | mbuffer -m 100m | sshp io.phillm.net ./ipfs-s3 dag import --pin-roots=false
 }
 
+
+function ipfs.fetch.blocks () {
+    ipfs.ls.recursive.blocks "${1}" | while read -r cid _info; do echo "Fetching $cid"; ipfs.dag.get "${cid}" > /dev/null; done
+}
 
 export -f ipfs.ls
 export -f ipfs.pin.ls
