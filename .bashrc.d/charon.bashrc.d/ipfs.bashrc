@@ -33,7 +33,16 @@ PUBLIC_DAG_EXPORT_GATEWAY=http://external7.ddns.peelvalley.com.au:8080
 
 function export-split-car ()
 {
-    ( cd /selene/Sync/Upload/Titan_E/split && ipfs dag export -p "${1}" | split -b 10M -a 3 --verbose - "${1}.car." )
+    (
+        cd /selene/Sync/Upload/ipfs-export && ipfs dag export -p "${1}" | split -b 10M -a 3 --verbose - "${1}.car."
+        while read -r -d $'\0' fname
+        do
+            mv "${fname}" /selene/Sync/Upload/Titan_E/split
+            sleep 300
+        done < <(
+            find . -name "${1}" -print0
+        )
+    )
 }
 
 function export-split-car-files ()
