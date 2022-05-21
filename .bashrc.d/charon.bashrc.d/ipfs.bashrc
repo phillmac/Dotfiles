@@ -37,14 +37,13 @@ function export-split-car ()
         cd /selene/Sync/Upload/ipfs-export && ipfs dag export -p "${1}" | split -b 10M -a 3 --verbose - "${1}.car."
         if docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false < <( mbuffer < <( cat "${1}".car.* ))
         then
+            find . -name "*.car.*" -print0 | sort > /selene/Sync/Upload/Titan_E/split/"${1}".car.pieces.txt
             while read -r -d $'\0' fname
             do
                 mv -v "${fname}" /selene/Sync/Upload/Titan_E/split
                 date
                 sleep 20
-            done < <(
-                find . -name "*.car.*" -print0 | sort
-            )
+            done < /selene/Sync/Upload/Titan_E/split/"${1}".car.pieces.txt
         fi
     )
 }
