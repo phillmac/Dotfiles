@@ -42,7 +42,7 @@ function export-split-car ()
                 mv "${fname}" /selene/Sync/Upload/Titan_E/split
                 sleep 300
             done < <(
-                find . -name "${1}" -print0
+                find . -name "*.car.*" -print0 | sort
             )
         fi
     )
