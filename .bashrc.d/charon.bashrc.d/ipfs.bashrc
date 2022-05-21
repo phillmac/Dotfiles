@@ -47,14 +47,47 @@ function export-split-car ()
 
 function export-split-car-files ()
 {
-    ipfs.ls.recursive.files "${1}" | while read -r  cid info; do export-split-car $cid; done
-
+    ipfs.ls.recursive.files "${1}" | while read -r  cid _info; do export-split-car "${cid}"; done
 }
 
 function export-split-car-dirs ()
 {
-    ipfs.ls.recursive.dirs "${1}" | while read -r  cid info; do export-split-car $cid; done
+    ipfs.ls.recursive.dirs "${1}" | while read -r  cid _info; do export-split-car "${cid}"; done
+}
 
+function find-split-car ()
+{
+    (
+        set -e
+        cd /selene/Sync/Upload/Titan_E/split && find . -name "*${1}*" | sort
+    )
+}
+
+function read-split-car ()
+{
+    (
+        set -e
+        echo '' > "${HOME}"/split-car-read.log.txt
+        cd /selene/Sync/Upload/Titan_E/split &&
+        while read -r fname
+        do
+            if [[ -n "${fname}" ]]
+            then
+                echo "${fname}" >> "${HOME}"/split-car-read.log.txt
+                cat "${fname}"
+            fi
+        done < <(
+            find-split-car "${1}"
+        )
+    )
+}
+
+function import-split-car ()
+{
+    (
+        set -e
+        cd /selene/Sync/Upload/Titan_E/split && docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false < <( mbuffer < <( read-split-car "${1}" ))
+    )
 }
 
 export IPFS_GET_BATCH_COUNT
