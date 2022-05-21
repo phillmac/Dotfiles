@@ -39,7 +39,8 @@ function export-split-car ()
         then
             while read -r -d $'\0' fname
             do
-                mv "${fname}" /selene/Sync/Upload/Titan_E/split
+                mv -v "${fname}" /selene/Sync/Upload/Titan_E/split
+                date
                 sleep 300
             done < <(
                 find . -name "*.car.*" -print0 | sort
