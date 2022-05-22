@@ -204,7 +204,10 @@ function ipfs.dag.get () {
     get_url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/dag/get?arg=${ls_addr_encoded}"
     [[ -n "${IPFS_DEBUG}" ]] &&  echo "get_url is ${get_url}" >&2
 
-   _curl "${get_url}"
+    if ! _curl "${get_url}"
+    then
+        echo "Fetching ${ls_addr} failed" >&2
+    fi
 }
 
 function ipfs.dag.get.links () {
