@@ -461,7 +461,15 @@ function ipfs.preload ()
 
 
 function ipfs.fetch.blocks () {
-    ipfs.ls.recursive.blocks "${1}" | while read -r cid _info; do echo "Fetching $cid"; ipfs.dag.get "${cid}" > /dev/null; done
+    ipfs.ls.recursive.blocks "${1}"
+    while read -r cid _info;
+    do
+        echo "Fetching $cid";
+        if ! ipfs.dag.get "${cid}" > /dev/null
+        then
+            echo "Failed to fetch ${cid}";
+        fi
+    done < <(ipfs.ls.recursive.blocks "${1}")
 }
 
 export -f ipfs.ls
