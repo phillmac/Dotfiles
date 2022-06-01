@@ -15,6 +15,7 @@ function _curl () {
 
     local retries
     local maxtime
+    local result
 
     retries=${CURL_RETRIES:-0}
     maxtime=${CURL_MAXTIME:-300}
@@ -22,10 +23,13 @@ function _curl () {
     if [[ -n "${ENABLE_DEBUG}" ]] || [[ -n "${DEBUG_CURL}" ]]
     then
         curl --verbose --retry "${retries}" --max-time "${maxtime}" "${@}"
+        result=$?
     else
         curl --silent --fail "${@}"
+        result=$?
     fi
     echo
+    return ${result}
 }
 
 function curljson () {
