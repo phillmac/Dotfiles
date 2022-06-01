@@ -465,7 +465,7 @@ function ipfs.fetch.blocks () {
     while read -r cid _info;
     do
         echo "Fetching $cid";
-        if ! ipfs.dag.get "${cid}" > /dev/null
+        if ! ipfs.dag.get "${cid}" | mbuffer > /dev/null
         then
             echo "Failed to fetch ${cid}";
         fi
