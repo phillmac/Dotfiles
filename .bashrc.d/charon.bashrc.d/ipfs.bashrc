@@ -38,7 +38,7 @@ function export-split-car ()
         if docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false < <( mbuffer < <( cat "${1}".car.* ))
         then
             find . -name "*.car.*" | sort > /selene/Sync/Upload/ipfs-export/"${1}".car.pieces.txt
-            mv -v /selene/Sync/Upload/ipfs-export/"${1}".car.pieces.txt /selene/Sync/Upload/selene/Sync/Upload/ipfs-export/"${1}".car.pieces.txt
+            mv -v /selene/Sync/Upload/ipfs-export/"${1}".car.pieces.txt /selene/Sync/Upload/Titan_E/"${1}".car.pieces.txt
             while read -r fname
             do
                 mv -v "${fname}" /selene/Sync/Upload/Titan_E/split
