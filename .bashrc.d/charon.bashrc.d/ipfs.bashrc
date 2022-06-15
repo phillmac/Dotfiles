@@ -33,20 +33,18 @@ PUBLIC_DAG_EXPORT_GATEWAY=http://external7.ddns.peelvalley.com.au:8080
 
 function export-split-car ()
 {
-    (
-        cd /selene/Sync/Upload/ipfs-export && ipfs dag export -p "${1}" | split -b 10M -a 4 --verbose - "${1}.car."
-        if docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false < <( mbuffer < <( cat "${1}".car.* ))
-        then
-            find . -name "*${1}.car.*" | sort > /selene/Sync/Upload/ipfs-export/"${1}".car.pieces.txt
-            mv -v /selene/Sync/Upload/ipfs-export/"${1}".car.pieces.txt /selene/Sync/Upload/Titan_E/split/"${1}".car.pieces.txt
-            while read -r fname
-            do
-                mv -v "${fname}" /selene/Sync/Upload/Titan_E/split
-                date
-                sleep 20
-            done < /selene/Sync/Upload/Titan_E/split/"${1}".car.pieces.txt
-        fi
-    )
+    ( cd /selene/Sync/Upload/ipfs-export && ipfs dag export -p "${1}" | split -b 10M -a 4 --verbose - "${1}.car." )
+    if docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false < <( mbuffer < <( cat /selene/Sync/Upload/ipfs-export/"${1}".car.???? ))
+    then
+        find /selene/Sync/Upload/ipfs-export -name "*${1}.car.????" | sort -u > /selene/Sync/Upload/ipfs-export/"${1}".car.pieces.txt
+        mv -v /selene/Sync/Upload/ipfs-export/"${1}".car.pieces.txt /selene/Sync/Upload/Titan_E/split/"${1}".car.pieces.txt
+        while read -r fname
+        do
+            mv -v "${fname}" /selene/Sync/Upload/Titan_E/split
+            date
+            sleep 20
+        done < /selene/Sync/Upload/Titan_E/split/"${1}".car.pieces.txt
+    fi
 }
 
 function export-split-car-files ()
