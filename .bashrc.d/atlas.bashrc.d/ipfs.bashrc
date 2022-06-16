@@ -26,14 +26,14 @@ function upload-split-car ()
 
 function export-split-car ()
 {
-    ( cd /titan/E/ipfs-export/split && ipfs dag export -p "${1}" | split -b 10M -a 3 --verbose - "${1}.car." )
+    ( cd /titan/E/ipfs-export/split && ipfs dag export -p "${1}" | split -b 10M -a 4 --verbose - "${1}.car." )
 }
 
 function find-split-car ()
 {
     (
         set -e
-        cd /titan/E/ipfs-export/split && find . -name "*${1}*" | sort
+        cd /titan/E/ipfs-export/split && find . -name "${1}.car.????" | sort
     )
 }
 
