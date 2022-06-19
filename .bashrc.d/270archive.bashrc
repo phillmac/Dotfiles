@@ -34,13 +34,15 @@ function masonry.dev.combine ()
     echo "https://ipfs.io/ipfs/${result}"
     echo "https://cf-ipfs.com/ipfs/${result}"
 
+    curl "http://external1.ddns.peelvalley.com.au:8081/api/v0/get?arg=${result}" > /dev/null
+    curl "http://192.168.30.57:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://io2.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://external5.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
     curl "http://vps1.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
     curl "http://vps2.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
     curl "http://vps3.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://external5.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://external1.ddns.peelvalley.com.au:8081/api/v0/get?arg=${result}" > /dev/null
     curl "http://external1.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://192.168.30.57:8080/api/v0/get?arg=${result}" > /dev/null
 
 }
 
