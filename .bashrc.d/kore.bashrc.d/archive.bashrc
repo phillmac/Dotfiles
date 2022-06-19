@@ -65,12 +65,20 @@ function db.get.contents.remote ()
 function ipfs.pin.add.remote ()
 {
     local hosts
+    local hostspvs
 
     hosts=("docker-vps1" "docker-vps2"  "docker-vps3")
     for h in "${hosts[@]}"
     do
         docker run --rm --net phill-dev_default docker sh -c "docker --host ${h}:2377 exec phill-dev_ipfs_1 sh -c 'ipfs pin add --progress ${*}'"
     done
+
+    hostspvs=("docker-charon" "docker-titan" "docker-carpo")
+    for hpvs in "${hostspvs[@]}"
+    do
+        docker run --rm --net pvs-dev_scheduler docker sh -c "docker --host ${hpvs}:2377 exec phill-dev_ipfs_1 sh -c 'ipfs pin add --progress ${*}'"
+    done
+
 }
 
 function archive.publish ()
@@ -161,7 +169,7 @@ function archive.pin.remote.pvs ()
     archive_addr=${1:-/ipns/ipfs-archive.online/Archive/DA}
 
 
-    hosts=("docker-charon" "docker-titan")
+    hosts=("docker-charon" "docker-titan" "docker-carpo")
 
     for h in "${hosts[@]}"
     do
@@ -405,8 +413,6 @@ function archive.pins.missing.pvs () {
         fi
     done
 }
-
-
 
 function archive.list.preload ()
 {
