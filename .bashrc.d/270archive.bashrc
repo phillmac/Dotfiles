@@ -27,7 +27,7 @@ function masonry.dev.combine ()
     echo 'Adding settings'
     settings_cid=$(cd /ananke/D/Source/Phill/Repos/Phill/masonry-settings && ipfs add -r -Q --pin=false .)
 
-    intermediate=$(ipfs object patch "${empty_dir}" add-link gallery "${masonry_cid}")
+    intermediate=$(ipfs object patch "${empty_dir}" add-link galleries "${masonry_cid}")
     echo "Intermediate dir ${intermediate}"
     result=$(ipfs object patch "${intermediate}" add-link settings "${settings_cid}")
 
