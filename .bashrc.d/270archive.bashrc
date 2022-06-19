@@ -39,9 +39,9 @@ function masonry.dev.combine ()
     curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
     curl "http://io2.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
     curl "http://external5.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://vps1.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://vps2.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://vps3.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://api.vps1.ipfs-archive.online:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://api.vps2.ipfs-archive.online:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://api.vps3.ipfs-archive.online:8080/api/v0/get?arg=${result}" > /dev/null
     curl "http://external1.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
 
 }
