@@ -83,7 +83,9 @@ function archive.split.dir ()
         if (( ${#archivefiles[@]} )); then
             if import-split-car "${cid}"; then
                 upload-split-car "${cid}";
-                ipfs pin rm "${cid}";
+                if ipfs pin rm "${cid}"; then
+                    true
+                fi
             else
                 echo "Archive integrity check failed for ${cid}" >&2;
             fi;
