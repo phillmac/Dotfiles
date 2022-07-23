@@ -57,6 +57,11 @@ function export-split-car-dirs ()
     ipfs.ls.recursive.dirs "${1}" | while read -r  cid _info; do export-split-car "${cid}"; done
 }
 
+function ipfs.dag.export ()
+{
+    export-split-car "${1}" && export-split-car-files "${1}" && export-split-car-dirs "${1}"
+}
+
 function find-split-car ()
 {
     (
