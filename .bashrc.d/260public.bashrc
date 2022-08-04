@@ -212,7 +212,7 @@ function public.anime.archiveone () {
         mv -v "${FILES}-new" "${FILES}"
 
         # Now transfer the data
-        rclone move -vvv --files-from-raw "${FILES}-batch" "${SOURCE}" "${DEST}"
+        rclone move -vvv --files-from-raw --checksum "${FILES}-batch" "${SOURCE}" "${DEST}"
         read -p "Press enter to continue"
     done
 }
@@ -240,7 +240,7 @@ function public.anime.archiveone.reverse () {
         # Now transfer the data
         rclone move -vvv --files-from-raw "${FILES}-batch" "${SOURCE}" "${DEST}"
         read -p "Press enter to continue"
-        rclone lsf --files-only --recursive "${SOURCE}" | tee "${FILES}"
+        rclone lsf --files-only --recursive --checksum "${SOURCE}" | tee "${FILES}"
     done
 }
 
