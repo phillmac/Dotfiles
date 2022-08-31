@@ -219,29 +219,36 @@ function public.anime.archiveone () {
 
 function public.anime.archiveone.reverse () {
 
-    local SOURCE
-    local DEST
-    local FILES
+    if [[ ! -d /dev/shm/public.anime.upload ]]
+    then
+        mkdir /dev/shm/public.anime.upload
+    fi
 
-    SOURCE=kore-ssh:/callisto/Data/Upload/TV-Shows/Anime
-    DEST=b2-phill:Video-Archive2/TV-Shows/Anime
-    FILES=$(mktemp --tmpdir=/dev/shm)
+    (
+        set -eo pipefail
 
-    trap 'rm -fv -- "${FILES}"*' ERR
-    trap 'rm -fv -- "${FILES}"*' EXIT
+        SOURCE=kore-ssh:/callisto/Data/Upload/TV-Shows/Anime
+        DEST=b2-phill:Video-Archive2/TV-Shows/Anime
+        FILES=$(mktemp --tmpdir=/dev/shm/public.anime.upload)
 
-    rclone lsf --files-only --recursive "${SOURCE}" | tee "${FILES}"
+        trap 'rm -fv -- "${FILES}"*' ERR
+        trap 'rm -fv -- "${FILES}"*' EXIT
 
-    while [ -s "${FILES}" ]; do
+        cd /dev/shm/public.anime.upload
 
-        # Get the last 1
-        tail -n 1 "${FILES}" > "${FILES}-batch"
+        rclone lsf --files-only --recursive "${SOURCE}" | tee "${FILES}"
 
-        # Now transfer the data
-        rclone move -vvv --files-from-raw "${FILES}-batch" "${SOURCE}" "${DEST}"
-        read -p "Press enter to continue"
-        rclone lsf --files-only --recursive --checksum "${SOURCE}" | tee "${FILES}"
-    done
+        while [ -s "${FILES}" ]; do
+
+            # Get the last 1
+            tail -n 1 "${FILES}" > "${FILES}-batch"
+
+            # Now transfer the data
+            rclone move -vvv --files-from-raw "${FILES}-batch" "${SOURCE}" "${DEST}"
+            read -p "Press enter to continue"
+           rclone lsf --files-only --recursive --checksum "${SOURCE}" | tee "${FILES}"
+       done
+    )
 }
 
 export -f public.root.hash
