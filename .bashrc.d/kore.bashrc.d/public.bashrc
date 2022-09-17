@@ -205,6 +205,7 @@ function public.anime.detect.add ()
             echo "Adding files to ${anime_name}" >&2
             if public.anime.add  "${anime_name}"
             then
+                public.name.publish
                 public.list.preload > "${HOME}/public.list.preload.log.txt" 2>&1 &
             fi
         else
@@ -244,8 +245,20 @@ function public.anime.torrents.monitor ()
     done
 }
 
+function public.name.publish ()
+{
+    docker run --rm \
+        --net pvs-dev_ipfs  \
+        --entrypoint sh  \
+        peelvalley/ipfs-cli \
+            -c \
+                'sh /scripts/ipfs-cli.sh name publish --timeout 10m --key Public $(sh /scripts/ipfs-cli.sh files stat --hash /Public)'
+}
+
 export -f unstage_video_files
 export -f public.anime.add
+export -f public.name.publish
+export -f public.anime.detect.add
 export -f fetch_queued_torrent
 export -f get_anime_names
 export -f public.anime.torrents.monitor
