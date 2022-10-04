@@ -73,7 +73,7 @@ function webtorrent_add_ipfs ()
     then
         source "${HOME}/.bashrc.d/020aliases.bashrc"
         source "${BASH_RC_HOST_DIR}/ipfs.bashrc"
-        ( cd "${1}" && _ipfs add --progress=false --pin=false -w ./* )
+        ( cd "${1}" && _ipfs add --progress=false --pin=false -r -w ./* )
         # ipfs-wasabi add -p -r -w --pin=false "${1}"/*
         echo
     fi
