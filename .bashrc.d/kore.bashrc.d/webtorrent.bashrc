@@ -20,14 +20,30 @@ function charon_wtdl_remote ()
 
 function io_wtdl_remote ()
 {
+    local subdircount
+    local prefix
+
     if sshp 192.227.67.212 \
         "nohup bash -c 'source .bashrc.d/150webtorrent.bashrc && webtorrent_download_remote'"
     then
-        if verify_torrent --no-delete ./*.torrent --prefix /callisto/Data/Staging/Webtorrent
+
+        subdircount=$(find /callisto/Data/Staging/Webtorrent -maxdepth 1 -type d | wc -l)
+        echo "subdircount: ${subdircount}" >&2
+
+        if (( 0$subdircount > 1 ));
+        then
+            prefix=$(find /callisto/Data/Staging/Webtorrent -maxdepth 1 -type d)
+        else
+            prefix=/callisto/Data/Staging/Webtorrent
+        fi
+
+        echo "verify torrent prefix ${prefix}" >&2
+
+        if verify_torrent --no-delete ./*.torrent --prefix "${prefix}"
         then
             echo "$(date) Done" >&2
         else
-            echo "$(date) Local verify failed"
+            echo "$(date) Local verify failed" >&2
             return 1
         fi
     else
