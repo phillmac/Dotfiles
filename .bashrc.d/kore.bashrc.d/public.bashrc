@@ -56,7 +56,7 @@ for fname in iglob("./*.mkv"):
 for n in names: print(n)
 
 
-pattern = compile(r"((\.\/)|(\[.*?\])|(\(\s*[0-9]{2}-\s*[0-9]{2}\))|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\)))")
+pattern = compile(r"((\.\/)|(\[.*?\])|(\(\s*[0-9]{2}-\s*[0-9]{2}\))|(\s*\[[0-9]{3,}p\])|(\s*\([0-9]{3,}p\)))")
 for fname in [ f.path for f in os.scandir(".") if f.is_dir() ]:
     names.add(pattern.sub("", fname).strip())
 for n in names: print(n)
