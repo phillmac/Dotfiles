@@ -27,12 +27,12 @@ function io_wtdl_remote ()
         "nohup bash -c 'source .bashrc.d/150webtorrent.bashrc && webtorrent_download_remote'"
     then
 
-        subdircount=$(find /callisto/Data/Staging/Webtorrent -maxdepth 1 -type d | wc -l)
+        subdircount=$(find /callisto/Data/Staging/Webtorrent -maxdepth 1  -mindepth 1 -type d | wc -l)
         echo "subdircount: ${subdircount}" >&2
 
-        if (( 0$subdircount > 1 ));
+        if (( 0$subdircount > 0 ));
         then
-            prefix=$(find /callisto/Data/Staging/Webtorrent -maxdepth 1 -type d)
+            prefix=$(find /callisto/Data/Staging/Webtorrent -maxdepth 1  -mindepth 1 -type d)
         else
             prefix=/callisto/Data/Staging/Webtorrent
         fi
