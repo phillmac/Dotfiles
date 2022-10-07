@@ -47,10 +47,17 @@ function get_anime_names () {
 '
 from glob import iglob
 from re import compile
+import os
 
 pattern = compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\))|\.mkv)")
 names = set()
 for fname in iglob("./*.mkv"):
+    names.add(pattern.sub("", fname).strip())
+for n in names: print(n)
+
+
+pattern = compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\)))")
+for fname in [ f.path for f in os.scandir(".") if f.is_dir() ]:
     names.add(pattern.sub("", fname).strip())
 for n in names: print(n)
 '
@@ -227,7 +234,8 @@ function public.anime.torrents.monitor ()
                 then
                     if io_wtdl_remote
                     then
-                        if compgen -G './*.mkv'
+                        batchdircount=$(find /callisto/Data/Staging/Webtorrent -maxdepth 1 -mindepth 1 -type d -iname '*batch*' | wc -l)
+                        if (( 0$batchdircount > 0 )) || compgen -G './*.mkv'
                         then
                             mv -vf ./*.torrent /callisto/Data/Phill/Downloads/Torrents
                             public.anime.detect.add
