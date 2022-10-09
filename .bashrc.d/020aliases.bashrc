@@ -22,10 +22,10 @@ function _curl () {
 
     if [[ -n "${ENABLE_DEBUG}" ]] || [[ -n "${DEBUG_CURL}" ]]
     then
-        curl --verbose --retry "${retries}" --max-time "${maxtime}" "${@}"
+        curl -n --verbose --retry "${retries}" --max-time "${maxtime}" "${@}"
         result=$?
     else
-        curl --silent --fail "${@}"
+        curl -n --silent --fail "${@}"
         result=$?
     fi
     echo
