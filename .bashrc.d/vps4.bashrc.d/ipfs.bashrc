@@ -107,6 +107,33 @@ function ipfs-wasabi.phone.pins.missing ()
     done < wasabi.phone.missing.txt
 }
 
+function ipfs.phone.pins.missing ()
+{
+    ssh -p 35681 192.227.67.212 cat cids/phone/cids.txt | sort --unique > phone.files.cids.txt
+    ipfs pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > pins.txt
+    comm -23 phone.files.cids.txt pins.txt > phone.missing.txt
+    cids_count=$(wc -l < phone.missing.txt)
+    ((progress=1))
+    while read -r pincid
+        do
+            echo "$(date) ipfs missing item ${pincid} [${progress}/${cids_count}]" >&2
+
+            while ! docker run \
+                --rm \
+                --net host \
+                --log-driver none \
+                curlimages/curl curl --fail \
+                    "http://192.227.67.212:8080/api/v0/dag/export?arg=${pincid}" > "${pincid}"
+            do
+                echo $(date) >&2
+                sleep 30m
+            done
+            docker exec -i phill-dev_ipfs_1 ipfs dag import < <( mbuffer < "${pincid}")
+            rm -v "${pincid}"
+            ((progress+=1))
+    done < phone.missing.txt
+}
+
 function public.root.hash () {
     docker run \
         --rm \
