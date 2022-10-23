@@ -94,7 +94,16 @@ function archive.split.dir ()
         fi;
     done < <( ipfs.ls.recursive "${archive_cid}" && echo "${archive_cid}" ) )
 }
+function find.archive.split.dir () {
+    local fname
+    local cid
 
+    while read -r fname
+    do
+        cid=$(basename "${fname}" .car.pieces.txt)
+        archive.split.dir "${cid}"
+    done < <(find /titan/E/Sync/Upload/Selene/split/ -name '*.car.pieces.txt' -printf "%T@ %Tc %p\n" | sort -n | cut -d ' ' -f 9 )
+}
 
 
 export IPFS_GET_BATCH_COUNT
