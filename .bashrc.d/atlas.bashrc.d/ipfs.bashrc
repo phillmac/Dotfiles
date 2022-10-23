@@ -102,7 +102,7 @@ function find.archive.split.dir () {
     do
         cid=$(basename "${fname}" .car.pieces.txt)
         archive.split.dir "${cid}"
-    done < <(find /titan/E/Sync/Upload/Selene/split/ -name '*.car.pieces.txt' -printf "%T@ %Tc %p\n" | sort -n | cut -d ' ' -f 9 )
+    done < <(find /titan/E/Sync/Upload/Selene/split/ -type f -name '*.car.pieces.txt' -printf "%T@ %Tc %p\n" | sort -n | cut -d ' ' -f 9 )
 }
 
 
