@@ -472,6 +472,14 @@ function ipfs.fetch.blocks () {
     done < <(ipfs.ls.recursive.blocks "${1}")
 }
 
+function ipfs.unpin.recursive ()
+{
+    while read -r cid _info
+    do
+        ipfs pin rm "${cid}";
+    done < <(ipfs.ls.recursive.files "${1}")
+}
+
 export -f ipfs.ls
 export -f ipfs.pin.ls
 export -f ipfs.ls.recursive

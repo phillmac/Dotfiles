@@ -251,6 +251,16 @@ function public.anime.archiveone.reverse () {
     )
 }
 
+function public.unpin ()
+{
+    local unpincid
+
+    while read -r unpincid
+    do
+        [[ -n "${unpincid}" ]] && ipfs.unpin.recursive "${unpincid}"
+    done < <(cut -f 2 -d ' ' < "${PUBLIC_CIDS_FILE}")
+}
+
 export -f public.root.hash
 export -f public.pins.missing.local
 export -f public.pins.monitor

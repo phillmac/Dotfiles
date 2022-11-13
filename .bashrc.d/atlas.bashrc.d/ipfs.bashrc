@@ -1,13 +1,23 @@
 #!/bin/bash
 
 
+IPFS_HTTP_GATEWAY="192.168.35.51:8080"
 IPFS_GET_BATCH_COUNT=10
 IPFS_GET_TIMEOUT="3600s"
 IPFS_PIN_TIMEOUT="24h"
 IPFS_RESOLVE_TIMEOUT="15m"
 IPFS_PIN_SLEEP="1h"
+PUBLIC_CIDS_FILE="/mimas/C/Users/phill/Documents/public cids.txt"
 
-IPFS_HTTP_GATEWAY="192.168.35.51:8080"
+
+export IPFS_HTTP_GATEWAY
+export IPFS_GET_BATCH_COUNT
+export IPFS_GET_TIMEOUT
+export IPFS_PIN_TIMEOUT
+export IPFS_RESOLVE_TIMEOUT
+export IPFS_PIN_SLEEP
+export PUBLIC_CIDS_FILE
+
 
 function split-car ()
 {
@@ -106,12 +116,6 @@ function find.archive.split.dir () {
 }
 
 
-export IPFS_GET_BATCH_COUNT
-export IPFS_GET_TIMEOUT
-export IPFS_PIN_TIMEOUT
-export IPFS_RESOLVE_TIMEOUT
-export IPFS_PIN_SLEEP
-export IPFS_HTTP_GATEWAY
 
 export -f split-car
 export -f upload-car

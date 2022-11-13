@@ -1,17 +1,28 @@
 #!/bin/bash
 
 
+IPFS_HTTP_GATEWAY="127.0.0.1:8080"
+PUBLIC_DAG_EXPORT_GATEWAY=http://external7.ddns.peelvalley.com.au:8080
 IPFS_GET_BATCH_COUNT=10
 IPFS_GET_TIMEOUT="3600s"
 IPFS_PIN_TIMEOUT="24h"
 IPFS_RESOLVE_TIMEOUT="15m"
 IPFS_PIN_SLEEP="1h"
-
 IPFS_PIN_ALLOWED_START="23:59"
 IPFS_PIN_ALLOWED_FIN="06:00"
+PUBLIC_CIDS_FILE="/mimas/C/Users/phill/Documents/public cids.txt"
 
-IPFS_HTTP_GATEWAY="127.0.0.1:8080"
-PUBLIC_DAG_EXPORT_GATEWAY=http://external7.ddns.peelvalley.com.au:8080
+
+export IPFS_HTTP_GATEWAY
+export PUBLIC_DAG_EXPORT_GATEWAY
+export IPFS_GET_BATCH_COUNT
+export IPFS_GET_TIMEOUT
+export IPFS_PIN_TIMEOUT
+export IPFS_RESOLVE_TIMEOUT
+export IPFS_PIN_SLEEP
+export IPFS_PIN_ALLOWED_START
+export IPFS_PIN_ALLOWED_FIN
+export PUBLIC_CIDS_FILE
 
 
 # function charon.ipfs.preload ()
@@ -96,13 +107,5 @@ function import-split-car ()
         cd /selene/Sync/Upload/Titan_E/split && docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false < <( mbuffer < <( read-split-car "${1}" ))
     )
 }
-
-export IPFS_GET_BATCH_COUNT
-export IPFS_GET_TIMEOUT
-export IPFS_PIN_TIMEOUT
-export IPFS_RESOLVE_TIMEOUT
-export IPFS_PIN_SLEEP
-export IPFS_HTTP_GATEWAY
-export PUBLIC_DAG_EXPORT_GATEWAY
 
 # export -f charon.ipfs.preload
