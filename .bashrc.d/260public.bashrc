@@ -189,7 +189,7 @@ function public.list.preload ()
     echo "$(date) VPS1          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps1.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
     echo "$(date) VPS2          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps2.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
     echo "$(date) VPS3          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps3.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
-    echo "$(date) VPS4          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps4.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
+    echo "$(date) VPS4          $(wc -l < <(CURL_USR=user CURL_PASS=rrVfzbvRYTwNABCxJWjeHFu4 IPFS_HTTP_GATEWAY=https://vps4.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null))"
     echo "$(date) Done"
 }
 
