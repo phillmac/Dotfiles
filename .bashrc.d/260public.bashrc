@@ -52,7 +52,7 @@ function public.pin.add.local () {
         rm -v "${1}"
 
     else
-        ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${1}"
+        _ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${1}"
     fi
 }
 

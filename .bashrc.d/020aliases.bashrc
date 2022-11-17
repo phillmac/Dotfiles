@@ -80,7 +80,25 @@ function ipfs () {
     if which ipfs > /dev/null; then
         $(which ipfs) "${@}"
     else
-        _ipfs "${@}"
+        if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]
+        then
+            if [[ -t 1 ]] &&  [[ -t 2 ]] && [[ ! -p /dev/stdout ]] && [[ ! -p /dev/stdin ]]
+            then
+                echo 'Detected TTY' >&2
+                docker run --rm -it -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
+            else
+                docker run --rm -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
+            fi
+        else
+            if [[ -t 1 ]] &&  [[ -t 2 ]] && [[ ! -p /dev/stdout ]] && [[ ! -p /dev/stdin ]]
+            then
+                echo 'Detected TTY' >&2
+                docker run --rm -it -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
+            else
+                docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
+
+            fi
+        fi
     fi
 }
 
@@ -97,24 +115,12 @@ function ipfs.dag.import()
 function _ipfs() {
     if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]
     then
-        if [[ -t 1 ]] &&  [[ -t 2 ]] && [[ ! -p /dev/stdout ]] && [[ ! -p /dev/stdin ]]
-        then
-            echo 'Detected TTY' >&2
-            docker run --rm -it -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
-        else
-            docker run --rm -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
-        fi
+        
+        docker run --rm -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
     else
-        if [[ -t 1 ]] &&  [[ -t 2 ]] && [[ ! -p /dev/stdout ]] && [[ ! -p /dev/stdin ]]
-        then
-            echo 'Detected TTY' >&2
-            docker run --rm -it -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
-        else
-            docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
-
-        fi
+        
+        docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
     fi
-
 
 }
 
