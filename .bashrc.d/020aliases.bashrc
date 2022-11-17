@@ -16,19 +16,32 @@ function _curl () {
     local retries
     local maxtime
     local result
-    # local curl_usr
-    # local curl_pass
+    local curl_usr_pass
+    curl_usr_pass="${CURL_USR}:${CURL_PASS}"
 
     retries=${CURL_RETRIES:-0}
     maxtime=${CURL_MAXTIME:-300}
 
     if [[ -n "${ENABLE_DEBUG}" ]] || [[ -n "${DEBUG_CURL}" ]]
     then
-        curl -n --verbose --retry "${retries}" -u "${CURL_USR:CURL_PASS}" --max-time "${maxtime}" "${@}"
-        result=$?
+        
+        if [[ "${curl_usr_pass}" = ':' ]]
+        then
+            curl -n --verbose --fail --retry "${retries}" --max-time "${maxtime}" "${@}"
+            result=$?
+        else
+            curl -n --verbose --fail --retry "${retries}" -u "${curl_usr_pass}" --max-time "${maxtime}" "${@}"
+            result=$?
+        fi
     else
-        curl -n --silent --fail -u "${CURL_USR:CURL_PASS}" "${@}"
-        result=$?
+        if [[ "${curl_usr_pass}" = ':' ]]
+        then
+            curl -n --silent --fail "${@}"
+            result=$?
+        else
+            curl -n --silent --fail -u "${curl_usr_pass}" "${@}"
+            result=$?
+        fi
     fi
     echo
     return ${result}
