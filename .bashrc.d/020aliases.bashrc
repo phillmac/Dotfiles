@@ -71,15 +71,23 @@ function ipfs () {
     fi
 }
 
+function ipfs.dag.import()
+{
+    if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]
+    then
+        docker run --rm -i -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli dag import --pin-roots=false
+    else
+        docker run --rm -i -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none peelvalley/ipfs-cli dag import --pin-roots=false
+    fi
+}
+
 function _ipfs() {
-    if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]; then
+    if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]
+    then
         if [[ -t 1 ]] &&  [[ -t 2 ]] && [[ ! -p /dev/stdout ]] && [[ ! -p /dev/stdin ]]
         then
             echo 'Detected TTY' >&2
             docker run --rm -it -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
-        elif [[ -p /dev/stdin ]]
-        then
-            docker run --rm -i -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
         else
             docker run --rm -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
         fi
@@ -88,9 +96,6 @@ function _ipfs() {
         then
             echo 'Detected TTY' >&2
             docker run --rm -it -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
-        elif [[ -p /dev/stdin ]]
-        then
-            docker run --rm -i -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
         else
             docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
 
