@@ -153,7 +153,7 @@ function ipfs.phone.pins.missing ()
             phone.pin.add.local "${pincid}"
             rm -v "${pincid}"
             ((progress+=1))
-    done < phone.missing.txt
+    done < <(grep . phone.missing.txt)
 }
 
 function public.root.hash () {
