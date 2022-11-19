@@ -142,6 +142,27 @@ function archive.root.hash () {
     curl -s --fail 'https://ipfs-admin.phillm.net/api/v0/files/stat?hash=true&arg=/ipfs-archive.online' | jq -r .Hash
 }
 
+function archive.pin.add.local () {
+    if [[ -n "${ARCHIVE_DAG_EXPORT_GATEWAY}" ]]
+    then
+       while ! docker run \
+                --rm \
+                --net host \
+                curlimages/curl curl --fail \
+                    "${ARCHIVE_DAG_EXPORT_GATEWAY}/${IPFS_API}/dag/export?arg=${1}" > "${1}"
+        do
+            date >&2
+            sleep 30m
+        done
+
+        ipfs.dag.import < <( mbuffer < "${1}")
+        rm -v "${1}"
+
+    else
+        _ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${1}"
+    fi
+}
+
 function archive.pins.missing.local () {
     local pinned_count
     local entry
@@ -163,10 +184,7 @@ function archive.pins.missing.local () {
             entry=$(grep "${pincid}" archive.entries.txt)
             echo "Missing pin item ${entry}" >&2
 
-            ipfs pin add \
-                --progress \
-                --timeout 2h \
-                "${pincid}"
+            archive.pin.add.local "${pincid}"
             date
         done < <( comm -23  archive.entries.cids.txt ipfs.pins.local.txt)
     fi

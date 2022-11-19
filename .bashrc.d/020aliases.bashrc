@@ -24,7 +24,7 @@ function _curl () {
 
     if [[ -n "${ENABLE_DEBUG}" ]] || [[ -n "${DEBUG_CURL}" ]]
     then
-        
+
         if [[ "${curl_usr_pass}" = ':' ]]
         then
             curl -n --verbose --fail --retry "${retries}" --max-time "${maxtime}" "${@}"
@@ -115,10 +115,10 @@ function ipfs.dag.import()
 function _ipfs() {
     if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]
     then
-        
+
         docker run --rm -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
     else
-        
+
         docker run --rm -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none peelvalley/ipfs-cli "${@}"
     fi
 

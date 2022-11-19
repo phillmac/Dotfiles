@@ -45,6 +45,7 @@ function public.pin.add.local () {
                 curlimages/curl curl --fail \
                     "${PUBLIC_DAG_EXPORT_GATEWAY}/${IPFS_API}/dag/export?arg=${1}" > "${1}"
         do
+            date >&2
             sleep 30m
         done
 

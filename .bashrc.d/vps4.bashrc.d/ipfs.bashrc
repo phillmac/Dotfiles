@@ -54,7 +54,7 @@ function ipfs-wasabi.public.pins.missing ()
                 curlimages/curl curl --fail \
                     "http://192.227.67.212:8080/api/v0/dag/export?arg=${pincid}" > "${pincid}"
             do
-                echo $(date) >&2
+                date >&2
                 sleep 30m
             done
             ipfs-wasabi dag import < <( mbuffer < "${pincid}")
@@ -118,6 +118,27 @@ function ipfs-wasabi.phone.pins.missing ()
     done < wasabi.phone.missing.txt
 }
 
+function phone.pin.add.local () {
+    if [[ -n "${PHONE_DAG_EXPORT_GATEWAY}" ]]
+    then
+       while ! docker run \
+                --rm \
+                --net host \
+                curlimages/curl curl --fail \
+                    "${PHONE_DAG_EXPORT_GATEWAY}/${IPFS_API}/dag/export?arg=${1}" > "${1}"
+        do
+            date >&2
+            sleep 30m
+        done
+
+        ipfs.dag.import < <( mbuffer < "${1}")
+        rm -v "${1}"
+
+    else
+        _ipfs pin add --progress --timeout "${IPFS_PIN_TIMEOUT}" "${1}"
+    fi
+}
+
 function ipfs.phone.pins.missing ()
 {
     ssh -p 35681 192.227.67.212 cat cids/phone/cids.txt | sort --unique > phone.files.cids.txt
@@ -129,17 +150,7 @@ function ipfs.phone.pins.missing ()
         do
             echo "$(date) ipfs missing item ${pincid} [${progress}/${cids_count}]" >&2
 
-            while ! docker run \
-                --rm \
-                --net host \
-                --log-driver none \
-                curlimages/curl curl --fail \
-                    "http://192.227.67.212:8080/api/v0/dag/export?arg=${pincid}" > "${pincid}"
-            do
-                echo $(date) >&2
-                sleep 30m
-            done
-            docker exec -i phill-dev_ipfs_1 ipfs dag import < <( mbuffer < "${pincid}")
+            phone.pin.add.local "${pincid}"
             rm -v "${pincid}"
             ((progress+=1))
     done < phone.missing.txt
