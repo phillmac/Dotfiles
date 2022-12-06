@@ -230,7 +230,19 @@ function ipfs.dag.get.links () {
     get_url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/dag/get?arg=${ls_addr_encoded}"
     [[ -n "${IPFS_DEBUG}" ]] &&  echo "get_url is ${get_url}" >&2
 
-    jq -r '.Links[].Hash["/"]' < <(_curl "${get_url}")
+    # jq -r '.Links[].Hash["/"]' < <(_curl "${get_url}")
+    python3 -c \
+'
+import sys, json
+dag = json.load(sys.stdin)
+
+if "links" in dag:
+    for l in dag["links"]:
+        print(l["Cid"]["/"])
+else:
+    for l in dag["Links"]:
+        print(l["Hash"]["/"])
+' < <(_curl "${get_url}")
 }
 
 function ipfs.links.info ()
