@@ -137,6 +137,10 @@ function ipfs-exec () {
 
 }
 
+function ipfs-car () {
+    docker run --rm -v "$(pwd)":/tmp -w /tmp --net none --log-driver none phillmac/ipfs-car "${@}"
+}
+
 function ipfs_find_add_folder() {
     local patern
     local folder

@@ -42,6 +42,7 @@ function public.pin.add.local () {
        while ! docker run \
                 --rm \
                 --net host \
+                --log-driver none \
                 curlimages/curl curl --fail \
                     "${PUBLIC_DAG_EXPORT_GATEWAY}/${IPFS_API}/dag/export?arg=${1}" > "${1}"
         do
