@@ -32,6 +32,21 @@ function export-split-car ()
     ( cd /data/ipfs-export/split && ipfs dag export -p "${1}" | split -b 10M -a 3 --verbose - "${1}.car." )
 }
 
+function ipfs.repo.gc () {
+    local before
+    local after
+
+    before=$(df -h | grep '/data/ipfs_data')
+
+    docker run --rm -v /data/ipfs_data:/data/ipfs ipfs/go-ipfs:v0.11.0 repo gc --stream-errors
+
+    after=$( df -h | grep '/data/ipfs_data')
+
+    echo "Before: ${before}"
+    echo "After ${after}"
+
+}
+
 
 export -f split-car
 export -f upload-car
