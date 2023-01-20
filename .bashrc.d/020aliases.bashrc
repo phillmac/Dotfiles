@@ -269,8 +269,8 @@ function nodejs_dev () {
 }
 
 function video_archive () {
-    docker run --rm --net host -v /root:/root -v /callisto/Data/Upload/TV-Shows:/TV-Shows peelvalley/rclone-b2 "rclone move --verbose --bwlimit 0.3125M --transfers 1 /TV-Shows  b2-phill:Video-Archive2/TV-Shows"
-    docker run --rm --net host -v /root:/root -v /callisto/Data/Upload/Movies:/Movies peelvalley/rclone-b2 "rclone move --verbose --transfers 1 --bwlimit 0.3125M --delete-empty-src-dirs /Movies  b2-phill:Video-Archive2/Movies"
+    docker run --rm --net host -v /root:/root -v /callisto/Data/Upload/TV-Shows:/TV-Shows peelvalley/rclone-b2  "rclone move -vvv  --checksum --transfers 1 --bwlimit 0.3125M                           /TV-Shows   b2-phill:Video-Archive2/TV-Shows"
+    docker run --rm --net host -v /root:/root -v /callisto/Data/Upload/Movies:/Movies peelvalley/rclone-b2      "rclone move -vvv --checksum --transfers 1 --bwlimit 0.3125M --delete-empty-src-dirs   /Movies     b2-phill:Video-Archive2/Movies"
 }
 
 function rclone_staging () {
