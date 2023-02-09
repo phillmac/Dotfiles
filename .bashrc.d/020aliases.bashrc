@@ -114,7 +114,7 @@ function ipfs.dag.import()
 
 function _ipfs() {
     if which ipfs > /dev/null; then
-        $(which ipfs) "${@}"
+        "$(which ipfs)" "${@}"
     else
         if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]
         then
