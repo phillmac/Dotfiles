@@ -476,7 +476,7 @@ function ipfs.fetch.blocks () {
     ipfs.ls.recursive.blocks "${1}"
     while read -r cid _info;
     do
-        echo "Fetching $cid";
+        echo "$(date) Fetching $cid";
         if ! ipfs.dag.get "${cid}" | mbuffer > /dev/null
         then
             echo "Failed to fetch ${cid}";
