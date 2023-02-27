@@ -108,4 +108,18 @@ function import-split-car ()
     )
 }
 
+function carpo-export-split-car ()
+{
+    ( cd /selene/Sync/Upload/ipfs-export && ssh -p 35681 external7.ddns.peelvalley.com.au cat /data/phill/"${1}".car | split -b 10M -a 4 --verbose - "${1}.car." );
+    if docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false < <( mbuffer < <( cat /selene/Sync/Upload/ipfs-export/"${1}".car.???? )); then
+        find /selene/Sync/Upload/ipfs-export -name "*${1}.car.????" | sort -u > /selene/Sync/Upload/ipfs-export/"${1}".car.pieces.txt;
+        mv -v /selene/Sync/Upload/ipfs-export/"${1}".car.pieces.txt /selene/Sync/Upload/Titan_E/split/"${1}".car.pieces.txt;
+        while read -r fname; do
+            mv -v "${fname}" /selene/Sync/Upload/Titan_E/split;
+            date;
+            sleep 20;
+        done < /selene/Sync/Upload/Titan_E/split/"${1}".car.pieces.txt;
+    fi
+}
+
 # export -f charon.ipfs.preload
