@@ -74,20 +74,24 @@ function public.anime.hasdir ()
 
     return ${anime_has_dir}
 }
-
-function public.pins.missing.local () {
+function public.cids.missing ()
+{
     local public_hash
-    local entry
-    local pincid
-
 
     public_hash=$(public.root.hash)
 
-    ipfs.ls.recursive.files "${public_hash}"  | tee public.files.txt | cut -d ' ' -f 1 | sort --unique > public.files.cids.txt
-
+    ipfs.ls.recursive.files "${public_hash}" | tee public.files.txt | cut -d ' ' -f 1 | sort --unique > public.files.cids.txt
     ipfs pin ls --type=recursive | cut -f1 -d ' ' | sort -u > pins.txt
-
     comm -23 public.files.cids.txt pins.txt > public.missing.cids.txt
+}
+
+function public.pins.missing.local ()
+{
+    local entry
+    local pincid
+
+    public.cids.missing
+
     cids_count=$(wc -l < public.missing.cids.txt)
     ((progress=1))
 
@@ -100,19 +104,13 @@ function public.pins.missing.local () {
     done < public.missing.cids.txt
 }
 
-function public.pins.missing.local.lockout () {
-    local public_hash
+function public.pins.missing.local.lockout ()
+{
     local entry
     local pincid
 
+    public.cids.missing
 
-    public_hash=$(public.root.hash)
-
-    ipfs.ls.recursive.files "${public_hash}"  | tee public.files.txt | cut -d ' ' -f 1 | sort --unique > public.files.cids.txt
-
-    ipfs pin ls --type=recursive | cut -f1 -d ' ' | sort -u > pins.txt
-
-    comm -23 public.files.cids.txt pins.txt > public.missing.cids.txt
     cids_count=$(wc -l < public.missing.cids.txt)
     ((progress=1))
 
