@@ -11,9 +11,9 @@ IPFS_PIN_ALLOWED_START="19:00"
 IPFS_PIN_ALLOWED_FIN="02:00"
 
 IPFS_HTTP_GATEWAY="127.0.0.2:8080"
-PUBLIC_DAG_EXPORT_GATEWAY="http://192.227.67.212:8080"
-PHONE_DAG_EXPORT_GATEWAY="http://external7.ddns.peelvalley.com.au:8080"
-ARCHIVE_DAG_EXPORT_GATEWAY="http://external7.ddns.peelvalley.com.au:8080"
+# PUBLIC_DAG_EXPORT_GATEWAY="http://192.227.67.212:8080"
+# PHONE_DAG_EXPORT_GATEWAY="http://external7.ddns.peelvalley.com.au:8080"
+# ARCHIVE_DAG_EXPORT_GATEWAY="http://external7.ddns.peelvalley.com.au:8080"
 
 export IPFS_GET_BATCH_COUNT
 export IPFS_GET_TIMEOUT
