@@ -19,7 +19,7 @@ export PUBLIC_CIDS_FILE
 
 function split-car ()
 {
-    ( cd /data/ipfs-export/split && split -b 10M -a 3 --verbose "/data/ipfs-export/${1}.car" "${1}.car." && rm -vf "/data/ipfs-export/${1}.car" )
+    ( cd /data/ipfs-export/split && split -b 10M -a 4 --verbose "/data/ipfs-export/${1}.car" "${1}.car." && rm -vf "/data/ipfs-export/${1}.car" )
 }
 
 function upload-car ()
@@ -29,7 +29,7 @@ function upload-car ()
 
 function export-split-car ()
 {
-    ( cd /data/ipfs-export/split && ipfs dag export -p "${1}" | split -b 10M -a 3 --verbose - "${1}.car." )
+    ( cd /data/ipfs-export/split && ipfs dag export -p "${1}" | split -b 10M -a 4 --verbose - "${1}.car." )
 }
 
 function ipfs.repo.gc () {
