@@ -274,7 +274,7 @@ function video_archive () {
 }
 
 function rclone_staging () {
-    docker run -it --rm --net host -v /root:/root -v /callisto/Data/Staging:/Staging -w /Staging --entrypoint bash -it peelvalley/rclone-b2
+    docker run -it --rm --net host -v /root:/root --log-driver none -v /callisto/Data/Staging:/Staging -w /Staging --entrypoint bash -it peelvalley/rclone-b2
 }
 
 function rclone_move_callisto () {
@@ -285,9 +285,9 @@ function rclone () {
     if [[ -t 1 ]] &&  [[ -t 2 ]] && [[ ! -p /dev/stdout ]] && [[ ! -p /dev/stdin ]]
     then
         echo 'Detected TTY' >&2
-        docker run -it --rm --net host -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
+        docker run -it --rm --net host --log-driver none -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
     else
-        docker run --rm --net host -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
+        docker run --rm --net host --log-driver none -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
     fi
 
 }
