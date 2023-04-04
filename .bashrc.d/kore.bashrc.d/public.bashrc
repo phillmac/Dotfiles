@@ -6,6 +6,7 @@ function unstage_video_files ()
     batchdircount=$(find /callisto/Data/Staging/Webtorrent -maxdepth 1 -mindepth 1 -type d -iname '*batch*' | wc -l)
     if (( 0$batchdircount > 0 )) 
     then
+        echo "Unstaging in batch mode"
         python3 -c \
 '
 from glob import iglob
@@ -13,8 +14,8 @@ from os import rename, makedirs, listdir, rmdir
 from os.path import basename, dirname, exists
 from re import compile
 
-mkvs = iglob("/callisto/Data/Staging/Webtorrent/*batch*/*.mkv")
-mp4s = iglob("/callisto/Data/Staging/Webtorrent/*batch*/*.mp4")
+mkvs = iglob("/callisto/Data/Staging/Webtorrent/*Batch*/*.mkv")
+mp4s = iglob("/callisto/Data/Staging/Webtorrent/*Batch*/*.mp4")
 
 pattern = compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\))|\.mkv)")
 
