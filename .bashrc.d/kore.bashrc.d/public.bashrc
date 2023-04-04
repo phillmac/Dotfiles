@@ -28,7 +28,7 @@ for fitem in (*mkvs, *mp4s):
     newbatchpath = f"/callisto/Data/Upload/TV-Shows/Anime/{dir_name}/{batchname}"
     if not exists(newbatchpath):
         print(f"Creating {newbatchpath}")
-        mkdirs(newbatchpath)
+        makedirs(newbatchpath)
 
     newpath = f"{newbatchpath}/{fname}"
 
