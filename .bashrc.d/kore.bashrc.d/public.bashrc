@@ -33,7 +33,7 @@ for fitem in (*mkvs, *mp4s):
     newpath = f"{newbatchpath}/{fname}"
 
     print(f"Moving '\''{fitem}'\'' to '\''{newpath}'\''")
-    # rename(fitem, newpath)
+    rename(fitem, newpath)
     
     if len([f for f in listdir(oldbatchpath) if not f.startswith(".")]) == 0:
         print(f"Removing empty batch dir '\''{newbatchpath}'\''")
@@ -62,7 +62,7 @@ for fitem in (*mkvs, *mp4s):
     dir_name = pattern.sub("", fname).strip()
     newpath = f"/callisto/Data/Upload/TV-Shows/Anime/{dir_name}/{fname}"
     print(f"Moving '\''{fitem}'\'' to '\''{newpath}'\''")
-    # rename(fitem, newpath)
+    rename(fitem, newpath)
 '
     fi
 }
