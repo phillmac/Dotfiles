@@ -2,7 +2,49 @@
 
 function unstage_video_files ()
 {
-    python3 -c \
+
+    batchdircount=$(find /callisto/Data/Staging/Webtorrent -maxdepth 1 -mindepth 1 -type d -iname '*batch*' | wc -l)
+    if (( 0$batchdircount > 0 )) 
+    then
+        python3 -c \
+'
+from glob import iglob
+from os import rename, makedirs, listdir, rmdir
+from os.path import basename, dirname, exists
+from re import compile
+
+mkvs = iglob("/callisto/Data/Staging/Webtorrent/*batch*/*.mkv")
+mp4s = iglob("/callisto/Data/Staging/Webtorrent/*batch*/*.mp4")
+
+pattern = compile(r"((\.\/)|(\[.*?\])|(-\s*[0-9]{2}(.[0-9])?\s*\[[0-9]{3,}p\])|(-\s*[0-9]{2}(.[0-9])?\s*\([0-9]{3,}p\))|\.mkv)")
+
+for fitem in (*mkvs, *mp4s):
+    oldbatchpath = dirname(fitem)
+    batchname = basename(oldbatchpath)
+    fname = basename(fitem)
+    dir_name = pattern.sub("", fname).strip()
+ 
+    newbatchpath = f"/callisto/Data/Upload/TV-Shows/Anime/{dir_name}/{batchname}"
+    if not exists(newbatchpath):
+        print(f"Creating {newbatchpath}")
+        mkdirs(newbatchpath)
+
+    newpath = f"{newbatchpath}/{fname}"
+
+    print(f"Moving '\''{fitem}'\'' to '\''{newpath}'\''")
+    # rename(fitem, newpath)
+    
+    if listdir(oldbatchpath).len == 0:
+        print(f"Removing empty batch dir '\''{newbatchpath}'\''")
+        rmdir(oldbatchpath)
+    else:
+        print(f"Batch dir '\''{newbatchpath}'\'' not empty. Leaving in place.")
+'
+
+    else
+
+
+        python3 -c \
 '
 from glob import iglob
 from os import rename
@@ -19,8 +61,9 @@ for fitem in (*mkvs, *mp4s):
     dir_name = pattern.sub("", fname).strip()
     newpath = f"/callisto/Data/Upload/TV-Shows/Anime/{dir_name}/{fname}"
     print(f"Moving '\''{fitem}'\'' to '\''{newpath}'\''")
-    rename(fitem, newpath)
+    # rename(fitem, newpath)
 '
+    fi
 }
 
 function public.anime.add ()
@@ -205,6 +248,8 @@ else:
 
 function public.anime.detect.add ()
 {
+    local anime_name
+
     while read -r anime_name
     do
         if [[ -n "${anime_name}" ]]
