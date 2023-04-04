@@ -35,7 +35,7 @@ for fitem in (*mkvs, *mp4s):
     print(f"Moving '\''{fitem}'\'' to '\''{newpath}'\''")
     # rename(fitem, newpath)
     
-    if listdir(oldbatchpath).len == 0:
+    if len(listdir(oldbatchpath)) == 0:
         print(f"Removing empty batch dir '\''{newbatchpath}'\''")
         rmdir(oldbatchpath)
     else:
