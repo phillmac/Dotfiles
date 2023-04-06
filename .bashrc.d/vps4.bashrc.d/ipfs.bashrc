@@ -161,10 +161,13 @@ function ipfs.phone.pins.missing ()
 }
 
 function public.root.hash () {
-    docker run \
+    (
+        set -eo pipefail
+        docker run \
         --rm \
         --net host \
-        curlimages/curl curl 'https://ipfs-admin.phillm.net/api/v0/files/stat?hash=true&arg=/Public' | jq -r .Hash
+        curlimages/curl curl --fail -s https://oasiscraft.org/root-hash.json | jq -r .Hash
+    )
 }
 
 
@@ -176,7 +179,7 @@ function ipfs-wasabi.public.pins.monitor () {
 
     while :
     do
-        public_hash=$(curl -s --fail https://oasiscraft.org/root-hash.json | jq -r '.Hash')
+        public_hash=$(public.root.hash)
         echo "$(date) rlast: '${rlast}' public_hash: '${public_hash}'" >&2
         if [[ "${rlast}" == "${public_hash}" ]]
         then
@@ -186,6 +189,38 @@ function ipfs-wasabi.public.pins.monitor () {
         fi
         echo "Pinning ${public_hash}" >&2
         ipfs-wasabi.public.pins.missing "${public_hash}"
+        rlast=${public_hash}
+        echo "$(date) Done" >&2
+    done
+}
+
+function vps4.public.pins.monitor () {
+    local public_hash
+    local rlast
+    local sleep_delay
+    sleep_delay=${1:-$IPFS_PIN_SLEEP}
+
+    while :
+    do
+        public_hash=$(public.root.hash)
+        echo "$(date) rlast: '${rlast}' public_hash: '${public_hash}'" >&2
+        if [[ "${rlast}" == "${public_hash}" ]]
+        then
+            echo "$(date) Waiting" >&2
+            sleep "${sleep_delay}"
+            continue
+        fi
+        echo "Pinning ${public_hash}" >&2
+        public.cids.missing && \
+        while read -r cid
+        do
+            echo "$(date) pinning $cid"
+            while ! _ipfs pin add --progress --timeout=4h "${cid}"
+            do
+                echo "$(date) Failed to pin ${cid}" >&2
+                sleep 5m
+            done
+        done < public.missing.cids.txt  
         rlast=${public_hash}
         echo "$(date) Done" >&2
     done
