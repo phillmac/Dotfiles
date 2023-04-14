@@ -47,6 +47,33 @@ function ipfs.repo.gc () {
 
 }
 
+function carpo.public.pins.monitor () {
+    local public_hash
+    local rlast
+    local sleep_delay
+    sleep_delay=${1:-$IPFS_PIN_SLEEP}
+
+    while :
+    do
+        public_hash=$(public.root.hash)
+        echo "$(date) rlast: '${rlast}' public_hash: '${public_hash}'" >&2
+        if [[ "${rlast}" == "${public_hash}" ]]
+        then
+            echo "$(date) Waiting" >&2
+            sleep "${sleep_delay}"
+            continue
+        fi
+        echo "Pinning ${public_hash}" >&2
+        public.pins.missing.local "${public_hash}"
+        rlast=${public_hash}
+        if [[ -n "${public_hash}" ]]
+        then
+            ipfs name publish --key=public --lifetime=72h --allow-offline "${public_hash}"
+        fi
+        echo "$(date) Done" >&2
+    done
+}
+
 
 export -f split-car
 export -f upload-car
