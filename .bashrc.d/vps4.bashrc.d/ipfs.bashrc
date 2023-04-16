@@ -198,6 +198,12 @@ function vps4.public.pins.monitor () {
     local public_hash
     local rlast
     local sleep_delay
+    local pincid
+    local _junk
+    local entry
+    local entrypath
+    local fname
+
     sleep_delay=${1:-$IPFS_PIN_SLEEP}
 
     while :
@@ -212,15 +218,32 @@ function vps4.public.pins.monitor () {
         fi
         echo "Pinning ${public_hash}" >&2
         public.cids.missing && \
-        while read -r cid
+        while read -r pincid
         do
-            echo "$(date) pinning $cid"
-            while ! _ipfs pin add --progress --timeout=4h "${cid}"
+            entry=$(grep "${pincid}" public.files.txt)
+            echo "$(date) pinning $entry"
+            while ! _ipfs pin add --progress --timeout=4h "${pincid}"
             do
-                echo "$(date) Failed to pin ${cid}" >&2
+                echo "$(date) Failed to pin ${entry}" >&2
                 sleep 5m
             done
-        done < public.missing.cids.txt  
+
+            read -r _junk entrypath <<< "${entry}"
+
+            if ! _ipfs files ls "/Public/${entrypath}" > dev/null 2>&1
+            then
+                echo "Creating missing mfs dir '/Public/${entrypath}'" >&2
+                _ipfs files mkdir -p "/Public/${entrypath}"
+            fi
+
+            fname=$(basename "${entrypath}")
+            dname=$(dirname "${entrypath}")
+
+            if ! ipfs.mfs.exists "${fname}" "/Public/${dname}"
+            then
+                ipfs files cp "/ipfs/${pincid}" "/Public/${entrypath}"
+            fi
+        done < public.missing.cids.txt
         rlast=${public_hash}
         echo "$(date) Done" >&2
     done
