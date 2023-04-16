@@ -228,16 +228,16 @@ function vps4.public.pins.monitor () {
                 sleep 5m
             done
 
-            read -r _junk entrypath <<< "${entry}"
-
-            if ! _ipfs files ls "/Public/${entrypath}" > dev/null 2>&1
-            then
-                echo "Creating missing mfs dir '/Public/${entrypath}'" >&2
-                _ipfs files mkdir -p "/Public/${entrypath}"
-            fi
+            IFS='/' read -r _junk entrypath <<< "${entry}"
 
             fname=$(basename "${entrypath}")
             dname=$(dirname "${entrypath}")
+
+            if ! _ipfs files ls "/Public/${dname}" > /dev/null 2>&1
+            then
+                echo "Creating missing mfs dir '/Public/${dname}'" >&2
+                _ipfs files mkdir -p "/Public/${dname}"
+            fi
 
             if ! ipfs.mfs.exists "${fname}" "/Public/${dname}"
             then
