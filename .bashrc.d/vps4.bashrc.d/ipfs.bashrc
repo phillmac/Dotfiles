@@ -241,7 +241,7 @@ function vps4.public.pins.monitor () {
 
             if ! ipfs.mfs.exists "${fname}" "/Public/${dname}"
             then
-                ipfs files cp "/ipfs/${pincid}" "/Public/${entrypath}"
+                _ipfs files cp "/ipfs/${pincid}" "/Public/${entrypath}"
             fi
         done < public.missing.cids.txt
         rlast=${public_hash}
