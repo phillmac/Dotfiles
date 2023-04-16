@@ -233,16 +233,25 @@ function vps4.public.pins.monitor () {
             fname=$(basename "${entrypath}")
             dname=$(dirname "${entrypath}")
 
+            echo "entrypath is ${entrypath}" >&2
+            echo "fname is ${fname}" >&2
+            echo "dname is ${dname}" >&2
+
+            if _ipfs files ls "/Public/${entrypath}" > /dev/null 2>&1
+            then
+                echo "${fname} already exists in mfs" >&2
+                continue
+            fi
+
             if ! _ipfs files ls "/Public/${dname}" > /dev/null 2>&1
             then
                 echo "Creating missing mfs dir '/Public/${dname}'" >&2
                 _ipfs files mkdir -p "/Public/${dname}"
             fi
 
-            if ! ipfs.mfs.exists "${fname}" "/Public/${dname}"
-            then
-                _ipfs files cp "/ipfs/${pincid}" "/Public/${entrypath}"
-            fi
+            echo "Copying /ipfs/{pincid} to /Public/${entrypath}" >&2
+            _ipfs files cp "/ipfs/${pincid}" "/Public/${entrypath}"
+
         done < public.missing.cids.txt
         rlast=${public_hash}
         echo "$(date) Done" >&2
