@@ -163,7 +163,7 @@ function ipfs.mfs.exists ()
         return 0
     fi
 
-    retun 1
+    return 1
 }
 
 function ipfs.mfs.create.dir ()
