@@ -172,9 +172,7 @@ function ipfs.mfs.create.dir ()
     local mfs_basedir=${2}
     local current_part=""
 
-    local IFS='/'
-
-    read -ra path_parts <<< "$create_path"
+    read -d '/' -ra path_parts <<< "$create_path"
 
     for part in "${path_parts[@]}"
     do
