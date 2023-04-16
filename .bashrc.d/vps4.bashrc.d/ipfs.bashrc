@@ -228,7 +228,7 @@ function vps4.public.pins.monitor () {
                 sleep 5m
             done
 
-            read -d '/' -r _junk entrypath <<< "${entry}"
+            IFS='/' read -r _junk entrypath <<< "${entry}"
 
             fname=$(basename "${entrypath}")
             dname=$(dirname "${entrypath}")

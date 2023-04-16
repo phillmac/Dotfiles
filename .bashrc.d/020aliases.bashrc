@@ -172,7 +172,9 @@ function ipfs.mfs.create.dir ()
     local mfs_basedir=${2}
     local current_part=""
 
-    read -d '/' -ra path_parts <<< "$create_path"
+    local IFS='/'
+
+    read -ra path_parts <<< "$create_path"
 
     for part in "${path_parts[@]}"
     do
@@ -190,19 +192,20 @@ function ipfs.mfs.create.dir ()
 }
 
 function ipfs_add_folder() {
-    local file
+    local fpath
     local fname
     local folder
     local file_hash
     local existing
     local isExisting=false
 
-    file="${1#'./'}"
+    fpath="${1#'./'}"
     folder="${2}"
-    fname=$(basename "${file}")
+    fname=$(basename "${fpath}")
 
 
-    if ipfs.mfs.exists "${fname}" "${folder}"; then
+    if _ipfs ls "${folder}/${fname}"
+    then
         echo "Skiping existing file ${fname} in folder ${folder}" >&2
         return
     fi
