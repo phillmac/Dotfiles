@@ -141,6 +141,85 @@ function ipfs-car () {
     docker run --rm -v "$(pwd)":/tmp -w /tmp --net none --log-driver none phillmac/ipfs-car "${@}"
 }
 
+function ipfs.mfs.exists ()
+{
+    local fname
+    local folder
+    local existing
+    local isExisting=false
+
+    iname="${1}"
+    mfspath="${2}"
+
+    while read -r existing
+    do
+        if [[ "${iname}" = "${existing}" ]]; then
+            isExisting=true
+        fi
+    done < <(_ipfs files ls "${mfspath}")
+
+    if [[ ${isExisting} = true ]]; then
+        echo "${iname} exists in mfs at ${mfspath}" >&2
+        return 0
+    fi
+
+    retun 1
+}
+
+function ipfs.mfs.create.dir ()
+{
+    local create_path=${1}
+    local mfs_basedir=${2}
+    local current_part=""
+
+    local IFS='/'
+
+    read -ra path_parts <<< "$create_path"
+
+    for part in "${path_parts[@]}"
+    do
+        current_part="$current_part/$part"
+        echo "Current part: $current_part"
+
+        if ! ipfs.mfs.exists "${part}" "${mfs_basedir}/${last_path}"
+        then
+            echo "Creating missing mfs dir ${mfs_basedir}/${current_part}" >&2
+            _ipfs files mkdir "${mfs_basedir}/${current_part}"
+        fi
+
+        last_path="$current_part"
+    done
+}
+
+function ipfs_add_folder() {
+    local file
+    local fname
+    local folder
+    local file_hash
+    local existing
+    local isExisting=false
+
+    file="${1#'./'}"
+    folder="${2}"
+    fname=$(basename "${file}")
+
+
+    if ipfs.mfs.exists "${fname}" "${folder}"; then
+        echo "Skiping existing file ${fname} in folder ${folder}" >&2
+        return
+    fi
+
+    echo "$(date) Adding ${fname}" >&2
+
+    file_hash=$(ipfs add --pin=false -Q "${file}")
+
+    echo "$(date) Copying ${file_hash} for ${fname} to ${folder}" >&2
+
+    ipfs files cp "/ipfs/${file_hash}" "${folder}/${fname}"
+
+    echo "$(date) Done" >&2
+}
+
 function ipfs_find_add_folder() {
     local patern
     local folder
@@ -159,39 +238,21 @@ function ipfs_find_add_folder() {
     echo "Found ${files_count} files" >&2
 }
 
-function ipfs_add_folder() {
-    local file
-    local fname
-    local folder
-    local file_hash
-    local existing
-    local isExisting=false
+function ipfs_cache_hash () {
+    local hash
 
-    file="${1#'./'}"
-    folder="${2}"
-    fname=$(basename "${file}")
+    hash=${1}
 
-    while read -r existing
-    do
-        if [[ "${fname}" = "${existing}" ]]; then
-            isExisting=true
-        fi
-    done < <(ipfs files ls "${folder}")
-
-    if [[ ${isExisting} = true ]]; then
-        echo "Skiping existing file ${fname} in folder ${folder}" >&2
-        return
+    if [[ -z "${hash}" ]]
+    then
+        read -r -p 'Enter hash: ' hash
     fi
 
-    echo "$(date) Adding ${fname}" >&2
-
-    file_hash=$(ipfs add --pin=false -Q "${file}")
-
-    echo "$(date) Copying  ${file_hash} for ${fname} to ${folder}" >&2
-
-    ipfs files cp "/ipfs/${file_hash}" "${folder}/${fname}"
-
-    echo "$(date) Done" >&2
+    parallel --ungroup --env load_bashrc.d -S titan "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
+    parallel --ungroup --env load_bashrc.d -S charon "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
+    parallel --ungroup --env load_bashrc.d -S io "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
+    parallel --ungroup --env load_bashrc.d -S vps3.phillm.net "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
+    parallel --ungroup --env load_bashrc.d -S vps1.phillm.net "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
 }
 
 function ipfs_provide_folder() {
@@ -301,22 +362,6 @@ function load_bashrc.d () {
     done
 }
 
-function ipfs_cache_hash () {
-    local hash
-
-    hash=${1}
-
-    if [[ -z "${hash}" ]]
-    then
-        read -r -p 'Enter hash: ' hash
-    fi
-
-    parallel --ungroup --env load_bashrc.d -S titan "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
-    parallel --ungroup --env load_bashrc.d -S charon "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
-    parallel --ungroup --env load_bashrc.d -S io "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
-    parallel --ungroup --env load_bashrc.d -S vps3.phillm.net "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
-    parallel --ungroup --env load_bashrc.d -S vps1.phillm.net "load_bashrc.d && ipfs.get.recursive" ::: "${hash}"
-}
 
 export -f _curl
 export -f ipfs
