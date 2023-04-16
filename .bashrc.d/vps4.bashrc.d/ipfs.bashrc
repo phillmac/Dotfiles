@@ -249,7 +249,7 @@ function vps4.public.pins.monitor () {
                 _ipfs files mkdir -p "/Public/${dname}"
             fi
 
-            echo "Copying /ipfs/{pincid} to /Public/${entrypath}" >&2
+            echo "Copying /ipfs/${pincid} to /Public/${entrypath}" >&2
             _ipfs files cp "/ipfs/${pincid}" "/Public/${entrypath}"
 
         done < public.missing.cids.txt
