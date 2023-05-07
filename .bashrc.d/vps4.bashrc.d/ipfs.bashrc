@@ -217,7 +217,7 @@ function vps4.public.pins.monitor () {
             continue
         fi
         echo "Pinning ${public_hash}" >&2
-        public.cids.missing && \
+        public.cids.missing &&
         while read -r pincid
         do
             entry=$(grep "${pincid}" public.files.txt)
@@ -251,6 +251,7 @@ function vps4.public.pins.monitor () {
 
             echo "Copying /ipfs/${pincid} to /Public/${entrypath}" >&2
             _ipfs files cp "/ipfs/${pincid}" "/Public/${entrypath}"
+            _ipfs name publish --key=public "$(ipfs files stat --hash /Public)"
 
         done < public.missing.cids.txt
         rlast=${public_hash}
