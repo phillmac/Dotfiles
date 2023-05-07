@@ -245,16 +245,17 @@ function vps4.public.pins.monitor () {
 
             if ! _ipfs files ls "/Public/${dname}" > /dev/null 2>&1
             then
-                echo "Creating missing mfs dir '/Public/${dname}'" >&2
+                echo "$(date) Creating missing mfs dir '/Public/${dname}'" >&2
                 _ipfs files mkdir -p "/Public/${dname}"
             fi
 
-            echo "Copying /ipfs/${pincid} to /Public/${entrypath}" >&2
+            echo "$(date) Copying /ipfs/${pincid} to /Public/${entrypath}" >&2
             _ipfs files cp "/ipfs/${pincid}" "/Public/${entrypath}"
-            _ipfs name publish --key=public "$(ipfs files stat --hash /Public)"
 
         done < public.missing.cids.txt
         rlast=${public_hash}
+        echo "$(date) Publishing public key" >&2
+        _ipfs name publish --key=public "$(ipfs files stat --hash /Public)"
         echo "$(date) Done" >&2
     done
 }
