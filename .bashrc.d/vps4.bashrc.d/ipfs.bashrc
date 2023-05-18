@@ -260,3 +260,8 @@ function vps4.public.pins.monitor () {
     done
 }
 
+function archive.publish ()
+{
+    archive.ipns.update '' /ipns/staging.ipfs-archive.online
+    archive.ipns.update staging "$(ipfs files stat --hash /ipfs-archive.online)"
+}
