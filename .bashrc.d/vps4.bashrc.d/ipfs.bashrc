@@ -260,6 +260,22 @@ function vps4.public.pins.monitor () {
     done
 }
 
+function ipfs.files.public.pin () {
+    ipfs files stat --hash /Public > public.cid.txt
+    ipfs.ls.recursive.files "$(< public.cid.txt)" | tee public.files.txt
+    ipfs pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > pins.txt
+    comm -23 public.files.txt pins.txt > public.files.missing.txt
+    while read -r cid info
+    do
+        echo "$(date) pinning $info $cid"
+        while ! _ipfs pin add --progress --timeout=4h "${cid}"
+        do
+            date
+            sleep 5m
+        done
+    done < public.files.missing.txt
+}
+
 function archive.publish ()
 {
     archive.ipns.update '' /ipns/staging.ipfs-archive.online
