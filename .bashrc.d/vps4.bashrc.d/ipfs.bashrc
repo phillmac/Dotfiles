@@ -221,12 +221,6 @@ function vps4.public.pins.monitor () {
         while read -r pincid
         do
             entry=$(grep "${pincid}" public.files.txt)
-            echo "$(date) pinning $entry"
-            while ! _ipfs pin add --progress --timeout=4h "${pincid}"
-            do
-                echo "$(date) Failed to pin ${entry}" >&2
-                sleep 5m
-            done
 
             IFS='/' read -r _junk entrypath <<< "${entry}"
 
@@ -251,6 +245,13 @@ function vps4.public.pins.monitor () {
 
             echo "$(date) Copying /ipfs/${pincid} to /Public/${entrypath}" >&2
             _ipfs files cp "/ipfs/${pincid}" "/Public/${entrypath}"
+
+            echo "$(date) pinning $entry" >&2
+            while ! _ipfs pin add --progress --timeout=4h "${pincid}"
+            do
+                echo "$(date) Failed to pin ${entry}" >&2
+                sleep 5m
+            done
 
         done < public.missing.cids.txt
         rlast=${public_hash}
