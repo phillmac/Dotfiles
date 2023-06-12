@@ -180,17 +180,17 @@ function public.list.preload ()
 {
     local cid
     cid=$( public.root.hash )
-    echo  "$(date) Janus        $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.42.208:8080       ipfs.ls.recursive "${cid}" 2> /dev/null | tee janus.public.preload.log.txt))"  > janus.public.preload.count.txt  &
-    echo "$(date) Carpo         $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.50.51:8080        ipfs.ls.recursive "${cid}" 2> /dev/null | tee carpo.public.preload.log.txt))"  > carpo.public.preload.count.txt  &
-    echo "$(date) Charon        $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.30.57:8080        ipfs.ls.recursive "${cid}" 2> /dev/null | tee charon.public.preload.log.txt))" > charon.public.preload.count.txt &
-    echo "$(date) Io            $(wc -l < <(IPFS_HTTP_GATEWAY=http://192.168.20.33:8080 ipfs.ls.recursive "${cid}" 2> /dev/null | tee io.public.preload.log.txt))"     > io.public.preload.count.txt     &
-    echo "$(date) Titan         $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.35.51:8080        ipfs.ls.recursive "${cid}" 2> /dev/null | tee titan.public.preload.log.txt))"  > titan.public.preload.count.txt  &
-    echo "$(date) VPS1          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps1.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null | tee vps1.public.preload.log.txt))"   > vps1.public.preload.count.txt   &
-    echo "$(date) VPS2          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps2.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null | tee vps2.public.preload.log.txt))"   > vps2.public.preload.count.txt   &
-    echo "$(date) VPS3          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps3.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null | tee vps3.public.preload.log.txt))"   > vps3.public.preload.count.txt   &
-    echo "$(date) VPS4          $(wc -l < <(CURL_USR=user CURL_PASS=rrVfzbvRYTwNABCxJWjeHFu4 IPFS_HTTP_GATEWAY=https://vps4.phillm.net ipfs.ls.recursive "${cid}" 2> /dev/null | tee vps4.public.preload.log.txt))" > vps4.public.preload.count.txt  &
+    echo  "$(date) Janus        $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.42.208:8080       ipfs.ls.recursive "${cid}" 2> /dev/null | tee ~/janus.public.preload.log.txt))"  > ~/janus.public.preload.count.txt  &
+    echo "$(date) Carpo         $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.50.51:8080        ipfs.ls.recursive "${cid}" 2> /dev/null | tee ~/carpo.public.preload.log.txt))"  > ~/carpo.public.preload.count.txt  &
+    echo "$(date) Charon        $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.30.57:8080        ipfs.ls.recursive "${cid}" 2> /dev/null | tee ~/charon.public.preload.log.txt))" > ~/charon.public.preload.count.txt &
+    echo "$(date) Io            $(wc -l < <(IPFS_HTTP_GATEWAY=http://192.168.20.33:8080 ipfs.ls.recursive "${cid}" 2> /dev/null | tee ~/io.public.preload.log.txt))"     > ~/io.public.preload.count.txt     &
+    echo "$(date) Titan         $(wc -l < <(IPFS_HTTP_GATEWAY=192.168.35.51:8080        ipfs.ls.recursive "${cid}" 2> /dev/null | tee ~/titan.public.preload.log.txt))"  > ~/titan.public.preload.count.txt  &
+    echo "$(date) VPS1          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps1.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null | tee ~/vps1.public.preload.log.txt))"   > ~/vps1.public.preload.count.txt   &
+    echo "$(date) VPS2          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps2.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null | tee ~/vps2.public.preload.log.txt))"   > ~/vps2.public.preload.count.txt   &
+    echo "$(date) VPS3          $(wc -l < <(IPFS_HTTP_GATEWAY=https://vps3.phillm.net   ipfs.ls.recursive "${cid}" 2> /dev/null | tee ~/vps3.public.preload.log.txt))"   > ~/vps3.public.preload.count.txt   &
+    echo "$(date) VPS4          $(wc -l < <(CURL_USR=user CURL_PASS=rrVfzbvRYTwNABCxJWjeHFu4 IPFS_HTTP_GATEWAY=https://vps4.phillm.net ipfs.ls.recursive "${cid}" 2> /dev/null | tee ~/vps4.public.preload.log.txt))" > ~/vps4.public.preload.count.txt  &
     wait
-    cat ./*.preload.count.txt
+    cat ~/*.preload.count.txt
     echo "$(date) Done"
 }
 
