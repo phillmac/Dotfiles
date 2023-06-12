@@ -204,7 +204,7 @@ function ipfs_add_folder() {
     fname=$(basename "${fpath}")
 
 
-    if _ipfs ls "${folder}/${fname}"
+    if _ipfs files ls "${folder}/${fname}"
     then
         echo "Skiping existing file ${fname} in folder ${folder}" >&2
         return
