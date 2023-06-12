@@ -2,12 +2,12 @@
 
 function source_dir_files ()
 {
-    for file in "${1}"/*.bashrc
+    for fname in "${1}"/*.bashrc
     do
         [[ "${SOURCE_DEBUG}" ]] || [[ "${BASH_RC_D_DEBUG}" ]] && {
-            echo "Sourcing ${file}" >&2
+            echo "Sourcing ${fname}" >&2
         }
-        source "${file}"
+        source "${fname}"
     done
 }
 
@@ -212,7 +212,7 @@ function ipfs_add_folder() {
 
     echo "$(date) Adding ${fname}" >&2
 
-    file_hash=$(ipfs add --pin=false -Q "${file}")
+    file_hash=$(ipfs add --pin=false -Q "${fname}")
 
     echo "$(date) Copying ${file_hash} for ${fname} to ${folder}" >&2
 
@@ -355,10 +355,10 @@ function rclone () {
 }
 
 function load_bashrc.d () {
-    for file in "${HOME}"/.bashrc.d/*.bashrc
+    for fname in "${HOME}"/.bashrc.d/*.bashrc
     do
-        if [[ -f "${file}" && -r "${file}" ]]; then
-            source "${file}"
+        if [[ -f "${fname}" && -r "${fname}" ]]; then
+            source "${fname}"
         fi
     done
 }
