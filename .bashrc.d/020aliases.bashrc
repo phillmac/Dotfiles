@@ -214,6 +214,12 @@ function ipfs_add_folder() {
 
     file_hash=$(ipfs add --pin=false -Q "${fname}")
 
+    if [[ -z "${file_hash}" ]]
+    then
+        echo "Empty file hash for ${fname}" >&2
+        return 255
+    fi
+
     echo "$(date) Copying ${file_hash} for ${fname} to ${folder}" >&2
 
     ipfs files cp "/ipfs/${file_hash}" "${folder}/${fname}"
