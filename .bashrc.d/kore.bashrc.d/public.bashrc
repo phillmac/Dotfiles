@@ -77,6 +77,7 @@ function public.anime.add ()
 
     if [[ ! -d "/callisto/Data/Upload/TV-Shows/Anime/${1}" ]]
     then
+        echo "Creating ipfs upload dir /callisto/Data/Upload/TV-Shows/Anime/${1}"
         mkdir -v "/callisto/Data/Upload/TV-Shows/Anime/${1}"
     fi
 
