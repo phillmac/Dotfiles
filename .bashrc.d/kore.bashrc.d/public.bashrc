@@ -4,7 +4,7 @@ function unstage_video_files ()
 {
 
     batchdircount=$(find /callisto/Data/Staging/Webtorrent -maxdepth 1 -mindepth 1 -type d -iname '*batch*' | wc -l)
-    if (( 0$batchdircount > 0 )) 
+    if (( 0$batchdircount > 0 ))
     then
         echo "Unstaging in batch mode"
         python3 -c \
@@ -24,7 +24,7 @@ for fitem in (*mkvs, *mp4s):
     batchname = basename(oldbatchpath)
     fname = basename(fitem)
     dir_name = pattern.sub("", fname).strip()
- 
+
     newbatchpath = f"/callisto/Data/Upload/TV-Shows/Anime/{dir_name}/{batchname}"
     if not exists(newbatchpath):
         print(f"Creating {newbatchpath}")
@@ -34,7 +34,7 @@ for fitem in (*mkvs, *mp4s):
 
     print(f"Moving '\''{fitem}'\'' to '\''{newpath}'\''")
     rename(fitem, newpath)
-    
+
     if len([f for f in listdir(oldbatchpath) if not f.startswith(".")]) == 0:
         print(f"Removing empty batch dir '\''{newbatchpath}'\''")
         rmdir(oldbatchpath)
