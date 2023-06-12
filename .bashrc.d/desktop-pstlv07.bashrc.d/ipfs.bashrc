@@ -12,19 +12,26 @@ function ipfs.get.recursive.files () {
     done < "${1}".files.list.txt
 }
 
-ipfs.add.export.carpo () {
+function ipfs.add.export.carpo () {
     local dname=${1}
     local args=( "$@" );
     local dpath=( "${args[@]:1}" )
 
-    local dcid=$(ipfs add -Q -r -w --pin=false "${dname}")
-    local empty=$(ipfs object new unixfs-dir)
+    local dcid
+    local empty
     local elem
+    local mfspath
+
+    dcid=$(ipfs add -Q -r -w --pin=false "${dname}")
+    empty=$(ipfs object new unixfs-dir)
 
     for elem in "${dpath[@]}"
     do
         dcid=$(ipfs object patch add-link "${empty}" "${elem}" "${dcid}")
+        mfspath="${elem}/${mfspath}"
     done
+
+    echo "/ipfs/${dcid} /${mfspath}" >&2
 
     if ! grep -q "${dcid}" "/cygdrive/e/Staging/staging cids.txt"
     then
@@ -33,9 +40,12 @@ ipfs.add.export.carpo () {
         /cygdrive/c/rclone/rclone move -v "/cgydrive/h/ipfs-export/${dcid}.car" carpo:/data/ipfs-export
 
         ssh -p 35681 phill@carpo "docker run --rm -v /data/ipfs-export:/data/ipfs-export peelvalley/rclone-b2 rclone move -v '/data/ipfs-export/${dcid}.car' phill-gdrive:ipfs-export"
-        ssh phill@vps4 staging.gdrive.import "${dcid}"
+
+        ssh phill@vps4 "docker run --rm peelvalley/rclone-b2 'rclone cat phill-gdrive:ipfs-export/${dcid}.car' | mbuffer | docker exec -i phill-dev_ipfs_1 ipfs dag import --pin-roots=false"
+
+        ssh phill@vps4 ipfs.files.cp.deep "/ipfs/${dcid}" "'/${mfspath}'"
+
         echo "${dcid}" >> "/cygdrive/e/Staging/staging cids.txt"
     fi
-
 
 }
