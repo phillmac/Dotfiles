@@ -262,19 +262,34 @@ function vps4.public.pins.monitor () {
 }
 
 function ipfs.files.public.pin () {
-    ipfs files stat --hash /Public > public.cid.txt
-    ipfs.ls.recursive.files "$(< public.cid.txt)" | tee public.files.txt
+    local mfs_public_hash
+    local entry
+    local cids_count
+    local progress
+
+    mfs_public_hash=$(_ipfs files stat --hash /Public)
+
+    ipfs.ls.recursive.files "${mfs_public_hash}" | tee mfs.public.files.txt | cut -d ' ' -f 1 | sort --unique > mfs.public.files.cids.txt
+
     ipfs pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > pins.txt
-    comm -23 public.files.txt pins.txt > public.files.missing.txt
-    while read -r cid info
+
+    comm -23 mfs.public.files.cids.txt pins.txt > mfs.public.files.missing.txt
+
+    cids_count=$(wc -l < mfs.public.files.missing.txt)
+    ((progress=1))
+
+    while read -r cid
     do
-        echo "$(date) pinning $info $cid"
+
+        entry=$(grep "${cid}" mfs.public.files.txt)
+        echo "$(date) pinning ${entry} [${progress}/${cids_count}]" >&2
         while ! _ipfs pin add --progress --timeout=4h "${cid}"
         do
             date
-            sleep 5m
+            sleep 300
         done
-    done < public.files.missing.txt
+        ((progress+=1))
+    done < mfs.public.files.missing.txt
 }
 
 function archive.publish ()

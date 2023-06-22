@@ -89,6 +89,8 @@ function public.pins.missing.local ()
 {
     local entry
     local pincid
+    local cids_count
+    local progress
 
     public.cids.missing
 
