@@ -5,6 +5,7 @@ function staging.add.export () {
     local args=( "$@" );
     local dpath=( "${args[@]:1}" )
 
+    local bname
     local dcid
     local empty
     local elem
@@ -36,6 +37,21 @@ function staging.add.export () {
         echo "${dcid}" >> "/cygdrive/e/Staging/staging cids.txt"
     else
         echo "Found ${dcid} already exported" >&2
+        bname=$(basename "${dname}")
+        dnamepath=$(dirname "${dname}")
+
+        (
+            cd "${dnamepath}" \
+             &&  /cygdrive/c/rclone/rclone.exe move \
+                    -vvv \
+                    --checksum \
+                    --transfers 1 \
+                    --delete-empty-src-dirs \
+                    --include "${bname}/*" \
+                    --min-age 30d \
+                    . \
+                    "b2-phill-all:Archive-Store/_/Staging/${mfspath}"
+        )
     fi
 
 }
