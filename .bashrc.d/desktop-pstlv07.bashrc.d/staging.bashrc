@@ -62,7 +62,7 @@ function laptop.staging.add.export ()
         cd "/cygdrive/e/Staging/Laptop/Downloads/${1}" && {
             for sdname in *
             do
-                if [[ -d  "/cygdrive/c/Staging/Laptop/Downloads/${1}/${sdname}" ]]
+                if [[ -d  "/cygdrive/e/Staging/Laptop/Downloads/${1}/${sdname}" ]]
                 then
                     echo "$(date) adding ${sdname}" >&2
                     staging.add.export "E:\Staging\Laptop\Downloads\\${1}\\${sdname}" "${1}" Downloads Laptop
