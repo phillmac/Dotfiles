@@ -59,6 +59,17 @@ function staging.add.export () {
 function laptop.staging.add.export ()
 {
     (
-        cd "/cygdrive/e/Staging/Laptop/Downloads/${1}" && for sdname in *; do  echo "$(date) adding ${sdname}"; staging.add.export "E:\Staging\Laptop\Downloads\\${1}\\${sdname}" "${1}" Downloads Laptop; done
+        cd "/cygdrive/e/Staging/Laptop/Downloads/${1}" && {
+            for sdname in *
+            do
+                if [[ -d  "/cygdrive/c/Staging/Laptop/Downloads/${1}/${sdname}" ]]
+                then
+                    echo "$(date) adding ${sdname}" >&2
+                    staging.add.export "E:\Staging\Laptop\Downloads\\${1}\\${sdname}" "${1}" Downloads Laptop
+                else
+                    echo "Skipping nonexistent dir ${sdname}" >&2
+                fi
+            done
+        }
     )
 }
