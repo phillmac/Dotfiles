@@ -40,10 +40,15 @@ function staging.add.export () {
         bname=$(basename "${dname}")
         dnamepath=$(dirname "${dname}")
 
+        echo "bname: ${bname}" >&2
+        echo "dnamepath: ${dnamepath}" >&2
+
+
         (
             cd "${dnamepath}" \
+             && pwd \
              &&  /cygdrive/c/rclone/rclone.exe move \
-                    -vvv \
+                    -vv \
                     --checksum \
                     --transfers 1 \
                     --delete-empty-src-dirs \
