@@ -297,3 +297,10 @@ function archive.publish ()
     archive.ipns.update '' /ipns/staging.ipfs-archive.online
     archive.ipns.update staging "$(ipfs files stat --hash /ipfs-archive.online)"
 }
+
+ipfs.dag.import.gdrive ()
+{
+    ( set -eo pipefail
+    rclone cat "phill-gdrive:ipfs-export/${1}.car" | mbuffer | ipfs.dag.import )
+}
+
