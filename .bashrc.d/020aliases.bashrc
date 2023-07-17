@@ -369,6 +369,11 @@ function load_bashrc.d () {
     done
 }
 
+function sync-develop ()
+{
+    git pull && git push && git checkout develop && git pull && git merge master && git push && git checkout master
+}
+
 
 export -f _curl
 export -f ipfs
