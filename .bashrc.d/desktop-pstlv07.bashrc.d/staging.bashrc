@@ -54,6 +54,7 @@ function staging.add.export () {
                     --delete-empty-src-dirs \
                     --include "${bname}/*" \
                     --min-age 30d \
+                    --local-encoding None \
                     . \
                     "b2-phill-all:Archive-Store/_/Staging/${mfspath}"
         )
