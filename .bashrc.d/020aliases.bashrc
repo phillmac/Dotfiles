@@ -381,6 +381,11 @@ function sync-develop-github ()
     git pull github master && git push github master && git checkout develop && git pull github develop && git merge master && git push github develop && git checkout master
 }
 
+function sync-develop-phill-github ()
+{
+    git pull github master && git push github master && git checkout develop && git pull github develop && git merge master && git push github develop && git checkout master
+}
+
 
      
 
