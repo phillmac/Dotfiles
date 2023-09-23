@@ -371,8 +371,22 @@ function load_bashrc.d () {
 
 function sync-develop ()
 {
-    git pull && git push && git checkout develop && git pull && git merge master && git push && git checkout master
+    git pull origin master && git push origin master && git checkout develop && git pull origin develop && git merge master && git push origin develop && git checkout master
 }
+
+function sync-develop-github ()
+{
+    git pull github master && git push github master && git checkout develop && git pull github develop && git merge master && git push github develop && git checkout master
+}
+
+function sync-develop-phill-github ()
+{
+    git pull phill-github master && git push phill-github master && git checkout develop && git pull phill-github develop && git merge master && git push phill-github develop && git checkout master
+}
+
+
+     
+
 
 
 export -f _curl
