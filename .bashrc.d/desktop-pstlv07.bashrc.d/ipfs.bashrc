@@ -13,11 +13,12 @@ function ipfs.get.recursive.files () {
 }
 
 function ipfs.export.dirs () {
+    ipfs ls --stream=true --size=false "${1}" | tee ipfs.ls.txt
     while read -r cid dirname
         do
             mkdir -pv "/cygdrive/h/ipfs-export/${1}/${dirname}"
 	        echo "$(date) Exporting ${cid} ${dirname}" >&2
             ipfs dag export -p "${cid}" > "/cygdrive/h/ipfs-export/${1}/${dirname}${cid}.car"
             /cygdrive/c/rclone/rclone move -v --include "${cid}.car" "H:\ipfs-export" "carpo:/data/ipfs-staging/Mimas/Downloads"
-        done < <(ipfs ls --stream=true --size=false "${1}")
+        done < ipfs.ls.txt
 }
