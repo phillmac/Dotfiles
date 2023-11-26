@@ -18,7 +18,7 @@ function ipfs.export.dirs () {
         do
             mkdir -pv "/cygdrive/h/ipfs-export/${1}/${dirname}"
 	        echo "$(date) Exporting ${cid} ${dirname}" >&2
-            ipfs dag export -p "${cid}" > "/cygdrive/h/ipfs-export/${1}/${dirname}${cid}.car"
+            while ! ipfs dag export -p "${cid}" > "/cygdrive/h/ipfs-export/${1}/${dirname}${cid}.car"; do sleep 1; done
             /cygdrive/c/rclone/rclone move -v --include "${cid}.car" "H:\ipfs-export" "carpo:/data/ipfs-staging/Mimas/Downloads"
         done < ipfs.ls.txt
 }
