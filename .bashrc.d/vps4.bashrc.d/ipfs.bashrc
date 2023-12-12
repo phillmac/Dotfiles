@@ -298,9 +298,17 @@ function archive.publish ()
     archive.ipns.update staging "$(ipfs files stat --hash /ipfs-archive.online)"
 }
 
-ipfs.dag.import.gdrive ()
+function ipfs.dag.import.gdrive ()
 {
     ( set -eo pipefail
     rclone cat "phill-gdrive:ipfs-export/${1}.car" | mbuffer | ipfs.dag.import )
 }
 
+function ipfs.export.deeparchive ()
+{
+    while ! rclonei rcat -vvv --s3-chunk-size=250M "ipfs-deep-archive:ipfs-deep-archive/${2}/${1}.car" < <(ipfs dag export --timeout=3h --progress=false "${1}")
+    do
+        echo "$(date) Retrying"
+        sleep 30
+    done
+}
