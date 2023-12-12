@@ -360,6 +360,10 @@ function rclone () {
 
 }
 
+function rclonei () {
+    docker run -i--rm --net host --log-driver none -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
+}
+
 function load_bashrc.d () {
     for fname in "${HOME}"/.bashrc.d/*.bashrc
     do
@@ -385,7 +389,7 @@ function sync-develop-phill-github ()
 }
 
 
-     
+
 
 
 
