@@ -100,6 +100,20 @@ function ipfs-wasabi.public.pins.monitor () {
     done
 }
 
+function ipfs.export.backblaze.batch ()
+{
+    while read -r cid fpath
+    do
+        echo "$(date) Exporting ${cid} - ${fpath}"
+
+        while ! ipfs-backblaze dag import < <(mbuffer < <(ipfs dag export --timeout=3h --progress=false "${cid}"))
+        do
+            echo "$(date) Retrying"
+            sleep 30
+        done
+    done
+}
+
 export IPFS_GET_BATCH_COUNT
 export IPFS_GET_TIMEOUT
 export IPFS_PIN_TIMEOUT
