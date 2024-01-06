@@ -69,8 +69,8 @@ function archive.masonry.dev.combine ()
 
 
     echo 'Fetching io'
-    curl "http://io.phillm.net:8080/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "http://io.phillm.net:8080/api/v0/dag/get?arg=${result}" > /dev/null
+    curl "http://io2.phillm.net:8080/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "http://io2.phillm.net:8080/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching janus'
     curl "http://192.168.42.208:8080/api/v0/get?arg=${intermediate}" > /dev/null
