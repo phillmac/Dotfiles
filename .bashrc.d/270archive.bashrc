@@ -90,8 +90,8 @@ function archive.masonry.dev.combine ()
     curl "https://api.vps3.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching api1'
-    curl "http://api1.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "http://api1.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
+    curl "https://api1.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "https://api1.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching vps4'
     curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://vps4.phillm.net/api/v0/get?arg=${intermediate}" > /dev/null
