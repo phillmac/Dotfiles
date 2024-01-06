@@ -29,7 +29,21 @@ function masonry.dev.combine ()
 
     intermediate=$(ipfs object patch "${empty_dir}" add-link galleries "${masonry_cid}")
     echo "Intermediate dir ${intermediate}"
+
+    intermediate=$(ipfs object patch "${intermediate}" add-link favourites "${masonry_cid}")
+    echo "Intermediate dir ${intermediate}"
+
+    intermediate=$(ipfs object patch "${intermediate}" add-link dmca.txt QmRai1uve3mF137HXYqVvP5vCAWrD8ZRPVRfn8onsYUFAb )
+    echo "Intermediate dir ${intermediate}"
+
+    intermediate=$(ipfs object patch "${intermediate}" add-link copyright.txt QmRai1uve3mF137HXYqVvP5vCAWrD8ZRPVRfn8onsYUFAb )
+    echo "Intermediate dir ${intermediate}"
+
+    intermediate=$(ipfs object patch "${intermediate}" add-link robots.txt QmSiUsNRrkDi3ERbsuxjTGz8N6EZe9n997sUxyFNUGBMaG )
+    echo "Intermediate dir ${intermediate}"
+
     result=$(ipfs object patch "${intermediate}" add-link settings "${settings_cid}")
+    echo "Result dir ${result}"
 
     echo "https://ipfs.io/ipfs/${result}"
     echo "https://cf-ipfs.com/ipfs/${result}"
