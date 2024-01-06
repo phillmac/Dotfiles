@@ -105,6 +105,9 @@ function archive.masonry.dev.combine ()
     curl "https://api.vps5.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
     curl "https://api.vps5.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
+    echo "Result dir ${result}"
+
+
 }
 
 function archive.ipns.update () {
