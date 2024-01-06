@@ -63,34 +63,45 @@ function archive.masonry.dev.combine ()
     echo "https://cf-ipfs.com/ipfs/${result}"
     echo
 
+    echo 'Fetching external7'
     curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/get?arg=${intermediate}" > /dev/null
     curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/dag/get?arg=${result}" > /dev/null
 
-    curl "http://io2.phillm.net:8080/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "http://io2.phillm.net:8080/api/v0/dag/get?arg=${result}" > /dev/null
 
+    echo 'Fetching io'
+    curl "http://io.phillm.net:8080/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "http://io.phillm.net:8080/api/v0/dag/get?arg=${result}" > /dev/null
+
+    echo 'Fetching janus'
     curl "http://192.168.42.208:8080/api/v0/get?arg=${intermediate}" > /dev/null
     curl "http://192.168.42.208:8080/api/v0/dag/get?arg=${result}" > /dev/null
 
 
-    curl "http://api.vps1.ipfs-archive.online:8080/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "http://api.vps1.ipfs-archive.online:8080/api/v0/dag/get?arg=${result}" > /dev/null
+    echo 'Fetching vps1'
+    curl "https://api.vps1.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "https://api.vps1.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
-    curl "http://api.vps2.ipfs-archive.online:8080/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "http://api.vps2.ipfs-archive.online:8080/api/v0/dag/get?arg=${result}" > /dev/null
+    echo 'Fetching vps2'
+    curl "https://api.vps2.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "https://api.vps2.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
-    curl "http://api.vps3.ipfs-archive.online:8080/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "http://api.vps3.ipfs-archive.online:8080/api/v0/dag/get?arg=${result}" > /dev/null
+    echo 'Fetching vps3'
+    curl "https://api.vps3.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "https://api.vps3.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
+    echo 'Fetching api1'
     curl "http://api1.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
     curl "http://api1.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
+    echo 'Fetching vps4'
     curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://vps4.phillm.net/api/v0/get?arg=${intermediate}" > /dev/null
     curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://vps4.phillm.net/api/v0/dag/get?arg=${result}" > /dev/null
 
+    echo 'Fetching rhea'
     curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://rhea.phillm.net/api/v0/get?arg=${intermediate}" > /dev/null
     curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://rhea.phillm.net/api/v0/dag/get?arg=${result}" > /dev/null
 
+    echo 'Fetching archive master'
     curl  "https://ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
     curl  "https://ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
