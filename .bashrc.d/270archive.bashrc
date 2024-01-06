@@ -46,7 +46,7 @@ function masonry.dev.combine ()
     echo "Intermediate dir ${intermediate}"
 
     echo 'Adding Archive'
-    arcive_cid=$(ipfs.resolve  /ipns/staging.ipfs-archive.online/Archive)
+    arcive_cid=$(ipfs.resolve /ipns/staging.ipfs-archive.online/Archive)
 
     intermediate=$(ipfs object patch "${intermediate}" add-link Archive "${arcive_cid}" )
     echo "Intermediate dir ${intermediate}"
