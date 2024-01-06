@@ -13,7 +13,7 @@ function masonry.publish ()
     fi
 }
 
-function masonry.dev.combine ()
+function archive.masonry.dev.combine ()
 {
     local masonry_cid
     local settings_cid
@@ -45,30 +45,55 @@ function masonry.dev.combine ()
     intermediate=$(ipfs object patch "${intermediate}" add-link robots.txt QmSiUsNRrkDi3ERbsuxjTGz8N6EZe9n997sUxyFNUGBMaG )
     echo "Intermediate dir ${intermediate}"
 
-    echo 'Adding Archive'
-    arcive_cid=$(ipfs.resolve /ipns/staging.ipfs-archive.online/Archive)
-
-    intermediate=$(ipfs object patch "${intermediate}" add-link Archive "${arcive_cid}" )
-    echo "Intermediate dir ${intermediate}"
-
     echo 'Adding settings'
     settings_cid=$(cd /ananke/D/Source/Phill/Repos/Phill/masonry-settings && ipfs add -r -Q --pin=false .)
 
-    result=$(ipfs object patch "${intermediate}" add-link settings "${settings_cid}")
+    intermediate=$(ipfs object patch "${intermediate}" add-link settings "${settings_cid}")
+    echo "Intermediate dir ${intermediate}"
+
+    echo 'Adding Archive'
+    arcive_cid=$(ipfs.resolve /ipns/staging.ipfs-archive.online/Archive)
+
+    result=$(ipfs object patch "${intermediate}" add-link Archive "${arcive_cid}" )
     echo "Result dir ${result}"
 
+    echo
     echo "https://ipfs.io/ipfs/${result}"
+    echo
     echo "https://cf-ipfs.com/ipfs/${result}"
+    echo
 
-    curl "http://external1.ddns.peelvalley.com.au:8081/api/v0/get?arg=${result}" > /dev/null
-    curl "http://192.168.30.57:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://io2.phillm.net:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://external5.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://api.vps1.ipfs-archive.online:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://api.vps2.ipfs-archive.online:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://api.vps3.ipfs-archive.online:8080/api/v0/get?arg=${result}" > /dev/null
-    curl "http://external1.ddns.peelvalley.com.au:8080/api/v0/get?arg=${result}" > /dev/null
+    curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/dag/get?arg=${result}" > /dev/null
+
+    curl "http://io2.phillm.net:8080/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "http://io2.phillm.net:8080/api/v0/dag/get?arg=${result}" > /dev/null
+
+    curl "http://192.168.42.208:8080/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "http://192.168.42.208:8080/api/v0/dag/get?arg=${result}" > /dev/null
+
+
+    curl "http://api.vps1.ipfs-archive.online:8080/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "http://api.vps1.ipfs-archive.online:8080/api/v0/dag/get?arg=${result}" > /dev/null
+
+    curl "http://api.vps2.ipfs-archive.online:8080/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "http://api.vps2.ipfs-archive.online:8080/api/v0/dag/get?arg=${result}" > /dev/null
+
+    curl "http://api.vps3.ipfs-archive.online:8080/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "http://api.vps3.ipfs-archive.online:8080/api/v0/dag/get?arg=${result}" > /dev/null
+
+    curl "http://api1.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
+    curl "http://api1.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
+
+    curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://vps4.phillm.net/api/v0/get?arg=${intermediate}" > /dev/null
+    curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://vps4.phillm.net/api/v0/dag/get?arg=${result}" > /dev/null
+
+    curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://rhea.phillm.net/api/v0/get?arg=${intermediate}" > /dev/null
+    curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://rhea.phillm.net/api/v0/dag/get?arg=${result}" > /dev/null
+
+    curl  "https://ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
+    curl  "https://ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
+
 
 }
 
