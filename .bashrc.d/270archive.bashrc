@@ -52,7 +52,7 @@ function archive.masonry.dev.combine ()
     echo "Intermediate dir ${intermediate}"
 
     echo 'Adding Archive'
-    archive_cid=$(ipfs.resolve /ipns/staging.ipfs-archive.online/Archive)
+    archive_cid=$(ipfs resolve /ipns/staging.ipfs-archive.online/Archive | sed 's/\/ipfs\///g' /dev/stdin )
     echo "Archive cid is ${archive_cid}"
 
     result=$(ipfs object patch "${intermediate}" add-link Archive "${archive_cid}" )
