@@ -45,6 +45,12 @@ function masonry.dev.combine ()
     intermediate=$(ipfs object patch "${intermediate}" add-link robots.txt QmSiUsNRrkDi3ERbsuxjTGz8N6EZe9n997sUxyFNUGBMaG )
     echo "Intermediate dir ${intermediate}"
 
+    echo 'Adding Archive'
+    arcive_cid=$(ipfs.resolve  /ipns/staging.ipfs-archive.online/Archive)
+
+    intermediate=$(ipfs object patch "${intermediate}" add-link Archive "${arcive_cid}" )
+    echo "Intermediate dir ${intermediate}"
+
     echo 'Adding settings'
     settings_cid=$(cd /ananke/D/Source/Phill/Repos/Phill/masonry-settings && ipfs add -r -Q --pin=false .)
 
