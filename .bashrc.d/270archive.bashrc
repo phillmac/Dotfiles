@@ -24,23 +24,29 @@ function masonry.dev.combine ()
     empty_dir=$(ipfs object new unixfs-dir)
     echo 'Adding masonry'
     masonry_cid=$(masonry.publish -Q)
-    echo 'Adding settings'
-    settings_cid=$(cd /ananke/D/Source/Phill/Repos/Phill/masonry-settings && ipfs add -r -Q --pin=false .)
 
+    echo 'Adding galleries'
     intermediate=$(ipfs object patch "${empty_dir}" add-link galleries "${masonry_cid}")
     echo "Intermediate dir ${intermediate}"
 
+    echo 'Adding favourites'
     intermediate=$(ipfs object patch "${intermediate}" add-link favourites "${masonry_cid}")
     echo "Intermediate dir ${intermediate}"
 
+    echo 'Adding dmca.txt'
     intermediate=$(ipfs object patch "${intermediate}" add-link dmca.txt QmRai1uve3mF137HXYqVvP5vCAWrD8ZRPVRfn8onsYUFAb )
     echo "Intermediate dir ${intermediate}"
 
+    echo 'Adding copyright.txt'
     intermediate=$(ipfs object patch "${intermediate}" add-link copyright.txt QmRai1uve3mF137HXYqVvP5vCAWrD8ZRPVRfn8onsYUFAb )
     echo "Intermediate dir ${intermediate}"
 
+    echo 'Adding robots.txt'
     intermediate=$(ipfs object patch "${intermediate}" add-link robots.txt QmSiUsNRrkDi3ERbsuxjTGz8N6EZe9n997sUxyFNUGBMaG )
     echo "Intermediate dir ${intermediate}"
+
+    echo 'Adding settings'
+    settings_cid=$(cd /ananke/D/Source/Phill/Repos/Phill/masonry-settings && ipfs add -r -Q --pin=false .)
 
     result=$(ipfs object patch "${intermediate}" add-link settings "${settings_cid}")
     echo "Result dir ${result}"
