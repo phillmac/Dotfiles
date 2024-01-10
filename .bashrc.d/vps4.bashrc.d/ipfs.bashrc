@@ -34,6 +34,11 @@ function ipfs-wasabi ()
     IPFS_PATH='/home/phill/.ipfs-wasabi' ipfs-s3 "${@}"
 }
 
+function ipfs-wasabi-test ()
+{
+    IPFS_PATH='/home/phill/.ipfs-wasabi-test' ipfs-s3 "${@}"
+}
+
 function ipfs-backblaze ()
 {
     IPFS_PATH='/home/phill/.ipfs-backblaze' ipfs-s3 "${@}"
@@ -298,17 +303,9 @@ function archive.publish ()
     archive.ipns.update staging "$(ipfs files stat --hash /ipfs-archive.online)"
 }
 
-function ipfs.dag.import.gdrive ()
+ipfs.dag.import.gdrive ()
 {
     ( set -eo pipefail
     rclone cat "phill-gdrive:ipfs-export/${1}.car" | mbuffer | ipfs.dag.import )
 }
 
-function ipfs.export.deeparchive ()
-{
-    while ! rclonei rcat -vvv --s3-chunk-size=250M "ipfs-deep-archive:ipfs-deep-archive/${2}/${1}.car" < <(ipfs dag export --timeout=3h --progress=false "${1}")
-    do
-        echo "$(date) Retrying"
-        sleep 30
-    done
-}
