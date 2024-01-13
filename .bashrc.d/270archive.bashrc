@@ -57,8 +57,8 @@ function archive.masonry.dev.combine ()
 
     ipfs files cp "/ipfs/${intermediate}" "/dev-versions.ipfs-archive.online/${version}"
 
-    echo "Updateing dev versions"
-    ipns archive.ipns.update dev-versions "$(ipfs files stat --hash /dev-versions.ipfs-archive.online)"
+    echo "Updating dev versions"
+    archive.ipns.update dev-versions "$(ipfs files stat --hash /dev-versions.ipfs-archive.online)"
 
     echo 'Adding Archive'
     archive_cid=$(ipfs resolve /ipns/staging.ipfs-archive.online/Archive | sed 's/\/ipfs\///g' /dev/stdin )
