@@ -51,6 +51,15 @@ function archive.masonry.dev.combine ()
     intermediate=$(ipfs object patch "${intermediate}" add-link settings "${settings_cid}")
     echo "Intermediate dir ${intermediate}"
 
+    echo "Copying to dev versions"
+
+    version=$(ipfs cat "${intermediate}/galleries/js/version.js" |  grep 'const version' | awk -F"'" '{print $2}')
+
+    ipfs files cp "/ipfs/${intermediate}" "/dev-versions.ipfs-archive.online/${version}"
+
+    echo "Updateing dev versions"
+    ipns archive.ipns.update dev-versions "$(ipfs files stat --hash /dev-versions.ipfs-archive.online)"
+
     echo 'Adding Archive'
     archive_cid=$(ipfs resolve /ipns/staging.ipfs-archive.online/Archive | sed 's/\/ipfs\///g' /dev/stdin )
     echo "Archive cid is ${archive_cid}"
