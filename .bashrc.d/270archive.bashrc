@@ -13,7 +13,7 @@ function masonry.publish ()
     fi
 }
 
-function archive.masonry.dev.combine ()
+function archive.masonry.dev.publish ()
 {
     local masonry_cid
     local settings_cid
@@ -51,13 +51,13 @@ function archive.masonry.dev.combine ()
     intermediate=$(ipfs object patch "${intermediate}" add-link settings "${settings_cid}")
     echo "Intermediate dir ${intermediate}"
 
-    echo "Copying to dev versions"
+    echo "Copying to dev-versions"
 
     version=$(ipfs cat "${intermediate}/galleries/js/version.js" |  grep 'const version' | awk -F"'" '{print $2}')
 
     ipfs files cp "/ipfs/${intermediate}" "/dev-versions.ipfs-archive.online/${version}"
 
-    echo "Updating dev versions"
+    echo "Updating dev-versions ipns"
     archive.ipns.update dev-versions "$(ipfs files stat --hash /dev-versions.ipfs-archive.online)"
 
     echo 'Adding Archive'
@@ -114,6 +114,9 @@ function archive.masonry.dev.combine ()
     echo 'Fetching vps5'
     curl "https://api.vps5.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
     curl "https://api.vps5.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
+
+    echo "Updating dev ipns"
+    archive.ipns.update dev "${result}"
 
     echo "Result dir ${result}"
 
