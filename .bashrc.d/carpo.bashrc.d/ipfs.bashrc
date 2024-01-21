@@ -74,6 +74,27 @@ function carpo.public.pins.monitor () {
     done
 }
 
+function carpo.export.laptop.dag ()
+{
+    if [[ ! -p carpo.export.laptop.dag.queue  ]]
+    then
+        mkfifo carpo.export.laptop.dag.queue
+    fi
+
+    while read -r cid;
+    do
+        echo "$(date) ${cid}"
+        docker exec -i \
+            phill-dev_ipfs_1 \
+                ipfs dag import \
+                    --pin-roots=false < <( docker run --rm \
+            -v /fileservers/desktop-pstlv07/F/Data/ipfs:/data/ipfs \
+            --entrypoint /usr/local/bin/ipfs \
+            ipfs/go-ipfs:v0.8.0 \
+                dag export -p "${cid}" )
+    done < <(tail -f carpo.export.laptop.dag.queue)
+}
+
 
 export -f split-car
 export -f upload-car
