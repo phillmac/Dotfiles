@@ -24,6 +24,17 @@ function ipfs-backblaze ()
     IPFS_PATH='/home/phill/.ipfs-backblaze' ipfs-s3 "${@}"
 }
 
+function ipfs-wasabi.pins.ls.export ()
+{
+    ipfs-wasabi pin ls --type=recursive > ".ipfs-wasabi/$(date '+%Y_%m_%d_%H_%M_%S').pins.txt"
+}
+
+function ipfs-wasabi.files.ls.export ()
+{
+    files_root=$(ipfs-wasabi files stat --hash /)
+    ipfs-wasabi ls --size=false "${files_root}" > ".ipfs-wasabi/$(date '+%Y_%m_%d_%H_%M_%S').files.txt"
+}
+
 
 function ipfs-wasabi.public.pins.missing ()
 {
@@ -98,6 +109,36 @@ function ipfs-wasabi.public.pins.monitor () {
         rlast=${public_hash}
         echo "$(date) Done" >&2
     done
+}
+
+function ipfs-backblaze.archive.pins.missing ()
+{
+    archive.entries "${1}" | sort --unique > archive.entries.cids.txt
+    ipfs-backblaze pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > backblaze.pins.txt
+    comm -23  archive.entries.cids.txt backblaze.pins.txt > backblaze.archive.missing.txt
+    cids_count=$(wc -l < backblaze.archive.missing.txt)
+    ((progress=1))
+    while read -r pincid
+        do
+
+            pin_cid_entry=$(grep "${pincid}" archive.entries.txt)
+            echo '(date) ipfs-backblaze missing item ' "${pin_cid_entry} [${progress}/${cids_count}]" >&2
+            while ! ipfs-backblaze dag import < <(
+                docker run \
+                    --rm \
+                    --net host \
+                    curlimages/curl curl \
+                        --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' \
+                        "https://rhea.phillm.net/api/v0/dag/export?arg=${pincid}"
+            )
+            do
+                echo "$(date) Retrying ${pin_cid_entry} [${progress}/${cids_count}]"
+                sleep 300
+            done
+
+            ((progress+=1))
+    done < backblaze.archive.missing.txt
+
 }
 
 function ipfs.export.backblaze.batch ()
