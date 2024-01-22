@@ -83,7 +83,7 @@ function carpo.export.laptop.dag ()
 
     while read -r cid;
     do
-        echo "$(date) ${cid}"
+        echo "$(date) - Exporting ${cid}"
         docker exec -i \
             phill-dev_ipfs_1 \
                 ipfs dag import \
@@ -92,6 +92,7 @@ function carpo.export.laptop.dag ()
             --entrypoint /usr/local/bin/ipfs \
             ipfs/go-ipfs:v0.8.0 \
                 dag export -p "${cid}" )
+        echo "$(date) - Done"
     done < <(tail -f carpo.export.laptop.dag.queue)
 }
 
