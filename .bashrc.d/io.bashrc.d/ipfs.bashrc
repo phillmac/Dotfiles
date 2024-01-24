@@ -50,6 +50,7 @@ function ipfs-wasabi.public.pins.missing ()
                 docker run \
                     --rm \
                     --net host \
+                    --log-driver=none \
                     curlimages/curl curl \
                         "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}"
             )
@@ -72,6 +73,7 @@ function ipfs-wasabi.archive.pins.missing ()
                 docker run \
                     --rm \
                     --net host \
+                    --log-driver=none \
                     curlimages/curl curl \
                         "https://external5.ddns.peelvalley.com.au/api/v0/dag/export?arg=${pincid}"
             )
@@ -127,6 +129,7 @@ function ipfs-backblaze.archive.pins.missing ()
                 docker run \
                     --rm \
                     --net host \
+                    --log-driver=none \
                     curlimages/curl curl \
                         --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' \
                         "https://rhea.phillm.net/api/v0/dag/export?arg=${pincid}"
