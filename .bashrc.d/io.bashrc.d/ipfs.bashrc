@@ -122,7 +122,7 @@ function ipfs-backblaze.archive.pins.missing ()
         do
 
             pin_cid_entry=$(grep "${pincid}" archive.entries.txt)
-            echo '(date) ipfs-backblaze missing item ' "${pin_cid_entry} [${progress}/${cids_count}]" >&2
+            echo "$(date) - ipfs-backblaze missing item " "${pin_cid_entry} [${progress}/${cids_count}]" >&2
             while ! ipfs-backblaze dag import < <(
                 docker run \
                     --rm \
@@ -132,7 +132,7 @@ function ipfs-backblaze.archive.pins.missing ()
                         "https://rhea.phillm.net/api/v0/dag/export?arg=${pincid}"
             )
             do
-                echo "$(date) Retrying ${pin_cid_entry} [${progress}/${cids_count}]"
+                echo "$(date) - Retrying ${pin_cid_entry} [${progress}/${cids_count}]"
                 sleep 300
             done
 
