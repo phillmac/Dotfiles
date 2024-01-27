@@ -96,10 +96,11 @@ function archive.publish.dev ()
     masonry_cid=$(masonry.publish -Q)
     settings_cid=$(cd /ananke/D/Source/Phill/Repos/Phill/masonry-settings && ipfs add -r -Q --pin=false .)
 
-    ipfs files rm -r /dev.ipfs-archive.online/galleries
-    ipfs files cp "/ipfs/${masonry_cid}" /dev.ipfs-archive.online/galleries
+    ipfs files rm -r /dev.ipfs-archive.online
+    ipfs files mkdir /dev.ipfs-archive.online
 
-    ipfs files rm -r /dev.ipfs-archive.online/settings
+    ipfs files cp "/ipfs/${masonry_cid}" /dev.ipfs-archive.online/galleries
+    ipfs files cp "/ipfs/${masonry_cid}" /dev.ipfs-archive.online/favourites
     ipfs files cp "/ipfs/${settings_cid}" /dev.ipfs-archive.online/settings
 
     dev_cid=$(ipfs files stat --hash /dev.ipfs-archive.online)
