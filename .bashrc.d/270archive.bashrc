@@ -95,17 +95,17 @@ function archive.masonry.dev.publish ()
 
     echo 'Fetching vps1'
     _curl "https://api.vps1.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
-    _curl "https://api.vps1.ipfs-archive.online/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl "https://api.vps1.ipfs-archive.online/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
     _curl "https://api.vps1.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching vps2'
     _curl "https://api.vps2.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
-    _curl "https://api.vps2.ipfs-archive.online/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl "https://api.vps2.ipfs-archive.online/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
     _curl "https://api.vps2.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching vps3'
     _curl "https://api.vps3.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
-    _curl "https://api.vps3.ipfs-archive.online/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl "https://api.vps3.ipfs-archive.online/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
     _curl "https://api.vps3.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching api1'
