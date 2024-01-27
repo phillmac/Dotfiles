@@ -110,7 +110,7 @@ function archive.masonry.dev.publish ()
 
     echo 'Fetching api1'
     curl "https://api1.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "https://api1.ipfs-archive.online/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
+    curl "https://api1.ipfs-archive.online/api/v0/dag/get?arg=${dev_versions_cid}" > /dev/null
     curl "https://api1.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching vps4'
