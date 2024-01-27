@@ -77,56 +77,56 @@ function archive.masonry.dev.publish ()
     echo
 
     echo 'Fetching external7'
-    curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
-    curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/dag/get?arg=${result}" > /dev/null
+    _curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/get?arg=${intermediate}" > /dev/null
+    _curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl "http://external7.ddns.peelvalley.com.au:8080/api/v0/dag/get?arg=${result}" > /dev/null
 
 
     echo 'Fetching io'
-    curl "http://io2.phillm.net:8080/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "http://io2.phillm.net:8080/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
-    curl "http://io2.phillm.net:8080/api/v0/dag/get?arg=${result}" > /dev/null
+    _curl "http://io2.phillm.net:8080/api/v0/get?arg=${intermediate}" > /dev/null
+    _curl "http://io2.phillm.net:8080/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl "http://io2.phillm.net:8080/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching janus'
-    curl "http://192.168.42.208:8080/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "http://192.168.42.208:8080/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
-    curl "http://192.168.42.208:8080/api/v0/dag/get?arg=${result}" > /dev/null
+    _curl "http://192.168.42.208:8080/api/v0/get?arg=${intermediate}" > /dev/null
+    _curl "http://192.168.42.208:8080/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl "http://192.168.42.208:8080/api/v0/dag/get?arg=${result}" > /dev/null
 
 
     echo 'Fetching vps1'
-    curl "https://api.vps1.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "https://api.vps1.ipfs-archive.online/dag/export?arg=${dev_versions_cid}" > /dev/null
-    curl "https://api.vps1.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
+    _curl "https://api.vps1.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
+    _curl "https://api.vps1.ipfs-archive.online/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl "https://api.vps1.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching vps2'
-    curl "https://api.vps2.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "https://api.vps2.ipfs-archive.online/dag/export?arg=${dev_versions_cid}" > /dev/null
-    curl "https://api.vps2.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
+    _curl "https://api.vps2.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
+    _curl "https://api.vps2.ipfs-archive.online/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl "https://api.vps2.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching vps3'
-    curl "https://api.vps3.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "https://api.vps3.ipfs-archive.online/dag/export?arg=${dev_versions_cid}" > /dev/null
-    curl "https://api.vps3.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
+    _curl "https://api.vps3.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
+    _curl "https://api.vps3.ipfs-archive.online/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl "https://api.vps3.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching api1'
-    curl "https://api1.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "https://api1.ipfs-archive.online/api/v0/dag/get?arg=${dev_versions_cid}" > /dev/null
-    curl "https://api1.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
+    _curl "https://api1.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
+    _curl "https://api1.ipfs-archive.online/api/v0/dag/get?arg=${dev_versions_cid}" > /dev/null
+    _curl "https://api1.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching vps4'
-    curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://vps4.phillm.net/api/v0/get?arg=${intermediate}" > /dev/null
-    curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://vps4.phillm.net/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
-    curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://vps4.phillm.net/api/v0/dag/get?arg=${result}" > /dev/null
+    _curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://vps4.phillm.net/api/v0/get?arg=${intermediate}" > /dev/null
+    _curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://vps4.phillm.net/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://vps4.phillm.net/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching rhea'
-    curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://rhea.phillm.net/api/v0/get?arg=${intermediate}" > /dev/null
-    curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://rhea.phillm.net/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
-    curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://rhea.phillm.net/api/v0/dag/get?arg=${result}" > /dev/null
+    _curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://rhea.phillm.net/api/v0/get?arg=${intermediate}" > /dev/null
+    _curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://rhea.phillm.net/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' "https://rhea.phillm.net/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo 'Fetching vps5'
-    curl "https://api.vps5.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
-    curl "https://api.vps5.ipfs-archive.online/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
-    curl "https://api.vps5.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
+    _curl "https://api.vps5.ipfs-archive.online/api/v0/get?arg=${intermediate}" > /dev/null
+    _curl "https://api.vps5.ipfs-archive.online/api/v0/dag/export?arg=${dev_versions_cid}" > /dev/null
+    _curl "https://api.vps5.ipfs-archive.online/api/v0/dag/get?arg=${result}" > /dev/null
 
     echo "Updating dev ipns"
     archive.ipns.update dev "${result}"
