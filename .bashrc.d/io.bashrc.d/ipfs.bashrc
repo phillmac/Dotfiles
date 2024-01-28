@@ -35,6 +35,17 @@ function ipfs-wasabi.files.ls.export ()
     ipfs-wasabi ls --size=false "${files_root}" > ".ipfs-wasabi/$(date '+%Y_%m_%d_%H_%M_%S').files.txt"
 }
 
+function ipfs-backblaze.pins.ls.export ()
+{
+    ipfs-backblaze pin ls --type=recursive > ".ipfs-backblaze/$(date '+%Y_%m_%d_%H_%M_%S').pins.txt"
+}
+
+function ipfs-backblaze.files.ls.export ()
+{
+    files_root=$(ipfs-backblaze files stat --hash /)
+    ipfs-backblaze ls --size=false "${files_root}" > ".ipfs-backblaze/$(date '+%Y_%m_%d_%H_%M_%S').files.txt"
+}
+
 
 function ipfs-wasabi.public.pins.missing ()
 {
