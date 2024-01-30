@@ -24,6 +24,11 @@ function ipfs-backblaze ()
     IPFS_PATH='/home/phill/.ipfs-backblaze' ipfs-s3 "${@}"
 }
 
+function ipfs-backblaze-test ()
+{
+    IPFS_PATH='/home/phill/.ipfs-backblaze-test' ipfs-s3 "${@}"
+}
+
 function ipfs-wasabi.pins.ls.export ()
 {
     ipfs-wasabi pin ls --type=recursive > ".ipfs-wasabi/$(date '+%Y_%m_%d_%H_%M_%S').pins.txt"
