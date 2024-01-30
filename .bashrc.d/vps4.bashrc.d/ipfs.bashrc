@@ -28,6 +28,10 @@ export PHONE_DAG_EXPORT_GATEWAY
 export ARCHIVE_DAG_EXPORT_GATEWAY
 
 
+function ipfs-backblaze-test ()
+{
+    IPFS_PATH='/home/phill/.ipfs-backblaze-test' ipfs-s3 "${@}"
+}
 
 function ipfs-wasabi ()
 {
