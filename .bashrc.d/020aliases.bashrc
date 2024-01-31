@@ -388,6 +388,45 @@ function sync-develop-phill-github ()
     git pull phill-github master --ff && git push phill-github master && git checkout develop && git pull phill-github develop --ff && git merge master && git push phill-github develop && git checkout master
 }
 
+function monitor_output () {
+    # Check if a command is provided as an argument
+    if [ -z "$1" ]; then
+        echo "Usage: $0 <command_to_monitor>"
+        exit 1
+    fi
+
+    # The command to monitor is provided as an argument
+    command_to_monitor="$1"
+
+    # Run the specified command and capture the output
+    current_output=$($command_to_monitor)
+
+    # Specify a file to store the previous output
+    previous_output_file="/tmp/previous_output_$$.txt"
+
+    # Check if the file exists and read the previous output
+    if [ -e "$previous_output_file" ]; then
+        previous_output=$(<"$previous_output_file")
+
+        # Compare the current and previous output
+        if [ "$current_output" != "$previous_output" ]; then
+            echo "Output has changed."
+            # Do something when the output has changed
+            echo "$current_output" > "$previous_output_file"
+            exit 0  # Success exit code
+        else
+            echo "Output is the same."
+            # Do something when the output is the same
+            exit 1  # Failure exit code
+        fi
+    else
+        echo "Previous output file not found. Creating it."
+        echo "$current_output" > "$previous_output_file"
+        exit 0  # Success exit code since it's the first run
+    fi
+
+}
+
 
 
 
