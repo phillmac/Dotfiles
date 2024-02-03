@@ -55,7 +55,8 @@ function archive.masonry.dev.publish ()
 
     version=$(ipfs cat "${intermediate}/galleries/app/version.js" |  grep 'const version' | awk -F"'" '{print $2}')
 
-    ipfs files cp "/ipfs/${intermediate}" "/dev-versions.ipfs-archive.online/${version}"
+    ipfs files mkdir "/dev-versions.ipfs-archive.online/${version}"
+    ipfs files cp "/ipfs/${intermediate}" "/dev-versions.ipfs-archive.online/${version}/"
 
     echo "Updating dev-versions ipns"
     dev_versions_cid=$(ipfs files stat --hash /dev-versions.ipfs-archive.online)
