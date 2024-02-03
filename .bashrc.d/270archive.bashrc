@@ -53,7 +53,7 @@ function archive.masonry.dev.publish ()
 
     echo "Copying to dev-versions"
 
-    version=$(ipfs cat "${intermediate}/galleries/js/version.js" |  grep 'const version' | awk -F"'" '{print $2}')
+    version=$(ipfs cat "${intermediate}/galleries/app/js/version.js" |  grep 'const version' | awk -F"'" '{print $2}')
 
     ipfs files cp "/ipfs/${intermediate}" "/dev-versions.ipfs-archive.online/${version}"
 
