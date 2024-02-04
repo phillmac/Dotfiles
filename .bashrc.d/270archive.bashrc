@@ -61,7 +61,7 @@ function archive.masonry.dev.publish ()
     echo "Updating dev-versions ipns"
     dev_versions_cid=$(ipfs files stat --hash /dev-versions.ipfs-archive.online)
     archive.ipns.update dev-versions "${dev_versions_cid}"
-    echo "dev-versions cid is ${archive_cid}"
+    echo "dev-versions cid is ${dev_versions_cid}"
 
 
     echo 'Adding Archive'
