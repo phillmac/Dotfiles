@@ -281,6 +281,16 @@ function archive.pins.missing.local () {
     fi
 }
 
+function archive.dirs.replace () 
+{
+    ipfs.files.dir.replace /ipfs-archive.online /ipns/ipfs-archive.online
+    ipfs.files.dir.replace /staging.ipfs-archive.online /ipns/staging.ipfs-archive.online
+    ipfs.files.dir.replace /dev.ipfs-archive.online /ipns/dev.ipfs-archive.online
+    ipfs.files.dir.replace /dev-versions.ipfs-archive.online /ipns/dev-versions.ipfs-archive.online
+    ipfs.files.dir.replace /alt.ipfs-archive.online /ipns/alt.ipfs-archive.online
+
+}
+
 export -f masonry.publish
 export -f archive.ipns.update
 export -f archive.pin
