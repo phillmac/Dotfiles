@@ -492,6 +492,16 @@ function ipfs.unpin.recursive ()
     done < <(ipfs.ls.recursive.files "${1}")
 }
 
+function ipfs.files.dir.replace () 
+{
+    cid=$(ipfs resolve "${2}")
+    if [[ -n "${cid}" ]]
+    then
+         ipfs files rm -r "${1}" && ipfs files cp "${cid}" "${1}"
+    fi
+    
+}
+
 export -f ipfs.ls
 export -f ipfs.pin.ls
 export -f ipfs.ls.recursive
