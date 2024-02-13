@@ -151,8 +151,9 @@ function ipfs-backblaze.archive.pins.missing ()
                         "https://rhea.phillm.net/api/v0/dag/export?arg=${pincid}"
             )
             do
-                echo "$(date) - Retrying ${pin_cid_entry} [${progress}/${cids_count}]"
+                echo "$(date) - Failed ${pin_cid_entry} [${progress}/${cids_count}]"
                 sleep 300
+                echo "$(date) - Retrying ${pin_cid_entry} [${progress}/${cids_count}]"
             done
 
             ((progress+=1))

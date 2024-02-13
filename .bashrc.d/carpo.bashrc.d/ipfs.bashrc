@@ -96,6 +96,33 @@ function carpo.export.laptop.dag ()
     done < <(tail -f carpo.export.laptop.dag.queue)
 }
 
+function rhea.export.laptop.dag ()
+{
+    if [[ ! -p rhea.export.laptop.dag.queue  ]]
+    then
+        mkfifo rhea.export.laptop.dag.queue
+    fi
+
+    while read -r cid;
+    do
+        echo "$(date) - Exporting ${cid}"
+        while ! ssh phill@192.99.21.37 'docker exec -i \
+            phill-dev-ipfs-1 \
+                ipfs dag import \
+                    --pin-roots=false < <(mbuffer)' < <( docker run --rm \
+            -v /fileservers/desktop-pstlv07/F/Data/ipfs:/data/ipfs \
+            --entrypoint /usr/local/bin/ipfs \
+            ipfs/go-ipfs:v0.8.0 \
+                dag export --progress=false "${cid}" )
+        do
+            echo "$(date) - Failed ${cid}"
+            sleep 300
+            echo "$(date) - Retrying ${cid}"
+        done
+        echo "$(date) - Done"
+    done < <(tail -f rhea.export.laptop.dag.queue)
+}
+
 
 export -f split-car
 export -f upload-car
