@@ -373,7 +373,7 @@ function rclone_fuse () {
             --cap-add SYS_ADMIN \
             --security-opt apparmor:unconfined \
             -v /root:/root \
-            -v "$(pwd):$(pwd)" \
+            -v "$(pwd):$(pwd):shared" \
             -w "$(pwd)" \
             --entrypoint rclone \
             peelvalley/rclone-b2 \
@@ -387,7 +387,7 @@ function rclone_fuse () {
             --cap-add SYS_ADMIN \
             --security-opt apparmor:unconfined \
             -v /root:/root \
-            -v "$(pwd):$(pwd)" \
+            -v "$(pwd):$(pwd):shared" \
             -w "$(pwd)" \
             --entrypoint rclone \
             peelvalley/rclone-b2 \
