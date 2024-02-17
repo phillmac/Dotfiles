@@ -396,6 +396,10 @@ function rclone_fuse () {
 
 }
 
+function rclone_mount () {
+    rclone_fuse --dir-cache-time 1d --vfs-refresh "${@}"
+}
+
 function rclonei () {
     docker run -i --rm --net host --log-driver none -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
 }
