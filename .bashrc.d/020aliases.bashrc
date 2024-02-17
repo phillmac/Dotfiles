@@ -360,6 +360,42 @@ function rclone () {
 
 }
 
+function rclone_fuse () {
+    if [[ -t 1 ]] &&  [[ -t 2 ]] && [[ ! -p /dev/stdout ]] && [[ ! -p /dev/stdin ]]
+    then
+        echo 'Detected TTY' >&2
+        docker run \
+            -it \
+            --rm \
+            --net host \
+            --log-driver none \
+            --device /dev/fuse \
+            --cap-add SYS_ADMIN \
+            --security-opt apparmor:unconfined \
+            -v /root:/root \
+            -v "$(pwd):$(pwd)" \
+            -w "$(pwd)" \
+            --entrypoint rclone \
+            peelvalley/rclone-b2 \
+                "${@}"
+    else
+        docker run \
+            --rm \
+            --net host \
+            --log-driver none \
+            --device /dev/fuse \
+            --cap-add SYS_ADMIN \
+            --security-opt apparmor:unconfined \
+            -v /root:/root \
+            -v "$(pwd):$(pwd)" \
+            -w "$(pwd)" \
+            --entrypoint rclone \
+            peelvalley/rclone-b2 \
+                "${@}"
+    fi
+
+}
+
 function rclonei () {
     docker run -i --rm --net host --log-driver none -v /root:/root -v "$(pwd):$(pwd)" -w "$(pwd)" --entrypoint rclone peelvalley/rclone-b2 "${@}"
 }
