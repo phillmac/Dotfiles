@@ -32,3 +32,9 @@ export IPFS_HTTP_GATEWAY
 #     archive.ipns.update '' /ipns/staging.ipfs-archive.online
 #     archive.ipns.update staging "$(ipfs files stat --hash /ipfs-archive.online)"
 # }
+
+
+function export-split-car ()
+{
+    ( cd /home/phill/ipfs-export-split && ipfs dag export -p "${1}" | split -b 10M -a 5 --verbose - "${1}.car." )
+}

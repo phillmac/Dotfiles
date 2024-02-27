@@ -9,7 +9,7 @@ PUBLIC_CIDS_FILE="//192.168.50.53/c/Users/phill/Documents/public cids.txt"
 
 function export-split-car ()
 {
-    ( cd /cygdrive/g/ipfs-export/split && ipfs dag export -p "${1}" | split -b 10M -a 3 --verbose - "${1}.car." )
+    ( cd /cygdrive/g/ipfs-export/split && ipfs dag export -p "${1}" | split -b 10M -a 4 --verbose - "${1}.car." )
 }
 
 
