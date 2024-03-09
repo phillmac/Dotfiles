@@ -153,12 +153,26 @@ function archive.ipns.update () {
         return 252
     fi
 
-    docker run --rm --net host\
-        -e "CF_TOKEN=jloiYa7e-B29xbQi3um34m9NyWeUGcdLS3RY1u6V" \
-        -e "CF_ZONE_NAME=ipfs-archive.online" \
-        -e "CF_RECORD=${update_ipns_record}" \
-        -e "IPFS_KEY=${update_query_addr}" \
-        peelvalley/cloudflare scripts/update-ipns.py
+    if [[ -n "${IPFS_RESOLVE}" ]]
+    then
+        docker run --rm --net host\
+            -e "CF_TOKEN=jloiYa7e-B29xbQi3um34m9NyWeUGcdLS3RY1u6V" \
+            -e "CF_ZONE_NAME=ipfs-archive.online" \
+            -e "CF_RECORD=${update_ipns_record}" \
+            -e "IPFS_KEY=${update_query_addr}" \
+            -e "IPFS_RESOLVE=${IPFS_RESOLVE}" \
+            peelvalley/cloudflare scripts/update-ipns.py
+
+    else
+        docker run --rm --net host\
+            -e "CF_TOKEN=jloiYa7e-B29xbQi3um34m9NyWeUGcdLS3RY1u6V" \
+            -e "CF_ZONE_NAME=ipfs-archive.online" \
+            -e "CF_RECORD=${update_ipns_record}" \
+            -e "IPFS_KEY=${update_query_addr}" \
+            peelvalley/cloudflare scripts/update-ipns.py
+
+    fi
+
 }
 
 function archive.pin () {
@@ -281,7 +295,7 @@ function archive.pins.missing.local () {
     fi
 }
 
-function archive.dirs.replace () 
+function archive.dirs.replace ()
 {
     ipfs.files.dir.replace /ipfs-archive.online /ipns/ipfs-archive.online
     ipfs.files.dir.replace /staging.ipfs-archive.online /ipns/staging.ipfs-archive.online
