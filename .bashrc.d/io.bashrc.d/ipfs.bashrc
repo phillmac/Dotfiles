@@ -179,7 +179,7 @@ function find-split-car ()
 {
     (
         set -e
-        find . -name "${1}.car.????" | sort
+        find . -name "${1}.car.?????" | sort
     )
 }
 
