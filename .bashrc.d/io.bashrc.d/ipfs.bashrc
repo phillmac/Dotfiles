@@ -175,6 +175,41 @@ function ipfs.export.backblaze.batch ()
     done
 }
 
+function find-split-car ()
+{
+    (
+        set -e
+        find . -name "${1}.car.????" | sort
+    )
+}
+
+function read-split-car ()
+{
+    (
+        set -e
+        echo '' > "${HOME}"/split-car-read.log.txt
+        
+        while read -r fname
+        do
+            if [[ -n "${fname}" ]]
+            then
+                echo "${fname}" >> "${HOME}"/split-car-read.log.txt
+                cat "${fname}"
+            fi
+        done < <(
+            find-split-car "${1}"
+        )
+    )
+}
+
+function import-split-car-backblaze ()
+{
+    (
+        set -e
+        ipfs-backblaze dag import < <( mbuffer < <( read-split-car "${1}" ))
+    )
+}
+
 export IPFS_GET_BATCH_COUNT
 export IPFS_GET_TIMEOUT
 export IPFS_PIN_TIMEOUT
