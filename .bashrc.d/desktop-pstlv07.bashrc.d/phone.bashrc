@@ -2,7 +2,12 @@
 
 function ipfs.phone.add.staging ()
 {
-    /cygdrive/c/rclone/rclone copy -v --checksum carpo:/fileservers/mimas/E/Staging/Phone/Downloads "H:\Staging\Phone\Downloads"
+    /cygdrive/c/rclone/rclone copy \
+        -v \
+        --checksum \
+        --backup-dir "H:\Staging\Phone\Downloads-Backup-$(date '+%Y%m%d%H%M')"
+        carpo:/fileservers/mimas/E/Staging/Phone/Downloads \
+        "H:\Staging\Phone\Downloads"
 
     echo "Adding files to ipfs" >&2
 
