@@ -16,7 +16,7 @@ function ipfs.phone.add.staging ()
         carpo:/fileservers/mimas/E/Staging/Phone/Downloads-Backup \
         H:/Staging/Phone/Downloads-Backup
 
-    echo "Adding files to ipfs" >&2
+    echo "$(date) -Adding files to ipfs" >&2
 
     cid=$(ipfs add -r -w -Q --pin=false 'H:\Staging\Phone')
 
