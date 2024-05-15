@@ -9,5 +9,7 @@ function sleep_until ()
     target_epoch=$(date -d "${1}" +%s)
     sleep_seconds=$(( target_epoch - current_epoch ))
 
+    echo "Sleeping for ${sleep_seconds} seconds" >&2
+
     sleep "${sleep_seconds}"
 }
