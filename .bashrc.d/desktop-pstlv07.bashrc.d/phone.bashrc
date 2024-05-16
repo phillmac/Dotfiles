@@ -5,11 +5,18 @@ function ipfs.phone.add.staging ()
     /cygdrive/c/rclone/rclone copy \
         -v \
         --checksum \
-        --backup-dir="H:\Staging\Phone\Downloads-Backup-$(date '+%Y%m%d%H%M')" \
+        --backup-dir="H:/Staging/Phone/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
         carpo:/fileservers/mimas/E/Staging/Phone/Downloads \
-        "H:\Staging\Phone\Downloads"
+        "H:/Staging/Phone/Downloads"
 
-    echo "Adding files to ipfs" >&2
+    /cygdrive/c/rclone/rclone move \
+        -v \
+        --checksum \
+        --delete-empty-src-dirs \
+        carpo:/fileservers/mimas/E/Staging/Phone/Downloads-Backup \
+        H:/Staging/Phone/Downloads-Backup
+
+    echo "$(date) -Adding files to ipfs" >&2
 
     cid=$(ipfs add -r -w -Q --pin=false 'H:\Staging\Phone')
 
