@@ -11,7 +11,13 @@ function staging.add.export () {
     local elem
     local mfspath
 
-    dcid=$(ipfs add -Q -r -w --pin=false "${dname}")
+
+
+    if ! dcid=$(ipfs add -Q -r -w --pin=false "${dname}")
+    then
+        echo "Add ${dname} to IPFS failed"
+        return 1
+    fi
     empty=$(ipfs object new unixfs-dir)
 
     echo "Base dcid: ${dcid}" >&2
@@ -19,7 +25,13 @@ function staging.add.export () {
     for elem in "${dpath[@]}"
     do
         echo "Adding link ${elem} ${dcid} for mfs path ${mfspath}" >&2
-        dcid=$(ipfs object patch add-link "${empty}" "${elem}" "${dcid}")
+
+        if ! dcid=$(ipfs object patch add-link -- "${empty}" "${elem}" "${dcid}")
+        then
+            echo "Failed to patch object ${empty} ${elem} ${dcid}"
+            return 1
+        fi
+
         mfspath="${elem}/${mfspath}"
     done
 
@@ -47,13 +59,13 @@ function staging.add.export () {
         (
             cd "${dnamepath}" \
              && pwd \
-             &&  /cygdrive/c/rclone/rclone.exe move \
+             && /cygdrive/c/rclone/rclone.exe move \
                     -vv \
                     --checksum \
                     --transfers 1 \
                     --delete-empty-src-dirs \
                     --include "${bname}/*" \
-                    --min-age 30d \
+                    --min-age 2d \
                     --local-encoding None \
                     . \
                     "b2-phill-all:Archive-Store/_/Staging/${mfspath}"
@@ -64,6 +76,24 @@ function staging.add.export () {
 
 function laptop.staging.add.export ()
 {
+    if [[ -z "${1}" ]]
+    then
+
+        for ddname in /cygdrive/e/Staging/Laptop/Downloads/*/
+        do
+
+            echo "Found ${ddname}"
+            bddname=$(basename "${ddname}")
+
+            if ! laptop.staging.add.export "${bddname}"
+            then
+                return 1
+            fi
+        done
+
+        return
+    fi
+
     (
         cd "/cygdrive/e/Staging/Laptop/Downloads/${1}" && {
             for sdname in *
@@ -72,6 +102,43 @@ function laptop.staging.add.export ()
                 then
                     echo "$(date) adding ${sdname}" >&2
                     staging.add.export "E:\Staging\Laptop\Downloads\\${1}\\${sdname}" "${1}" Downloads Laptop
+                else
+                    echo "Skipping nonexistent dir ${sdname}" >&2
+                fi
+            done
+        }
+    )
+}
+
+
+  function ipfs.mimas.add.staging () {
+
+    if [[ -z "${1}" ]]
+    then
+
+        for ddname in /cygdrive/g/Staging/Laptop/Downloads/*/
+        do
+
+            echo "Found ${ddname}"
+            bddname=$(basename "${ddname}")
+
+            if ! laptop.staging.add.export "${bddname}"
+            then
+                return 1
+            fi
+        done
+
+        return
+    fi
+
+    (
+        cd "/cygdrive/g/Staging/Mimas/Downloads/${1}" && {
+            for sdname in *
+            do
+                if [[ -d  "/cygdrive/g/Staging/Mimas/Downloads/${1}/${sdname}" ]]
+                then
+                    echo "$(date) adding ${sdname}" >&2
+                    staging.add.export "G:\Staging\Mimas\Downloads\\${1}\\${sdname}" "${1}" Downloads Mimas
                 else
                     echo "Skipping nonexistent dir ${sdname}" >&2
                 fi
