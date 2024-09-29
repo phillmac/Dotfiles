@@ -21,6 +21,6 @@ function ipfs.phone.add.staging ()
     cid=$(ipfs add -r -w -Q --pin=false 'H:\Staging\Phone')
 
     ipfs dag export --progress=false "${cid}" > /cygdrive/h/ipfs-export/"${cid}".car \
-        && /cygdrive/c/rclone/rclone move -v --checksum --include "${cid}.car" "H:\ipfs-export" "carpo:/data/ipfs-staging/IPFS Export Phone" \
-        && /cygdrive/c/rclone/rclone move -v --checksum --include "${cid}.car" "carpo:/data/ipfs-staging" "carpo:/data/ipfs-export/IPFS Export Phone"
+        && /cygdrive/c/rclone/rclone move -v --include "${cid}.car" "H:\ipfs-export" "carpo:/data/ipfs-staging/IPFS Export Phone" \
+        && /cygdrive/c/rclone/rclone move -v --include "${cid}.car" "carpo:/data/ipfs-staging" "carpo:/data/ipfs-export/IPFS Export Phone"
 }
