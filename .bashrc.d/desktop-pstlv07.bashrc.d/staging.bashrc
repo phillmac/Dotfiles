@@ -71,7 +71,6 @@ function staging.add.export () {
                     "b2-phill-all:Archive-Store/_/Staging/${mfspath}"
         )
     fi
-
 }
 
 function laptop.staging.add.export ()
