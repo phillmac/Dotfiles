@@ -115,13 +115,13 @@ function laptop.staging.add.export ()
     if [[ -z "${1}" ]]
     then
 
-        for ddname in /cygdrive/g/Staging/Laptop/Downloads/*/
+        for ddname in /cygdrive/g/Staging/Mimas/Downloads/*/
         do
 
             echo "Found ${ddname}"
             bddname=$(basename "${ddname}")
 
-            if ! laptop.staging.add.export "${bddname}"
+            if ! mimas.staging.add.export "${bddname}"
             then
                 return 1
             fi
