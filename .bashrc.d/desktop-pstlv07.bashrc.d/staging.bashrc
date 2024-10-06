@@ -109,21 +109,8 @@ function laptop.staging.add.export ()
                 | cut -d ' ' -f2-
             )
 
-        # for ddname in /cygdrive/e/Staging/Laptop/Downloads/*/
-        # do
-
-        #     echo "Found ${ddname}"
-        #     bddname=$(basename "${ddname}")
-
-        #     if ! laptop.staging.add.export "${bddname}"
-        #     then
-        #         return 1
-        #     fi
-        # done
-
         return
     fi
-
 
     if [[ "${1}" == /* ]]
     then
@@ -148,6 +135,8 @@ function laptop.staging.add.export ()
             done
         }
     )
+
+    # /cygdrive/c/rclone/rclone.exe rmdirs -vv "${sname}"
 }
 
 
