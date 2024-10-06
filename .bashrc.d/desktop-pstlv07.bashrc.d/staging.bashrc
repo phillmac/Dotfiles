@@ -58,35 +58,37 @@ function staging.add.export () {
     echo "dnamepath: ${dnamepath}" >&2
 
 
-    # (
-    #     cd "${dnamepath}" \
-    #         && pwd \
-    #         && (
-    #             /cygdrive/c/rclone/rclone.exe move \
-    #                 -vv \
-    #                 --checksum \
-    #                 --transfers 1 \
-    #                 --delete-empty-src-dirs \
-    #                 --files-from - \
-    #                 --local-encoding None \
-    #                 --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[0]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
-    #                 . \
-    #                 "b2-phill-all:Archive-Store/_/Staging/${mfspath}"< <( \
-    #                 find "${bname}" \
-    #                 ) \
-    #                 || /cygdrive/c/rclone/rclone.exe move \
-    #                 -vv \
-    #                 --checksum \
-    #                 --transfers 1 \
-    #                 --delete-empty-src-dirs \
-    #                 --files-from - \
-    #                 --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[0]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
-    #                 . \
-    #                 "b2-phill-all:Archive-Store/_/Staging/${mfspath}" < <( \
-    #                 find "${bname}" \
-    #                 )
-    #         )
-    # )
+    (
+        cd "${dnamepath}" \
+            && pwd \
+            && (
+                /cygdrive/c/rclone/rclone.exe move \
+                    -vv \
+                    --dry-run \
+                    --checksum \
+                    --transfers 1 \
+                    --delete-empty-src-dirs \
+                    --files-from - \
+                    --local-encoding None \
+                    --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[0]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
+                    . \
+                    "b2-phill-all:Archive-Store/_/Staging/${mfspath}"< <( \
+                    find "${bname}" \
+                    ) \
+                    || /cygdrive/c/rclone/rclone.exe move \
+                    -vv \
+                    --dry-run \
+                    --checksum \
+                    --transfers 1 \
+                    --delete-empty-src-dirs \
+                    --files-from - \
+                    --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[0]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
+                    . \
+                    "b2-phill-all:Archive-Store/_/Staging/${mfspath}" < <( \
+                    find "${bname}" \
+                    )
+            )
+    )
 }
 
 function laptop.staging.add.export ()
