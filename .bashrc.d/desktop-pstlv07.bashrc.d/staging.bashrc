@@ -70,7 +70,7 @@ function staging.add.export () {
                     --delete-empty-src-dirs \
                     --files-from - \
                     --local-encoding None \
-                    --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[0]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
+                    --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[2]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
                     . \
                     "b2-phill-all:Archive-Store/_/Staging/${mfspath}"< <( \
                     find "${bname}" \
@@ -82,7 +82,7 @@ function staging.add.export () {
                     --transfers 1 \
                     --delete-empty-src-dirs \
                     --files-from - \
-                    --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[0]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
+                    --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[2]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
                     . \
                     "b2-phill-all:Archive-Store/_/Staging/${mfspath}" < <( \
                     find "${bname}" \
