@@ -49,28 +49,44 @@ function staging.add.export () {
         echo "${dcid}" >> "/cygdrive/e/Staging/staging cids.txt"
     else
         echo "Found ${dcid} already exported" >&2
-        bname=$(basename "${dname}")
-        dnamepath=$(dirname "${dname}")
-
-        echo "bname: ${bname}" >&2
-        echo "dnamepath: ${dnamepath}" >&2
-
-
-        (
-            cd "${dnamepath}" \
-             && pwd \
-             && /cygdrive/c/rclone/rclone.exe move \
-                    -vv \
-                    --checksum \
-                    --transfers 1 \
-                    --delete-empty-src-dirs \
-                    --include "${bname}/*" \
-                    --min-age 2d \
-                    --local-encoding None \
-                    . \
-                    "b2-phill-all:Archive-Store/_/Staging/${mfspath}"
-        )
     fi
+
+    bname=$(basename "${dname}")
+    dnamepath=$(dirname "${dname}")
+
+    echo "bname: ${bname}" >&2
+    echo "dnamepath: ${dnamepath}" >&2
+
+
+    # (
+    #     cd "${dnamepath}" \
+    #         && pwd \
+    #         && (
+    #             /cygdrive/c/rclone/rclone.exe move \
+    #                 -vv \
+    #                 --checksum \
+    #                 --transfers 1 \
+    #                 --delete-empty-src-dirs \
+    #                 --files-from - \
+    #                 --local-encoding None \
+    #                 --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[0]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
+    #                 . \
+    #                 "b2-phill-all:Archive-Store/_/Staging/${mfspath}"< <( \
+    #                 find "${bname}" \
+    #                 ) \
+    #                 || /cygdrive/c/rclone/rclone.exe move \
+    #                 -vv \
+    #                 --checksum \
+    #                 --transfers 1 \
+    #                 --delete-empty-src-dirs \
+    #                 --files-from - \
+    #                 --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[0]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
+    #                 . \
+    #                 "b2-phill-all:Archive-Store/_/Staging/${mfspath}" < <( \
+    #                 find "${bname}" \
+    #                 )
+    #         )
+    # )
 }
 
 function laptop.staging.add.export ()
@@ -78,31 +94,56 @@ function laptop.staging.add.export ()
     if [[ -z "${1}" ]]
     then
 
-        for ddname in /cygdrive/e/Staging/Laptop/Downloads/*/
+        while read -r odirname
         do
+            bodirname=$(basename "${odirname}")
 
-            echo "Found ${ddname}"
-            bddname=$(basename "${ddname}")
-
-            if ! laptop.staging.add.export "${bddname}"
+            if ! laptop.staging.add.export "${bodirname}"
             then
                 return 1
             fi
-        done
+
+        done < <(
+            find /cygdrive/e/Staging/Laptop/Downloads  -maxdepth 1 -mindepth 1 -type d -exec stat --format='%W %n' {} \; \
+                | sort -n \
+                | cut -d ' ' -f2-
+            )
+
+        # for ddname in /cygdrive/e/Staging/Laptop/Downloads/*/
+        # do
+
+        #     echo "Found ${ddname}"
+        #     bddname=$(basename "${ddname}")
+
+        #     if ! laptop.staging.add.export "${bddname}"
+        #     then
+        #         return 1
+        #     fi
+        # done
 
         return
     fi
 
+
+    if [[ "${1}" == /* ]]
+    then
+        sname=${1}
+    else
+        sname=/cygdrive/e/Staging/Laptop/Downloads/${1}
+    fi
+
     (
-        cd "/cygdrive/e/Staging/Laptop/Downloads/${1}" && {
-            for sdname in *
+        cd "${sname}" && {
+            for sdname in */
             do
-                if [[ -d  "/cygdrive/e/Staging/Laptop/Downloads/${1}/${sdname}" ]]
+                bsdname=$(basename "${sdname}")
+
+                if [[ -d  "/cygdrive/e/Staging/Laptop/Downloads/${1}/${bsdname}" ]]
                 then
-                    echo "$(date) adding ${sdname}" >&2
-                    staging.add.export "E:\Staging\Laptop\Downloads\\${1}\\${sdname}" "${1}" Downloads Laptop
+                    echo "$(date) adding ${bsdname}" >&2
+                    staging.add.export "E:\Staging\Laptop\Downloads\\${1}\\${bsdname}" "${1}" Downloads Laptop
                 else
-                    echo "Skipping nonexistent dir ${sdname}" >&2
+                    echo "Skipping nonexistent dir ${bsdname}" >&2
                 fi
             done
         }
@@ -110,36 +151,47 @@ function laptop.staging.add.export ()
 }
 
 
-  function ipfs.mimas.add.staging () {
+function ipfs.mimas.add.staging () {
 
     if [[ -z "${1}" ]]
     then
 
-        for ddname in /cygdrive/g/Staging/Mimas/Downloads/*/
+        while read -r odirname
         do
+            bodirname=$(basename "${odirname}")
 
-            echo "Found ${ddname}"
-            bddname=$(basename "${ddname}")
-
-            if ! mimas.staging.add.export "${bddname}"
+            if ! laptop.staging.add.export "${bodirname}"
             then
                 return 1
             fi
-        done
+
+        done < <(
+            find /cygdrive/g/Staging/Mimas/Downloads  -maxdepth 1 -mindepth 1 -type d -exec stat --format='%W %n' {} \; \
+                | sort -n \
+                | cut -d ' ' -f2-
+            )
 
         return
     fi
 
+    if [[ "${1}" == /* ]]
+    then
+        sname=${1}
+    else
+        sname=/cygdrive/g/Staging/Mimas/Downloads/${1}
+    fi
+
     (
-        cd "/cygdrive/g/Staging/Mimas/Downloads/${1}" && {
-            for sdname in *
+        cd "${sname}" && {
+            for sdname in */
             do
-                if [[ -d  "/cygdrive/g/Staging/Mimas/Downloads/${1}/${sdname}" ]]
+                bsdname=$(basename "${sdname}")
+                if [[ -d  "/cygdrive/g/Staging/Mimas/Downloads/${1}/${bsdname}" ]]
                 then
-                    echo "$(date) adding ${sdname}" >&2
-                    staging.add.export "G:\Staging\Mimas\Downloads\\${1}\\${sdname}" "${1}" Downloads Mimas
+                    echo "$(date) adding ${bsdname}" >&2
+                    staging.add.export "G:\Staging\Mimas\Downloads\\${1}\\${bsdname}" "${1}" Downloads Mimas
                 else
-                    echo "Skipping nonexistent dir ${sdname}" >&2
+                    echo "Skipping nonexistent dir ${bsdname}" >&2
                 fi
             done
         }
