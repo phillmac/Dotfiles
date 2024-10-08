@@ -64,7 +64,6 @@ function staging.add.export () {
             && (
                 /cygdrive/c/rclone/rclone.exe move \
                     -vv \
-                    --dry-run \
                     --checksum \
                     --transfers 1 \
                     --delete-empty-src-dirs \
@@ -77,7 +76,6 @@ function staging.add.export () {
                     ) \
                     || /cygdrive/c/rclone/rclone.exe move \
                     -vv \
-                    --dry-run \
                     --checksum \
                     --transfers 1 \
                     --delete-empty-src-dirs \
@@ -138,7 +136,7 @@ function laptop.staging.add.export ()
         }
     )
 
-    # /cygdrive/c/rclone/rclone.exe rmdirs -vv "${sname}"
+    /cygdrive/c/rclone/rclone.exe rmdirs -vv "${sname}"
 }
 
 
