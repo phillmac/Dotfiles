@@ -62,31 +62,28 @@ function staging.add.export () {
         cd "${dnamepath}" \
             && pwd \
             && (
+                find "${bname}" -type f -printf '%p\n' | tee list.txt
                 /cygdrive/c/rclone/rclone.exe move \
                     -vv \
                     --checksum \
                     --transfers 1 \
                     --delete-empty-src-dirs \
-                    --files-from - \
+                    --files-from list.txt \
                     --local-encoding None \
-                    --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[2]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
+                    --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[2]}/Downloads-Backup/${dname}/${bname}/$(date '+%Y%m%d%H%M')" \
                     . \
-                    "b2-phill-all:Archive-Store/_/Staging/${mfspath}"< <( \
-                    find "${bname}" \
-                    ) \
+                    "b2-phill-all:Archive-Store/_/Staging/${mfspath}" \
                     || /cygdrive/c/rclone/rclone.exe move \
                     -vv \
                     --checksum \
                     --transfers 1 \
                     --delete-empty-src-dirs \
-                    --files-from - \
-                    --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[2]}/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
+                    --files-from list.txt \
+                    --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[2]}/Downloads-Backup/${dname}/${bname}/$(date '+%Y%m%d%H%M')" \
                     . \
-                    "b2-phill-all:Archive-Store/_/Staging/${mfspath}" < <( \
-                    find "${bname}" \
-                    )
-            )
-    )
+                    "b2-phill-all:Archive-Store/_/Staging/${mfspath}"
+                    ) && rm -v list.txt
+        )
 }
 
 function laptop.staging.add.export ()
@@ -103,8 +100,10 @@ function laptop.staging.add.export ()
                 return 1
             fi
 
+            return
+
         done < <(
-            find /cygdrive/e/Staging/Laptop/Downloads  -maxdepth 1 -mindepth 1 -type d -exec stat --format='%W %n' {} \; \
+            find /cygdrive/e/Staging/Laptop/Downloads -maxdepth 1 -mindepth 1 -type d -exec stat --format='%W %n' {} \; \
                 | sort -n \
                 | cut -d ' ' -f2-
             )
@@ -119,24 +118,29 @@ function laptop.staging.add.export ()
         sname=/cygdrive/e/Staging/Laptop/Downloads/${1}
     fi
 
+    bsname=$(basename "${1}")
+
     (
         cd "${sname}" && {
             for sdname in */
             do
                 bsdname=$(basename "${sdname}")
 
-                if [[ -d  "/cygdrive/e/Staging/Laptop/Downloads/${1}/${bsdname}" ]]
+                if [[ -d  "/cygdrive/e/Staging/Laptop/Downloads/${bsname}/${bsdname}" ]]
                 then
                     echo "$(date) adding ${bsdname}" >&2
-                    staging.add.export "E:\Staging\Laptop\Downloads\\${1}\\${bsdname}" "${1}" Downloads Laptop
+                    staging.add.export "E:\Staging\Laptop\Downloads\\${bsname}\\${bsdname}" "${bsname}" Downloads Laptop
                 else
                     echo "Skipping nonexistent dir ${bsdname}" >&2
                 fi
+
+                return
+
             done
         }
     )
 
-    /cygdrive/c/rclone/rclone.exe rmdirs -vv "${sname}"
+    # /cygdrive/c/rclone/rclone.exe rmdirs -vv "${sname}"
 }
 
 
