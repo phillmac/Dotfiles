@@ -67,7 +67,6 @@ function staging.add.export () {
                 /cygdrive/c/rclone/rclone.exe move \
                     -vv \
                     --checksum \
-                    --transfers 1 \
                     --delete-empty-src-dirs \
                     --files-from ../list.txt \
                     --local-encoding None \
@@ -77,7 +76,6 @@ function staging.add.export () {
                     || /cygdrive/c/rclone/rclone.exe move \
                     -vv \
                     --checksum \
-                    --transfers 1 \
                     --delete-empty-src-dirs \
                     --files-from ../list.txt \
                     --backup-dir="b2-phill-all:Archive-Store/_/Staging/${dpath[2]}/Downloads-Backup/${dname}/$(date '+%Y%m%d%H%M')" \
