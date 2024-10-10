@@ -372,6 +372,7 @@ function rclone_fuse () {
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
             --security-opt apparmor:unconfined \
+            --tag "rclone-fuse:${RCLONE_FUSE_TAG}" \
             -v /root:/root \
             -v "$(pwd):$(pwd):shared" \
             -w "$(pwd)" \
@@ -386,6 +387,7 @@ function rclone_fuse () {
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
             --security-opt apparmor:unconfined \
+            --tag "rclone-fuse:${RCLONE_FUSE_TAG}" \
             -v /root:/root \
             -v "$(pwd):$(pwd):shared" \
             -w "$(pwd)" \
@@ -408,6 +410,7 @@ function rclone_fuse_data () {
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
             --security-opt apparmor:unconfined \
+            --tag "rclone-fuse:${RCLONE_FUSE_TAG}" \
             -v /root:/root \
             -v /data:/data \
             -v "$(pwd):$(pwd):shared" \
@@ -423,6 +426,7 @@ function rclone_fuse_data () {
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
             --security-opt apparmor:unconfined \
+            --tag "rclone-fuse:${RCLONE_FUSE_TAG}" \
             -v /root:/root \
             -v /data:/data \
             -v "$(pwd):$(pwd):shared" \
