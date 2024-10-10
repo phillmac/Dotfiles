@@ -135,7 +135,8 @@ function laptop.staging.add.export ()
         }
     )
 
-    /cygdrive/c/rclone/rclone.exe rmdirs -vv "E:\\Staging\\Laptop\\Downloads\\${bsname}"
+    /cygdrive/c/rclone/rclone.exe rmdirs -vv --local-encoding=none "E:\\Staging\\Laptop\\Downloads\\${bsname}" \
+    || /cygdrive/c/rclone/rclone.exe rmdirs -vv "E:\\Staging\\Laptop\\Downloads\\${bsname}"
 }
 
 
