@@ -19,3 +19,5 @@ function sleep_until ()
 
     sleep "${sleep_seconds}"
 }
+
+export -f sleep_until
