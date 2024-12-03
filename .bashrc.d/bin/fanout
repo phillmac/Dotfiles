@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+
+# fanout utility - send stdin input to multiple target commands.
+#
+# Copyright (c) 2017 Michael Klement, released under the [MIT license](http://opensource.org/licenses/MIT).
+#
+# Aside from requiring Bash 3+, this utility should be portable: 
+# It uses only POSIX-compliant utilities with POSIX-compliant options.
+#
+# Invoke with --help for help.
+
+kTHIS_NAME=${BASH_SOURCE##*/}
+
+die() { echo "$kTHIS_NAME: ERROR: ${1:-"ABORTING due to unexpected error."}" 1>&2; exit ${2:-1}; }
+dieSyntax() { echo "$kTHIS_NAME: ARGUMENT ERROR: ${1:-"Invalid argument(s) specified."}"$'\n'"Use -h for help." 1>&2; exit 2; }
+
+if [[ $1 == '-h' || $1 == '--help' ]]; then
+  cat <<EOF
+
+Sends stdin input to multiple target commands.
+
+   ... | $kTHIS_NAME [-u|-v] <cmd> ...
+
+   -u ... unbuffered mode; output is printed as it arrives, potentially mixing
+         output from different commands; by default, stdout output is captured
+         in full in temporary file first, and then printed in sequence, in the 
+         order the target commands were specified. Stderr output, by contrast,
+         is always printed as it arrives.
+
+   -v ... verbose mode; add a header line before each command's output 
+          identifying the command; mutually exclusive with -u
+
+   <cmd> ... a shell command line to send stdin input to, as a single string;
+            you may include an output redirection, but the command must take
+            input from stdin.
+
+* Note that unless -u is specified, output doesn't start printing until the
+  1st command finishes, then the 2nd, ...
+  
+* Neither -u nor -v are relevant if all target commands perform their own
+  output redirections.
+
+* Irrespective of output options, this utility 
+  * always waits until all commands have terminated.
+  * always prints a warning at the end for every target command that reported
+    a nonzero exit code.
+
+* The exit code will be 0, if all commands report 0.
+  Otherwise, it will be the exit code of the first command that reported a
+  nonzero exit code.
+
+Example:
+   \$ printf '1\n2\n' | $kTHIS_NAME -v "sed 's/^/@/'" "sed 's/^/%/'"
+   # sed 's/^/@/'
+   @1
+   @2
+   # sed 's/^/%/'
+   %1
+   %2
+
+EOF
+  exit 0
+fi
+
+verbose=0 unbuffered=0
+while getopts ':vu' opt; do
+  [[ $opt == '?' ]] && dieSyntax "Unknown option: -$OPTARG"
+  [[ $opt == ':' ]] && dieSyntax "Option -$OPTARG is missing its argument."  
+  case "$opt" in
+    u)
+      unbuffered=1
+      ;;
+    v)
+      verbose=1
+      ;;
+    *)
+      die "DESIGN ERROR: option -$opt not handled."
+      ;;
+  esac
+done
+shift $((OPTIND - 1)) # Skip the already-processed arguments (options).
+
+(( unbuffered && verbose )) && dieSyntax "Incompatible options specified."
+
+(( $# > 0 )) || dieSyntax "Please specify at least 1 target command."
+
+aCmds=( "$@" )
+
+# Create a temp. directory to hold all FIFOs and captured output.
+# Note: mktemp is not a POSIX utility, and env. var. TMPDIR may not be defined.
+#       Try to use TMPDIR, if defined; fall back to /tmp
+tmpDir="${TMPDIR:-/tmp}/$kTHIS_NAME-$$-$(date +%s)-$RANDOM"
+mkdir "$tmpDir" || die
+trap 'rm -rf "$tmpDir"' EXIT # Set up exit trap to automatically clean up the temp dir.
+
+# Determine the number padding for the sequential output names.
+maxNdx=$(( $# - 1 ))
+fmtString="%0${#maxNdx}d"
+
+# Create the filename arrays
+aFifos=() aOutFiles=()
+for (( i = 0; i <= maxNdx; ++i )); do
+  printf -v suffix "$fmtString" $i
+  aFifos[i]="$tmpDir/fifo-$suffix"
+  (( unbuffered )) && aOutFiles[i]='/dev/stdout' || aOutFiles[i]="$tmpDir/out-$suffix"
+done
+
+# Create the FIFOs.
+mkfifo "${aFifos[@]}" || die
+
+# Start all commands in the background, each reading from a dedicated FIFO.
+aPids=()
+for (( i = 0; i <= maxNdx; ++i )); do
+  fifo=${aFifos[i]}
+  outFile=${aOutFiles[i]}
+  cmd=${aCmds[i]}
+  (( verbose )) && printf '# %s\n' "$cmd" > "$outFile"
+  # Note: Since we're launching in the background, we cannot directly
+  #       determine failure; we'd have to do it via `wait` later.
+  eval "$cmd" < "$fifo" >> "$outFile" &
+  aPids[i]=$!
+done
+
+# Now tee stdin to all FIFOs
+tee "${aFifos[@]}" >/dev/null || die
+
+# Wait for all background processes to finish, in sequence.
+ecOverall=0 aWarnings=()
+for (( i = 0; i <= maxNdx; ++i )); do
+  wait "${aPids[i]}"
+  ec=$?
+  # Pass the first nonzero exit code out as the overall one.
+  (( ec != 0 && ecOverall == 0 )) && ecOverall=$ec
+  (( ec != 0 )) && aWarnings+=( "WARNING: '${aCmds[i]}' terminated with exit code $ec." )
+  (( unbuffered )) || cat "${aOutFiles[i]}"
+done
+
+# Print any warnings.
+if (( ${#aWarnings[@]} )); then
+  printf '%s\n' "${aWarnings[@]}"
+fi
+
+exit $ecOverall
