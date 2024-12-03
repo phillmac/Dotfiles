@@ -37,4 +37,43 @@ export IPFS_HTTP_GATEWAY
 function export-split-car ()
 {
     ( cd /home/phill/ipfs-export-split && ipfs dag export -p "${1}" | split -b 10M -a 5 --verbose - "${1}.car." )
+
 }
+
+function mount_ipfs_wasabi ()
+{
+    rclone_mount -vvv mount \
+        --allow-other \
+        --transfers 10 \
+        --attr-timeout 24h \
+        --dir-cache-time 24h \
+        --vfs-cache-mode full \
+        --vfs-cache-max-age 24h \
+        --vfs-write-back 1h \
+        --vfs-fast-fingerprint \
+        --cache-dir /data/ipfs-wasabi-cache \
+            wasabi-ca-central-1:ipfs-remote-mount/rhea \
+            /home/ubuntu/.ipfs-wasabi
+}
+
+function serve_ipfs_wasabi ()
+{
+    rclone_data -vvv serve s3 \
+        --addr 'unix:///home/ubuntu/.var/run/ipfs-blockstore-va-2.socket' \
+        --transfers 10 \
+        --attr-timeout 24h \
+        --dir-cache-time 24h \
+        --vfs-cache-mode full \
+        --vfs-cache-max-age 24h \
+        --vfs-write-back 1h \
+        --vfs-fast-fingerprint \
+        --cache-dir /data/ipfs-wasabi-s3-cache \
+        wasabi-us-east-2:ipfs-blockstore-va-2
+}
+
+function ipfs-wasabi ()
+{
+    IPFS_PATH='/home/ubuntu/.ipfs-wasabi' ipfs "${@}"
+}
+
+export -f ipfs-wasabi
