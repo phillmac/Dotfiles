@@ -20,13 +20,13 @@ function _curl () {
     local options
     local unix_sock_addr
     local curl_usr_pass
+    local curl_method
 
     unix_sock_addr=${CURL_SOCK_ADDR}
-
-    curl_usr_pass="${CURL_USR}:${CURL_PASS}"
-
     retries=${CURL_RETRIES:-0}
     maxtime=${CURL_MAXTIME:-300}
+    curl_usr_pass="${CURL_USR}:${CURL_PASS}"
+    curl_method="${CURL_METHOD}"
 
     options=(-n --fail)
 
@@ -46,10 +46,15 @@ function _curl () {
 
     if [[ "${curl_usr_pass}" != ':' ]]
     then
-        options=("${options[@]}"  -u "${curl_usr_pass}")
+        options=("${options[@]}" -u "${curl_usr_pass}")
     fi
 
-    options=("${options[@]}"  "${@}")
+    if [[ -n "${curl_method}" ]]
+    then
+        options=("${options[@]}" -X "${curl_method}")
+    fi
+
+    options=("${options[@]}" "${@}")
 
     if ((debug))
     then
