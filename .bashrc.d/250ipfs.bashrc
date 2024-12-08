@@ -230,7 +230,6 @@ function ipfs.dag.get.links () {
     get_url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/dag/get?arg=${ls_addr_encoded}"
     [[ -n "${IPFS_DEBUG}" ]] &&  echo "get_url is ${get_url}" >&2
 
-    # jq -r '.Links[].Hash["/"]' < <(_curl "${get_url}")
     python3 -c \
 '
 import sys, json
@@ -242,6 +241,40 @@ if "links" in dag:
 else:
     for l in dag["Links"]:
         print(l["Hash"]["/"])
+' < <(_curl "${get_url}")
+}
+
+function ipfs.dag.get.links.name () {
+    local ls_addr
+    local ls_addr_encoded
+    local get_url
+
+    ls_addr=${1:-$IPFS_ADDR}
+
+    if [[ -z "${ls_addr}" ]];
+    then
+        echo "ls addr is required" >&2
+        return 252
+    fi
+
+    ls_addr_encoded=$(rawurlencode "${ls_addr}")
+
+    [[ -n "${IPFS_DEBUG}" ]] &&  echo "ls_addr_encoded is ${ls_addr_encoded}" >&2
+
+    get_url="${IPFS_HTTP_GATEWAY}/${IPFS_API}/dag/get?arg=${ls_addr_encoded}"
+    [[ -n "${IPFS_DEBUG}" ]] &&  echo "get_url is ${get_url}" >&2
+
+    python3 -c \
+'
+import sys, json
+dag = json.load(sys.stdin)
+
+if "links" in dag:
+    for l in dag["links"]:
+        print(l["Cid"]["/"] + " " + l["Name"])
+else:
+    for l in dag["Links"]:
+        print(l["Hash"]["/"] + " " + l["Name"])
 ' < <(_curl "${get_url}")
 }
 
