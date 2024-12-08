@@ -16,34 +16,56 @@ function _curl () {
     local retries
     local maxtime
     local result
+    local debug
+    local options
+    local unix_sock_addr
     local curl_usr_pass
+
+    unix_sock_addr=${CURL_SOCK_ADDR}
+
     curl_usr_pass="${CURL_USR}:${CURL_PASS}"
 
     retries=${CURL_RETRIES:-0}
     maxtime=${CURL_MAXTIME:-300}
 
+    options=(-n --fail)
+
+    if [[ -n "${unix_sock_addr}" ]]
+    then
+        options=("${options[@]}" --unix-socket "${unix_sock_addr}")
+    fi
+
     if [[ -n "${ENABLE_DEBUG}" ]] || [[ -n "${DEBUG_CURL}" ]]
     then
-
-        if [[ "${curl_usr_pass}" = ':' ]]
-        then
-            curl -n --verbose --fail --retry "${retries}" --max-time "${maxtime}" "${@}"
-            result=$?
-        else
-            curl -n --verbose --fail --retry "${retries}" -u "${curl_usr_pass}" --max-time "${maxtime}" "${@}"
-            result=$?
-        fi
+        options=("${options[@]}" --verbose --retry "${retries}" --max-time "${maxtime}")
+        debug=1
     else
-        if [[ "${curl_usr_pass}" = ':' ]]
-        then
-            curl -n --silent --fail "${@}"
-            result=$?
-        else
-            curl -n --silent --fail -u "${curl_usr_pass}" "${@}"
-            result=$?
-        fi
+        options=("${options[@]}" --silent)
+        debug=0
     fi
+
+    if [[ "${curl_usr_pass}" != ':' ]]
+    then
+        options=("${options[@]}"  -u "${curl_usr_pass}")
+    fi
+
+    options=("${options[@]}"  "${@}")
+
+    if ((debug))
+    then
+        echo "CURL options: ${options[*]}" >&2
+    fi
+
+    curl "${options[@]}"
+    result=$?
+
     echo
+
+    if ((debug))
+    then
+        echo "CURL result code: ${result}" >&2
+    fi
+
     return ${result}
 }
 
