@@ -295,6 +295,7 @@ function ipfs_backblaze_sync_pins_rhea () {
         echo "${progress_msg}" >&2
 
         ipfs_dag_import_rhea_ssh < <( ipfs-backblaze dag export --progress=false --timeout=24h "${missing_cid}" | mbuffer ) || break
+        ((progress+=1))
     done < reha.pins.missing.txt
 }
 
