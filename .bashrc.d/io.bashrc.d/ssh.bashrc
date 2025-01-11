@@ -12,7 +12,7 @@ function ssh_rhea ()
 
 function ipfs_dag_import_rhea_ssh ()
 {
-    ssh_rhea "mbuffer -e -q | IPFS_PATH=/home/ubuntu/.ipfs-wasabi ipfs dag import"
+    ssh_rhea "mbuffer -e -q | ipfs --api /unix/home/ubuntu/.var/run/ipfs-wasabi.socket dag import"
 }
 
 
