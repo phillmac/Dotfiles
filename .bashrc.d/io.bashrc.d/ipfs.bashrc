@@ -80,7 +80,7 @@ function ipfs-wasabi.public.pins.missing ()
     while read -r pincid
         do
             cid_entry=$(grep "${pincid}" public.files.txt)
-            progress_msg="$(date) ipfs-wasabi missing item ${cid_entry} [${progress}/${cids_count}]"
+            progress_msg="$(date) ~ ipfs-wasabi missing item ${cid_entry} [${progress}/${cids_count}]"
 
             echo "${progress_msg}" >&2
 
@@ -116,7 +116,7 @@ function ipfs-wasabi.archive.pins.missing ()
         do
 
             cid_entry=$(grep "${pincid}" archive.entries.txt)
-            progress_msg="$(date) ipfs-wasabi missing item ${cid_entry} [${progress}/${cids_count}]"
+            progress_msg="$(date) ~ ipfs-wasabi missing item ${cid_entry} [${progress}/${cids_count}]"
 
             echo "${progress_msg}" >&2
 
@@ -275,15 +275,25 @@ function process_gdrive_ipfs_export () {
 }
 
 function ipfs_backblaze_sync_pins_rhea () {
+    local cids_count
+    local progress
+    local missing_cid
+    local progress_msg
+
    ipfs_pin_ls_recursive_rhea   > reha.pins.txt
    ipfs-backblaze.pins.ls       > backblaze.pins.txt
 
     comm -32 backblaze.pins.txt reha.pins.txt > reha.pins.missing.txt
-    wc -l < reha.pins.missing.txt
+    cids_count=$(wc -l < reha.pins.missing.txt)
+
+    ((progress=1))
 
     while read -r missing_cid && ! [[ -e ~/.var/run/stop-ipfs-pin-sync ]]
     do
-        echo "$(date) Missing ${missing_cid}"
+        progress_msg="$(date) ~ ipfs-rhea missing item ${missing_cid} [${progress}/${cids_count}]"
+
+        echo "${progress_msg}" >&2
+
         ipfs_dag_import_rhea_ssh < <( ipfs-backblaze dag export --progress=false --timeout=24h "${missing_cid}" | mbuffer ) || break
     done < reha.pins.missing.txt
 }
