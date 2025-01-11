@@ -188,7 +188,7 @@ function read-split-car ()
     (
         set -e
         echo '' > "${HOME}"/split-car-read.log.txt
-        
+
         while read -r fname
         do
             if [[ -n "${fname}" ]]
@@ -209,6 +209,25 @@ function import-split-car-backblaze ()
         ipfs-backblaze dag import < <( mbuffer < <( read-split-car "${1}" ))
     )
 }
+
+function gdrive.export.staging.move ()
+{
+    mv -v "$(find ~/gdrive/ipfs-export2 -type f | head -n 1)" ~/gdrive/ipfs-export
+}
+
+
+function process_gdrive_ipfs_export () {
+    gdrive.export.staging.move \
+    && while \
+    ./transfer-ipfs-export.sh \
+    && mv -v ~/gdrive/ipfs-export/*.car ~/gdrive/ipfs-export-processed \
+    && ! [[ -e ~/.var/run/stop-ipfs-car-processing ]]
+    do
+        gdrive.export.staging.move
+        sleep 2
+    done
+}
+
 
 export IPFS_GET_BATCH_COUNT
 export IPFS_GET_TIMEOUT
