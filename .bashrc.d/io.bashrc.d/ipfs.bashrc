@@ -29,9 +29,14 @@ function ipfs-backblaze-test ()
     IPFS_PATH='/home/phill/.ipfs-backblaze-test' ipfs-s3 "${@}"
 }
 
+function ipfs-wasabi.pins.ls ()
+{
+    ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique
+}
+
 function ipfs-wasabi.pins.ls.export ()
 {
-    ipfs-wasabi pin ls --type=recursive > ".ipfs-wasabi/$(date '+%Y_%m_%d_%H_%M_%S').pins.txt"
+    ipfs-wasabi.pins.ls > ".ipfs-wasabi/$(date '+%Y_%m_%d_%H_%M_%S').pins.txt"
 }
 
 function ipfs-wasabi.files.ls.export ()
@@ -40,9 +45,14 @@ function ipfs-wasabi.files.ls.export ()
     ipfs-wasabi ls --size=false "${files_root}" > ".ipfs-wasabi/$(date '+%Y_%m_%d_%H_%M_%S').files.txt"
 }
 
+function ipfs-backblaze.pins.ls ()
+{
+    ipfs-backblaze pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique
+}
+
 function ipfs-backblaze.pins.ls.export ()
 {
-    ipfs-backblaze pin ls --type=recursive > ".ipfs-backblaze/$(date '+%Y_%m_%d_%H_%M_%S').pins.txt"
+    ipfs-backblaze.pins.ls > ".ipfs-backblaze/$(date '+%Y_%m_%d_%H_%M_%S').pins.txt"
 }
 
 function ipfs-backblaze.files.ls.export ()
@@ -54,14 +64,26 @@ function ipfs-backblaze.files.ls.export ()
 
 function ipfs-wasabi.public.pins.missing ()
 {
+    local cids_count
+    local progress
+    local cid_entry
+    local progress_msg
+
     ipfs.ls.recursive.files "${1}" "${2}" | tee public.files.txt | cut -d ' ' -f 1 | sort --unique > public.files.cids.txt
-    ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > wasabi.pins.txt
+    ipfs-wasabi.pins.ls > wasabi.pins.txt
+
     comm -23 public.files.cids.txt wasabi.pins.txt > wasabi.public.missing.txt
     cids_count=$(wc -l < wasabi.public.missing.txt)
+
     ((progress=1))
+
     while read -r pincid
         do
-            echo "$(date) ipfs-wasabi missing item $(grep ${pincid} public.files.txt) [${progress}/${cids_count}]" >&2
+            cid_entry=$(grep "${pincid}" public.files.txt)
+            progress_msg="$(date) ipfs-wasabi missing item ${cid_entry} [${progress}/${cids_count}]"
+
+            echo "${progress_msg}" >&2
+
             ipfs-wasabi dag import < <(
                 docker run \
                     --rm \
@@ -77,14 +99,27 @@ function ipfs-wasabi.public.pins.missing ()
 
 function ipfs-wasabi.archive.pins.missing ()
 {
+    local cids_count
+    local progress
+    local cid_entry
+    local progress_msg
+
     archive.entries "${1}" | sort --unique > archive.entries.cids.txt
-    ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > wasabi.pins.txt
+    ipfs-wasabi.pins.ls > wasabi.pins.txt
+
     comm -23  archive.entries.cids.txt wasabi.pins.txt > wasabi.archive.missing.txt
     cids_count=$(wc -l < wasabi.archive.missing.txt)
+
     ((progress=1))
+
     while read -r pincid
         do
-            echo '(date) ipfs-wasabi missing item ' "$(grep "${pincid}" archive.entries.txt) [${progress}/${cids_count}]" >&2
+
+            cid_entry=$(grep "${pincid}" archive.entries.txt)
+            progress_msg="$(date) ipfs-wasabi missing item ${cid_entry} [${progress}/${cids_count}]"
+
+            echo "${progress_msg}" >&2
+
             ipfs-wasabi dag import < <(
                 docker run \
                     --rm \
@@ -131,16 +166,27 @@ function ipfs-wasabi.public.pins.monitor () {
 
 function ipfs-backblaze.archive.pins.missing ()
 {
-    archive.entries "${1}" | sort --unique > archive.entries.cids.txt
-    ipfs-backblaze pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique > backblaze.pins.txt
+    local cids_count
+    local progress
+    local pin_cid_entry
+    local progress_msg
+
+    archive.entries "${1}" | sort --unique  > archive.entries.cids.txt
+    ipfs-backblaze.pins.ls                  > backblaze.pins.txt
+
     comm -23  archive.entries.cids.txt backblaze.pins.txt > backblaze.archive.missing.txt
     cids_count=$(wc -l < backblaze.archive.missing.txt)
+
     ((progress=1))
+
     while read -r pincid
         do
 
             pin_cid_entry=$(grep "${pincid}" archive.entries.txt)
-            echo "$(date) - ipfs-backblaze missing item " "${pin_cid_entry} [${progress}/${cids_count}]" >&2
+            progress_msg="$(date) ~ ipfs-backblaze missing item ${cid_entry} [${progress}/${cids_count}]"
+
+            echo "${progress_msg}" >&2
+
             while ! ipfs-backblaze dag import < <(
                 docker run \
                     --rm \
@@ -228,6 +274,20 @@ function process_gdrive_ipfs_export () {
     done
 }
 
+function ipfs_backblaze_sync_pins_rhea () {
+   ipfs_pin_ls_recursive_rhea   > reha.pins.txt
+   ipfs-backblaze.pins.ls       > backblaze.pins.txt
+
+    comm -32 backblaze.pins.txt reha.pins.txt > reha.pins.missing.txt
+    wc -l < reha.pins.missing.txt
+
+    while read -r missing_cid
+    do
+        echo "$(date) Missing ${missing_cid}"
+        ipfs_dag_import_rhea_ssh < <( ipfs-backblaze dag export --progress=false --timeout=24h "${missing_cid}" ) || break
+    done < reha.pins.missing.txt
+}
+
 
 export IPFS_GET_BATCH_COUNT
 export IPFS_GET_TIMEOUT
@@ -237,3 +297,7 @@ export IPFS_PIN_SLEEP
 export IPFS_PIN_ALLOWED_START
 export IPFS_PIN_ALLOWED_FIN
 export IPFS_HTTP_GATEWAY
+
+export -f ipfs-wasabi
+export -f ipfs-backblaze
+export -f ipfs-backblaze-test
