@@ -281,7 +281,7 @@ function ipfs_backblaze_sync_pins_rhea () {
     comm -32 backblaze.pins.txt reha.pins.txt > reha.pins.missing.txt
     wc -l < reha.pins.missing.txt
 
-    while read -r missing_cid
+    while read -r missing_cid && ! [[ -e ~/.var/run/stop-ipfs-pin-sync ]]
     do
         echo "$(date) Missing ${missing_cid}"
         ipfs_dag_import_rhea_ssh < <( ipfs-backblaze dag export --progress=false --timeout=24h "${missing_cid}" ) || break
