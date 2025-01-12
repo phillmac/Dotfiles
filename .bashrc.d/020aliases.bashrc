@@ -174,6 +174,7 @@ function ipfs.mfs.exists ()
     local folder
     local existing
     local isExisting=false
+    local ipfs_cmd=${IPFS_CMD:-_ipfs}
 
     iname="${1}"
     mfspath="${2}"
@@ -183,7 +184,7 @@ function ipfs.mfs.exists ()
         if [[ "${iname}" = "${existing}" ]]; then
             isExisting=true
         fi
-    done < <(_ipfs files ls "${mfspath}")
+    done < <("${ipfs_cmd}" files ls "${mfspath}")
 
     if [[ ${isExisting} = true ]]; then
         echo "${iname} exists in mfs at ${mfspath}" >&2
@@ -198,6 +199,7 @@ function ipfs.mfs.create.dir ()
     local create_path=${1}
     local mfs_basedir=${2}
     local current_part=""
+    local ipfs_cmd=${IPFS_CMD:-_ipfs}
 
     local IFS='/'
 
@@ -211,7 +213,7 @@ function ipfs.mfs.create.dir ()
         if ! ipfs.mfs.exists "${part}" "${mfs_basedir}/${last_path}"
         then
             echo "Creating missing mfs dir ${mfs_basedir}/${current_part}" >&2
-            _ipfs files mkdir "${mfs_basedir}/${current_part}"
+            "${ipfs_cmd}" files mkdir "${mfs_basedir}/${current_part}"
         fi
 
         last_path="$current_part"
