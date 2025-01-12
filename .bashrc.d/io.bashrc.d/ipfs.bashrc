@@ -13,12 +13,7 @@ IPFS_PIN_ALLOWED_FIN="02:00"
 IPFS_HTTP_GATEWAY="http://192.168.20.33:8080"
 
 
-
-function ipfs-wasabi ()
-{
-    IPFS_PATH='/home/phill/.ipfs-wasabi' ipfs-s3 "${@}"
-}
-
+#IPFS Backblaze
 function ipfs-backblaze ()
 {
     IPFS_PATH='/home/phill/.ipfs-backblaze' ipfs-s3 "${@}"
@@ -27,22 +22,6 @@ function ipfs-backblaze ()
 function ipfs-backblaze-test ()
 {
     IPFS_PATH='/home/phill/.ipfs-backblaze-test' ipfs-s3 "${@}"
-}
-
-function ipfs-wasabi.pins.ls ()
-{
-    ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique
-}
-
-function ipfs-wasabi.pins.ls.export ()
-{
-    ipfs-wasabi.pins.ls > ".ipfs-wasabi/$(date '+%Y_%m_%d_%H_%M_%S').pins.txt"
-}
-
-function ipfs-wasabi.files.ls.export ()
-{
-    files_root=$(ipfs-wasabi files stat --hash /)
-    ipfs-wasabi ls --size=false "${files_root}" > ".ipfs-wasabi/$(date '+%Y_%m_%d_%H_%M_%S').files.txt"
 }
 
 function ipfs-backblaze.pins.ls ()
@@ -58,9 +37,87 @@ function ipfs-backblaze.pins.ls.export ()
 function ipfs-backblaze.files.ls.export ()
 {
     files_root=$(ipfs-backblaze files stat --hash /)
-    ipfs-backblaze ls --size=false "${files_root}" > ".ipfs-backblaze/$(date '+%Y_%m_%d_%H_%M_%S').files.txt"
+    gzip -9 < <(ipfs-backblaze ls --size=false "${files_root}") > ".ipfs-backblaze/$(date '+%Y_%m_%d_%H_%M_%S').files.txt.gz"
 }
 
+function ipfs-backblaze.archive.pins.missing ()
+{
+    local cids_count
+    local progress
+    local pin_cid_entry
+    local progress_msg
+
+    archive.entries "${1}" | sort --unique  > archive.entries.cids.txt
+    ipfs-backblaze.pins.ls                  > backblaze.pins.txt
+
+    comm -23  archive.entries.cids.txt backblaze.pins.txt > backblaze.archive.missing.txt
+    cids_count=$(wc -l < backblaze.archive.missing.txt)
+
+    ((progress=1))
+
+    while read -r pincid
+        do
+
+            pin_cid_entry=$(grep "${pincid}" archive.entries.txt)
+            progress_msg="$(date) ~ ipfs-backblaze missing item ${cid_entry} [${progress}/${cids_count}]"
+
+            echo "${progress_msg}" >&2
+
+            while ! ipfs-backblaze dag import < <(
+                docker run \
+                    --rm \
+                    --net host \
+                    --log-driver=none \
+                    curlimages/curl curl \
+                        --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' \
+                        "https://rhea.phillm.net/api/v0/dag/export?arg=${pincid}"
+            )
+            do
+                echo "$(date) - Failed ${pin_cid_entry} [${progress}/${cids_count}]"
+                sleep 300
+                echo "$(date) - Retrying ${pin_cid_entry} [${progress}/${cids_count}]"
+            done
+
+            ((progress+=1))
+    done < backblaze.archive.missing.txt
+
+}
+
+function ipfs.export.backblaze.batch ()
+{
+    while read -r cid fpath
+    do
+        echo "$(date) Exporting ${cid} - ${fpath}"
+
+        while ! ipfs-backblaze dag import < <(mbuffer < <(ipfs dag export --timeout=3h --progress=false "${cid}"))
+        do
+            echo "$(date) Retrying"
+            sleep 30
+        done
+    done
+}
+
+#IPFS Wasabi
+function ipfs-wasabi ()
+{
+    IPFS_PATH='/home/phill/.ipfs-wasabi' ipfs-s3 "${@}"
+}
+
+function ipfs-wasabi.pins.ls ()
+{
+    ipfs-wasabi pin ls --type=recursive | cut -d ' ' -f 1 | sort --unique
+}
+
+function ipfs-wasabi.pins.ls.export ()
+{
+    ipfs-wasabi.pins.ls > ".ipfs-wasabi/$(date '+%Y_%m_%d_%H_%M_%S').pins.txt"
+}
+
+function ipfs-wasabi.files.ls.export ()
+{
+    files_root=$(ipfs-wasabi files stat --hash /)
+    gzip -9 < <(ipfs-wasabi ls --size=false "${files_root}" ) > ".ipfs-wasabi/$(date '+%Y_%m_%d_%H_%M_%S').files.txt.gz"
+}
 
 function ipfs-wasabi.public.pins.missing ()
 {
@@ -133,14 +190,6 @@ function ipfs-wasabi.archive.pins.missing ()
 
 }
 
-function public.root.hash () {
-    docker run \
-        --rm \
-        --net host \
-        curlimages/curl curl 'https://ipfs-admin.phillm.net/api/v0/files/stat?hash=true&arg=/Public' | jq -r .Hash
-}
-
-
 function ipfs-wasabi.public.pins.monitor () {
     local public_hash
     local rlast
@@ -164,61 +213,12 @@ function ipfs-wasabi.public.pins.monitor () {
     done
 }
 
-function ipfs-backblaze.archive.pins.missing ()
-{
-    local cids_count
-    local progress
-    local pin_cid_entry
-    local progress_msg
 
-    archive.entries "${1}" | sort --unique  > archive.entries.cids.txt
-    ipfs-backblaze.pins.ls                  > backblaze.pins.txt
-
-    comm -23  archive.entries.cids.txt backblaze.pins.txt > backblaze.archive.missing.txt
-    cids_count=$(wc -l < backblaze.archive.missing.txt)
-
-    ((progress=1))
-
-    while read -r pincid
-        do
-
-            pin_cid_entry=$(grep "${pincid}" archive.entries.txt)
-            progress_msg="$(date) ~ ipfs-backblaze missing item ${cid_entry} [${progress}/${cids_count}]"
-
-            echo "${progress_msg}" >&2
-
-            while ! ipfs-backblaze dag import < <(
-                docker run \
-                    --rm \
-                    --net host \
-                    --log-driver=none \
-                    curlimages/curl curl \
-                        --user 'user:rrVfzbvRYTwNABCxJWjeHFu4' \
-                        "https://rhea.phillm.net/api/v0/dag/export?arg=${pincid}"
-            )
-            do
-                echo "$(date) - Failed ${pin_cid_entry} [${progress}/${cids_count}]"
-                sleep 300
-                echo "$(date) - Retrying ${pin_cid_entry} [${progress}/${cids_count}]"
-            done
-
-            ((progress+=1))
-    done < backblaze.archive.missing.txt
-
-}
-
-function ipfs.export.backblaze.batch ()
-{
-    while read -r cid fpath
-    do
-        echo "$(date) Exporting ${cid} - ${fpath}"
-
-        while ! ipfs-backblaze dag import < <(mbuffer < <(ipfs dag export --timeout=3h --progress=false "${cid}"))
-        do
-            echo "$(date) Retrying"
-            sleep 30
-        done
-    done
+function public.root.hash () {
+    docker run \
+        --rm \
+        --net host \
+        curlimages/curl curl 'https://ipfs-admin.phillm.net/api/v0/files/stat?hash=true&arg=/Public' | jq -r .Hash
 }
 
 function find-split-car ()
@@ -260,7 +260,6 @@ function gdrive.export.staging.move ()
 {
     mv -v "$(find ~/gdrive/ipfs-export2 -type f | head -n 1)" ~/gdrive/ipfs-export
 }
-
 
 function process_gdrive_ipfs_export () {
     gdrive.export.staging.move \
