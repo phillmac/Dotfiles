@@ -213,6 +213,43 @@ function ipfs-wasabi.public.pins.monitor () {
     done
 }
 
+function ipfs-wasabi.pin.update ()
+{
+    ipfs-wasabi files mkdir -p --flush=false "/scratchpad/${1}"
+
+    while read -r cid dirpath
+    do
+
+        bdirpath=$(dirname "${dirpath}")
+        echo "bdirpath: ${bdirpath}"
+
+        ipfs-wasabi files mkdir -p --flush=false "/scratchpad/${bdirpath}"
+
+        before=$(ipfs-wasabi files stat --flush=false --hash "/scratchpad/${1}")
+        echo "before: ${before}"
+
+        ipfs-wasabi pin add --progress "${before}"
+
+        ipfs-wasabi files --flush=false rm -r "/scratchpad/${dirpath}"
+
+	echo "copy /ipfs/${cid} /scratchpad/${dirpath}"
+
+        ipfs-wasabi files cp --flush=false "/ipfs/${cid}" "/scratchpad/${dirpath}"
+
+        after=$(ipfs-wasabi files stat --flush=false --hash "/scratchpad/${1}")
+
+        echo "after: ${after}"
+
+        ipfs-wasabi pin update --unpin=false "${before}" "${after}"
+
+
+    done < <(ipfs.ls.recursive.dirs "${1}" | tac)
+
+    ipfs-wasabi files rm -r --flush=false "/scratchpad/${1}"
+
+    ipfs-wasabi files flush
+}
+
 
 function public.root.hash () {
     docker run \
