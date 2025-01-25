@@ -17,7 +17,7 @@ function ipfs_dag_import_rhea_ssh ()
 
 function ipfs_dag_export_rhea_ssh ()
 {
-    ssh_rhea "ipfs --api /unix/home/ubuntu/.var/run/ipfs-wasabi.socket dag export --progress=false ${*} mbuffer -e -q"
+    ssh_rhea "ipfs --api /unix/home/ubuntu/.var/run/ipfs-wasabi.socket dag export --progress=false ${*} | mbuffer -e -q"
 }
 
 function ssh_rhea_ipfs ()
