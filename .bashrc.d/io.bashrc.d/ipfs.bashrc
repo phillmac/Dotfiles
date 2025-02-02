@@ -232,7 +232,7 @@ function ipfs-wasabi.pin.update ()
 
         ipfs-wasabi files --flush=false rm -r "/scratchpad/${dirpath}"
 
-	echo "copy /ipfs/${cid} /scratchpad/${dirpath}"
+	    echo "copy /ipfs/${cid} /scratchpad/${dirpath}"
 
         ipfs-wasabi files cp --flush=false "/ipfs/${cid}" "/scratchpad/${dirpath}"
 
