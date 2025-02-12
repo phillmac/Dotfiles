@@ -283,6 +283,11 @@ function ipfs.links.info ()
     jq -r '. | "\(.Type) \(.Hash) \(.Name)"'
 }
 
+function ipfs.dag.info ()
+{
+    jq -r ".links[] | \"\(.Cid[\"/\"]) \(.Name)\""
+}
+
 function ipfs.pin.ls () {
     ipfs pin ls --type=recursive | cut -d ' ' -f 1 | sort -u > pins.txt
 }
@@ -528,39 +533,11 @@ function ipfs.unpin.recursive ()
 function ipfs.files.dir.replace ()
 {
     cid=$(ipfs resolve "${2}")
-
     if [[ -n "${cid}" ]]
     then
-        ipfs files rm -r "${1}" && ipfs files cp "${cid}" "${1}"
+         ipfs files rm -r "${1}" && ipfs files cp "${cid}" "${1}"
     fi
 
-}
-
-function ipfs.mfs.copy.dirs ()
-{
-
-    local cid
-    local fpath
-
-    while read -r cid fpath
-    do
-        echo "$(date) ~ ${cid} ${fpath}" >&2
-        ipfs.mfs.create.dir /scratchpad/"${fpath}"
-    done < <(ipfs.ls.recursive.dirs "${1}")
-}
-
-function ipfs.mfs.copy.files ()
-{
-
-    local cid
-    local fpath
-    local ipfs_cmd=${IPFS_CMD:-_ipfs}
-
-    while read -r cid fpath
-    do
-        echo "$(date) ~ ${cid} ${fpath}" >&2
-        "${ipfs_cmd}" files cp "/ipfs/${cid}" /scratchpad/"${fpath}"
-    done < <(ipfs.ls.recursive.files "${1}")
 }
 
 export -f ipfs.ls
