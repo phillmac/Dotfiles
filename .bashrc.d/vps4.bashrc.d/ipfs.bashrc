@@ -329,7 +329,7 @@ function ipfs-wasabi.pin.update ()
         before=$(ipfs-wasabi files stat --flush=false --hash "/scratchpad/${1}")
         echo "Before: ${before}"
 
-        if ! ipfs-wasabi pin ls --type=recursive
+        if ! ipfs-wasabi pin ls --type=recursive "${before}"
         then
             ipfs-wasabi pin add --progress "${before}"
         else
