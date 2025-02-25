@@ -215,6 +215,11 @@ function ipfs-wasabi.public.pins.monitor () {
 
 function ipfs-wasabi.pin.update ()
 {
+
+    local before
+    local after
+    local last
+
     ipfs-wasabi files mkdir -p --flush=false "/scratchpad/${1}"
 
     while read -r cid dirpath
@@ -228,17 +233,26 @@ function ipfs-wasabi.pin.update ()
         before=$(ipfs-wasabi files stat --flush=false --hash "/scratchpad/${1}")
         echo "Before: ${before}"
 
-        if [[ -z "${IPFS_MFS_SKIP_PIN_BEFORE}" ]]
+        if [[ -z "${last}" ]]
         then
-            if  ! ipfs-wasabi pin ls --type=recursive "${before}"
-            then
-                ipfs-wasabi pin add --progress "${before}"
-            else
-                echo "Skip already pinned ${before}"
-            fi
+            echo "Pinning initial dir"
+            last=${before}
+            ipfs-wasabi pin add --progress "${before}"
+
         else
-            echo "Skip pin before set"
+            if [[ -z "${IPFS_MFS_SKIP_PIN_BEFORE}" ]]
+            then
+                if  ! ipfs-wasabi pin ls --type=recursive "${before}"
+                then
+                    ipfs-wasabi pin add --progress "${before}"
+                else
+                    echo "Skip already pinned ${before}"
+                fi
+            else
+                echo "Skip pin before set"
+            fi
         fi
+
 
         ipfs-wasabi files --flush=false rm -r "/scratchpad/${dirpath}"
 
@@ -252,11 +266,17 @@ function ipfs-wasabi.pin.update ()
 
         if  ! ipfs-wasabi pin ls --type=recursive "${after}"
         then
-            ipfs-wasabi pin update --unpin=false "${before}" "${after}"
+            if [[ -n "${IPFS_MFS_SKIP_PIN_BEFORE}" ]]
+            then
+                ipfs-wasabi pin update --unpin=false "${last}" "${after}"
+            else
+                ipfs-wasabi pin update --unpin=false "${before}" "${after}"
+            fi
         else
             echo "Skip already pinned ${after}"
         fi
 
+    last=${after}
 
 
     done < <(ipfs.ls.recursive.dirs "${1}" | tac)
