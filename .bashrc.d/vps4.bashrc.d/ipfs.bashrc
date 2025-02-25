@@ -329,11 +329,16 @@ function ipfs-wasabi.pin.update ()
         before=$(ipfs-wasabi files stat --flush=false --hash "/scratchpad/${1}")
         echo "Before: ${before}"
 
-        if ! ipfs-wasabi pin ls --type=recursive "${before}"
+        if [[ -z "${IPFS_MFS_SKIP_PIN_BEFORE}" ]]
         then
-            ipfs-wasabi pin add --progress "${before}"
+            if  ! ipfs-wasabi pin ls --type=recursive "${before}"
+            then
+                ipfs-wasabi pin add --progress "${before}"
+            else
+                echo "Skip already pinned ${before}"
+            fi
         else
-            echo "Skip already pinned ${before}"
+            echo "Skip pin before set"
         fi
 
         ipfs-wasabi files --flush=false rm -r "/scratchpad/${dirpath}"
@@ -346,7 +351,13 @@ function ipfs-wasabi.pin.update ()
 
         echo "After: ${after}"
 
-        ipfs-wasabi pin update --unpin=false "${before}" "${after}"
+        if  ! ipfs-wasabi pin ls --type=recursive "${after}"
+        then
+            ipfs-wasabi pin update --unpin=false "${before}" "${after}"
+        else
+            echo "Skip already pinned ${after}"
+        fi
+
 
 
     done < <(ipfs.ls.recursive.dirs "${1}" | tac)
