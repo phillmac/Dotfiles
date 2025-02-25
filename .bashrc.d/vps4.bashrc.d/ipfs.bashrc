@@ -374,7 +374,7 @@ function ipfs-wasabi.pin.update ()
                 ipfs-wasabi pin update --unpin=false "${before}" "${after}"
             fi
         else
-            echo "Skip already pinned ${after}"
+            echo "Skip updating already pinned ${after}"
         fi
 
     last=${after}
