@@ -321,6 +321,8 @@ function ipfs-wasabi.pin.update ()
     local after
     local last
 
+    ipfs-wasabi files rm -r --flush=false "/scratchpad/${1}"
+
     ipfs-wasabi files mkdir -p --flush=false "/scratchpad/${1}"
 
     while read -r cid dirpath
