@@ -268,9 +268,17 @@ function ipfs-wasabi.pin.update ()
         then
             if [[ -n "${IPFS_MFS_SKIP_PIN_BEFORE}" ]]
             then
-                ipfs-wasabi pin update --unpin=false "${last}" "${after}"
+                if ! ipfs-wasabi pin update --unpin=false "${last}" "${after}"
+                then
+                    echo "Failed to update pin ${last} -> ${after}"
+                    return 1
+                fi
             else
-                ipfs-wasabi pin update --unpin=false "${before}" "${after}"
+                if ! ipfs-wasabi pin update --unpin=false "${before}" "${after}"
+                then
+                    echo "Failed to update pin ${before} -> ${after}"
+                    return 1
+                fi
             fi
         else
             echo "Skip updating already pinned ${after}"
