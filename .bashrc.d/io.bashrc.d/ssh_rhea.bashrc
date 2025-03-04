@@ -2,7 +2,12 @@
 
 function forward_rhea_ssh_unix ()
 {
-    ssh -vNL ~/.var/run/rhea-ssh.sock:127.0.0.1:22  -o ServerAliveInterval=10 -o ServerAliveCountMax=12 ubuntu@192.99.21.37
+    ssh -vN \
+    -L ~/.var/run/rhea-ssh.sock:127.0.0.1:22 \
+    -L ~/.var/run/rhea-ipfs-wasabi.sock:/home/ubuntu/.var/run/ipfs-wasabi.socket \
+    -o ServerAliveInterval=10 \
+    -o ServerAliveCountMax=12 \
+    ubuntu@192.99.21.37
 }
 
 function ssh_rhea ()
