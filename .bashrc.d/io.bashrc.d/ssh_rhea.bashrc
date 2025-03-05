@@ -30,6 +30,11 @@ function ssh_rhea_ipfs ()
     ssh_rhea ipfs --api /unix/home/ubuntu/.var/run/ipfs-wasabi.socket "${@}"
 }
 
+function rhea_ipfs_local_api ()
+{
+    ipfsv0.31.0 --api /unix/home/phill/.var/run/rhea-ipfs-wasabi.sock "${@}"
+}
+
 function ipfs_pin_ls_recursive_rhea ()
 {
     sort -u < <( ssh_rhea_ipfs 'pin ls --type=recursive' | cut -d ' ' -f 1 )
