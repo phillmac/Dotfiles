@@ -2,6 +2,10 @@
 
 function forward_rhea_ssh_unix ()
 {
+    rm -v \
+    ~/.var/run/rhea-ipfs-wasabi.sock \
+    ~/.var/run/rhea-ssh.sock
+
     ssh -vN \
     -L ~/.var/run/rhea-ssh.sock:127.0.0.1:22 \
     -L ~/.var/run/rhea-ipfs-wasabi.sock:/home/ubuntu/.var/run/ipfs-wasabi.socket \
