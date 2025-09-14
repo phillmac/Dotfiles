@@ -2,6 +2,9 @@
 
 function forward_rhea_ssh_unix ()
 {
+
+    [[ ! -d ~/.var/run ]] && mkdir -pv ~/.var/run
+
     rm -v \
     ~/.var/run/rhea-ipfs-wasabi.sock \
     ~/.var/run/rhea-ssh.sock
