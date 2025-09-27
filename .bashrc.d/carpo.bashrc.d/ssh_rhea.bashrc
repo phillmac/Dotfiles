@@ -59,7 +59,7 @@ function fetch_cids () {
     while IFS= read -r cid <&"$RFD"
     do
         printf '%s Fetching %s\n' "$(date)" "$cid" >&2
-        ipfs_dag_export_rhea_ssh "${cid}" | mbuffer | ipfs dag import --pin-roots=false
+        ipfs_dag_export_rhea_ssh "${cid}" | mbuffer | ipfs.dag.import
     done
 
 }
