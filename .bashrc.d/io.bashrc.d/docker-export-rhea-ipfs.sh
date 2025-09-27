@@ -30,7 +30,7 @@ while IFS=$'\t' read -r repo_tag image_id; do
   # Stream docker save directly into MFS
   # --create: create file; --parents: ensure dirs exist
   # If you ever rerun for same file, add --truncate to overwrite.
-  docker save "$image_id" | mbuffer | rhea_ipfs_local_api files write --create --parents "$mfs_path"
+  docker save "$image_id" | mbuffer | rhea_ipfs_local_api files write --create --parents "$mfs_path/$image_id"
 
 done < <(docker images --format "{{.Repository}}:{{.Tag}}\t{{.ID}}")
 
