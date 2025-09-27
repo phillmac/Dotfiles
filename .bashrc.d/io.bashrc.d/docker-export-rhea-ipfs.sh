@@ -22,7 +22,7 @@ while IFS=$'\t' read -r repo_tag image_id; do
     base="$repo_tag"
   fi
 
-  fname="$(sanitize "$base").tar"
+  fname="$(sanitize "$base")_$image_id.tar"
   mfs_path="$MFS_DIR/$fname"
 
   echo "$(date) Exporting $repo_tag ($image_id) -> $mfs_path"
@@ -30,7 +30,7 @@ while IFS=$'\t' read -r repo_tag image_id; do
   # Stream docker save directly into MFS
   # --create: create file; --parents: ensure dirs exist
   # If you ever rerun for same file, add --truncate to overwrite.
-  docker save "$image_id" | mbuffer | rhea_ipfs_local_api files write --create --parents "$mfs_path/$image_id"
+  docker save "$image_id" | mbuffer | rhea_ipfs_local_api files write --create --parents "$mfs_path"
 
 done < <(docker images --format "{{.Repository}}:{{.Tag}}\t{{.ID}}")
 
