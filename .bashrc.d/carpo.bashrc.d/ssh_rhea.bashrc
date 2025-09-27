@@ -53,3 +53,4 @@ function ipfs_pin_ls_recursive_rhea ()
 export -f ssh_rhea
 export -f ipfs_dag_import_rhea_ssh
 export -f ipfs_pin_ls_recursive_rhea
+export -f rhea_ipfs_local_api
