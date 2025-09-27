@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Root folder in MFS to hold everything
-MFS_DIR="/docker-images/$(date +%Y%m%d-%H%M%S)"
+MFS_DIR="/docker-images/io/$(date +%Y%m%d-%H%M%S)"
 echo "Creating MFS dir: $MFS_DIR"
 rhea_ipfs_local_api files mkdir -p "$MFS_DIR"
 
@@ -30,7 +30,7 @@ while IFS=$'\t' read -r repo_tag image_id; do
   # Stream docker save directly into MFS
   # --create: create file; --parents: ensure dirs exist
   # If you ever rerun for same file, add --truncate to overwrite.
-  docker save "$image_id" | rhea_ipfs_local_api files write --create --parents "$mfs_path"
+  docker save "$image_id" | mbuffer | rhea_ipfs_local_api files write --create --parents "$mfs_path"
 
 done < <(docker images --format "{{.Repository}}:{{.Tag}}\t{{.ID}}")
 
