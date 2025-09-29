@@ -47,6 +47,54 @@ function ipfs_pin_ls_recursive_rhea ()
     sort -u < <( ssh_rhea_ipfs 'pin ls --type=recursive' | cut -d ' ' -f 1 )
 }
 
+function rhea.fetch_cids () {
+
+    if [[ ! -e cid_fetch_queue ]]
+    then
+        mkfifo cid_fetch_queue
+    fi
+
+    exec {RFD}<> cid_fetch_queue
+
+    while IFS= read -r cid <&"$RFD"
+    do
+        printf '%s Fetching %s\n' "$(date)" "$cid" >&2
+        ipfs-wasabi dag export --progress=false --timeout=24h "${cid}" | mbuffer | rhea_ipfs_local_api dag import --pin-roots=false
+    done
+
+}
+
+function rhea.ipfs.ls.native ()
+{
+    local root_cid=$1
+    shift || true  # optional extra args for the inner `ipfs ls` go in "$@"
+
+    if [[ -z $root_cid ]]; then
+        echo "usage: rhea.ipfs.ls.native <root_cid> [extra-args-for-inner-ipfs-ls]" >&2
+        return 2
+    fi
+
+    # Phase 1: fully collect child CIDs (waits for the producer to finish)
+    local -a cids
+    mapfile -t cids < <( rhea_ipfs_local_api refs "$root_cid" )
+
+    # Phase 2: process each child CID after the first pass is complete
+    local cid
+    for cid in "${cids[@]}"; do
+        printf '%s Listing %s\n' "$(date)" "$cid" >&2
+        rhea_ipfs_local_api ls --stream "$cid" "$@" || {
+            err=${?}
+            printf '%s Failed to list %s\n' "$(date)" "$cid" >&2
+
+            if [[ -e cid_fetch_queue ]]
+            then
+                printf '%s\n' "$cid" > cid_fetch_queue
+            fi
+
+            return ${err}
+        }
+    done
+}
 
 
 
