@@ -48,21 +48,30 @@ function ipfs_pin_ls_recursive_rhea ()
 }
 
 function rhea.fetch_cids () {
+  if [[ ! -e cid_fetch_queue ]]; then
+    mkfifo cid_fetch_queue
+  fi
 
-    if [[ ! -e cid_fetch_queue ]]
+  exec {RFD}<>cid_fetch_queue
+
+  # Fail the whole pipeline if any segment fails
+  set -o pipefail
+
+  while IFS= read -r cid <&"$RFD"; do
+    printf '%s Fetching %s\n' "$(date)" "$cid" >&2
+    if ! ipfs-wasabi dag export --progress=false --timeout=24h "$cid" \
+        | mbuffer -e -W 10800 \
+        | rhea_ipfs_local_api dag import --pin-roots=false
     then
-        mkfifo cid_fetch_queue
+      # Inspect which stage failed (0=export, 1=mbuffer, 2=import)
+      st=("${PIPESTATUS[@]}")
+      printf 'ERROR cid=%s status export=%s mbuffer=%s import=%s\n' \
+             "$cid" "${st[0]}" "${st[1]}" "${st[2]}" >&2
+      continue
     fi
-
-    exec {RFD}<> cid_fetch_queue
-
-    while IFS= read -r cid <&"$RFD"
-    do
-        printf '%s Fetching %s\n' "$(date)" "$cid" >&2
-        ipfs-wasabi dag export --progress=false --timeout=24h "${cid}" | mbuffer | rhea_ipfs_local_api dag import --pin-roots=false
-    done
-
+  done
 }
+
 
 function rhea.ipfs.ls.native ()
 {
