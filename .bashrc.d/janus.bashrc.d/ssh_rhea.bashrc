@@ -76,7 +76,7 @@ function ipfs.ls.native ()
 
     # Phase 1: fully collect child CIDs (waits for the producer to finish)
     local -a cids
-    mapfile -t cids < <( ipfs ls --stream "$root_cid" | cut -d' ' -f1 )
+    mapfile -t cids < <( ipfs ls --stream --resolve-type=false --size=false "$root_cid" | cut -d' ' -f1 )
 
     # Phase 2: process each child CID after the first pass is complete
     local cid
