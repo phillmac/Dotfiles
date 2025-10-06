@@ -109,7 +109,7 @@ function ipfs.ls.native.export ()
         echo "[$now] ipfs.ls.native failed — next retry scheduled for $resume_time" >&2
         sleep 3h
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Resuming retry attempt..." >&2
-    done | mbuffer -qe | while read -r exportcid _exportcidsize exportcidname; do
+    done | mbuffer -q -e | while read -r exportcid _exportcidsize exportcidname; do
         printf '%s Exporting CID=%s Name=%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$exportcid" "$exportcidname" >&2
 
         mbuffer -e -W 300 > /dev/null < <(ipfs dag export --progress=false "$exportcid") || {
