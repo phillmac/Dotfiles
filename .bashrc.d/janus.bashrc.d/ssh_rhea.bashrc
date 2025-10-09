@@ -110,20 +110,47 @@ function ipfs.ls.native.export ()
         sleep 3h
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] Resuming retry attempt..." >&2
     done | mbuffer -q -e | while read -r exportcid _exportcidsize exportcidname; do
-        printf '%s Exporting CID=%s Name=%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$exportcid" "$exportcidname" >&2
+        printf '%s Exporting %s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${exportcid}" "${exportcidname}" >&2
 
-        mbuffer -e -W 300 > /dev/null < <(ipfs dag export --progress=false "$exportcid") || {
+        mbuffer -e -W 300 > /dev/null < <(ipfs dag export --progress=false "${exportcid}") || {
                 printf '%s Failed to list %s\n' "$(date)" "$cid" >&2
 
                 if [[ -e cid_fetch_queue ]]
                 then
-                    printf '%s\n' "$exportcid" > cid_fetch_queue
+                    printf '%s\n' "${exportcid}" > cid_fetch_queue
                 fi
             }
     done
 
 }
 
+function ipfs.ls.native.pin ()
+{
+    set -o pipefail
+
+    while ! {
+        date >&2
+        ipfs.ls.native "${1}"
+    } 2>ls.log.txt; do
+        now="$(date '+%Y-%m-%d %H:%M:%S')"
+        resume_time="$(date -d '+3 hours' '+%Y-%m-%d %H:%M:%S')"
+        echo "[$now] ipfs.ls.native failed — next retry scheduled for $resume_time" >&2
+        sleep 3h
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Resuming retry attempt..." >&2
+    done | mbuffer -q -e | while read -r pincid _pincidsize pincidname; do
+        printf '%s Pining %s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${pincid}" "${pincidname}" >&2
+
+        mbuffer -e -W 300 > /dev/null < <(ipfs pin add --progress "${pincid}") || {
+                printf '%s Failed to list %s\n' "$(date)" "$cid" >&2
+
+                if [[ -e cid_fetch_queue ]]
+                then
+                    printf '%s\n' "${pincid}" > cid_fetch_queue
+                fi
+            }
+    done
+
+}
 export -f ssh_rhea
 export -f ipfs_dag_import_rhea_ssh
 export -f ipfs_pin_ls_recursive_rhea
