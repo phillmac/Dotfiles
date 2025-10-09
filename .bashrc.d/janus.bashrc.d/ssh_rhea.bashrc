@@ -140,7 +140,7 @@ function ipfs.ls.native.pin ()
     done | mbuffer -q -e | while read -r pincid _pincidsize pincidname; do
         printf '%s Pining %s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "${pincid}" "${pincidname}" >&2
 
-        mbuffer -e -W 300 > /dev/null < <(ipfs pin add --progress "${pincid}") || {
+        ipfs pin add --progress "${pincid}" || {
                 printf '%s Failed to list %s\n' "$(date)" "$cid" >&2
 
                 if [[ -e cid_fetch_queue ]]
