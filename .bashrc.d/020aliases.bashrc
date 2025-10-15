@@ -139,6 +139,16 @@ function ipfs.dag.import()
     fi
 }
 
+function ipfs.dag.import.bigblock()
+{
+    if [[ "$(docker network ls --format '{{.Name}}')" = *"phill-dev_ipfs"* ]]
+    then
+        docker run --rm -i -v "$(pwd)":/tmp -w /tmp --net phill-dev_ipfs --log-driver none peelvalley/ipfs-cli dag import --pin-roots=false --allow-big-block
+    else
+        docker run --rm -i -v "$(pwd)":/tmp -w /tmp --net pvs-dev_ipfs --log-driver none peelvalley/ipfs-cli dag import --pin-roots=false --allow-big-block
+    fi
+}
+
 function _ipfs() {
     if which ipfs > /dev/null; then
         "$(which ipfs)" "${@}"
