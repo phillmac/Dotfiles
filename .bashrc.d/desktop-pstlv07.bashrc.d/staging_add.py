@@ -51,8 +51,10 @@ def parse_args(argv=None):
     p.add_argument(
         "-n", "--dry-run",
         action="store_true",
-        help="Do not modify anything. Process ONLY the very first item: hash it with IPFS to get the base CID, "
-             "then print all the paths and the actions that would happen (MFS links, export, copies, renames)."
+        help=(
+            "Do not modify anything. Process ONLY the very first item: hash it with IPFS to get the base CID, "
+            "then print all the paths and the actions that would happen (MFS links, export, copies, renames)."
+        )
     )
     # Future flags could go here (e.g., --api, --export-dir, etc.)
     return p.parse_args(argv)
@@ -124,6 +126,89 @@ def copy_large_file(src, dst):
     print('copied "{}" --> "{}" in {:>.1f}s"'.format(src, dst, elapsed))
 
 
+def ensure_running_from_downloads_or_exit() -> tuple[Path, str]:
+    """
+    Validates that CWD is .../<Parent>/Downloads and that <Parent> is allowed.
+    Returns (downloads_dir, parent_name).
+    """
+    current_dir = Path.cwd().resolve()
+    allowed_parents = {"Laptop", "Mimas", "Ananke", "Janus"}
+    parent_name = current_dir.parent.name
+
+    # Must be Downloads
+    if current_dir.name != "Downloads":
+        sys.stderr.write(
+            f"[error] This tool must be run from a 'Downloads' directory. "
+            f"Current directory is: {current_dir}\n"
+        )
+        sys.exit(2)
+
+    # Parent must be one of allowed
+    if parent_name not in allowed_parents:
+        sys.stderr.write(
+            "[error] The parent of 'Downloads' must be one of: "
+            f"{', '.join(sorted(allowed_parents))}. "
+            f"Detected parent: '{parent_name}' (full path: {current_dir.parent})\n"
+        )
+        sys.exit(2)
+
+    return current_dir, parent_name
+
+
+def collect_target_dirs(downloads_dir: Path) -> list[Path]:
+    """
+    Collect every subdirectory under `downloads_dir` at ANY depth (excluding the top-level itself).
+    Sorted by creation time to preserve the original 'oldest-first' flavor.
+    Empty directories are included (so we can remove them), but top-level 'Downloads' is excluded.
+    """
+    all_dirs = [p for p in downloads_dir.rglob('*') if p.is_dir()]
+    # Sort by ctime; if equal, fallback to path for stable ordering
+    all_dirs.sort(key=lambda p: (p.stat().st_ctime, str(p)))
+    return all_dirs
+
+
+def is_dir_empty(p: Path) -> bool:
+    try:
+        next(p.iterdir())
+        return False
+    except StopIteration:
+        return True
+
+
+def build_mfs_items_for_dir(target_dir: Path, downloads_dir: Path, parent_name: str) -> list[str]:
+    """
+    Construct MFS names list using the detected parent.
+    Start with the deepest directory name and walk upward to 'Downloads',
+    then append 'Downloads' and the detected parent.
+
+    Example:
+      target_dir = .../Laptop/Downloads/2024-01-10/ClientX/Photos
+      rel parts from Downloads = ('2024-01-10','ClientX','Photos')
+      mfs_items = ['Photos','ClientX','2024-01-10','Downloads','Laptop']
+    """
+    rel = target_dir.relative_to(downloads_dir)
+    rel_parts = list(rel.parts)
+    rel_parts.reverse()  # deepest first
+    return rel_parts + [downloads_dir.name, parent_name]
+
+
+def processed_destination_path(target_dir: Path, downloads_dir_name: str = "Downloads",
+                               processed_root_name: str = "Downloads-Processed") -> Path:
+    """
+    Replace the first 'Downloads' component in the absolute path with 'Downloads-Processed'.
+    """
+    parts = list(target_dir.parts)
+    try:
+        idx = parts.index(downloads_dir_name)
+    except ValueError:
+        # Shouldn't happen since target_dir is under Downloads, but be defensive
+        idx = None
+
+    if idx is not None:
+        parts[idx] = processed_root_name
+    return Path(*parts)
+
+
 # --- main --------------------------------------------------------------------
 
 def main():
@@ -133,166 +218,127 @@ def main():
     DRY = args.dry_run
     api = ['/ip4/127.0.0.1/tcp/5001']
 
-    # Resolve and validate the working directory expectations.
-    current_dir = Path.cwd().resolve()
-    allowed_parents = {"Laptop", "Mimas", "Ananke", "Janus"}
-    parent_name = current_dir.parent.name
+    downloads_dir, parent_name = ensure_running_from_downloads_or_exit()
 
-    # 1) Current directory must be "Downloads"
-    if current_dir.name != "Downloads":
-        sys.stderr.write(
-            f"[error] This tool must be run from a 'Downloads' directory. "
-            f"Current directory is: {current_dir}\n"
-        )
-        sys.exit(2)
-
-    # 2) Parent must be one of the allowed names
-    if parent_name not in allowed_parents:
-        sys.stderr.write(
-            "[error] The parent of 'Downloads' must be one of: "
-            f"{', '.join(sorted(allowed_parents))}. "
-            f"Detected parent: '{parent_name}' (full path: {current_dir.parent})\n"
-        )
-        sys.exit(2)
-
-    # List all subdirectories and sort them by creation date
-    subdirs_sorted = sorted(
-        (d for d in current_dir.iterdir() if d.is_dir()),
-        key=lambda x: x.stat().st_ctime
-    )
-
-    # Convert to list if needed
-    subdirs_list = list(subdirs_sorted)
+    # Collect all target directories at ANY depth (excluding the top-level Downloads itself)
+    targets = collect_target_dirs(downloads_dir)
 
     processed_one_in_dry_run = False
 
-    # Print the sorted subdirectories
-    for subdir in subdirs_list:
-        # If a graceful stop was requested, do not start the next outer iteration.
+    for target_dir in targets:
+        # If a graceful stop was requested, do not start a new item.
         if stop_requested:
             print("[stop] Stop requested. Exiting before starting a new directory.")
             break
 
-        subdir_contents = [i for i in subdir.iterdir()]
-        if not any(subdir_contents):
-            print('Empty dir ', subdir)
+        # Skip if somehow the target is the root itself (shouldn't be in our list)
+        if target_dir.resolve() == downloads_dir:
+            continue
+
+        # Handle empty directories (delete or preview deletion)
+        if is_dir_empty(target_dir):
+            print('Empty dir ', target_dir)
             if not DRY:
-                subdir.rmdir()
+                try:
+                    target_dir.rmdir()
+                except OSError as e:
+                    # Could be not empty due to races; just note it.
+                    print(f"[warn] Failed to remove (race or permissions?): {target_dir} -> {e}")
             else:
-                print('[dry-run] Would remove empty directory:', subdir)
-            # After completing this (very short) iteration, respect any pending stop.
+                print('[dry-run] Would remove empty directory:', target_dir)
+            # After finishing this short iteration, respect any pending stop.
             if stop_requested:
                 print("[stop] Stop requested. Exiting after finishing current directory.")
                 break
             continue
 
-        # Process children
-        break_outer = False
-        for sub_child_dir in (d for d in subdir_contents if d.is_dir()):
-            # If a graceful stop was requested, do not start a new child item.
-            if stop_requested:
-                print("[stop] Stop requested. Exiting before starting a new item.")
-                break_outer = True
-                break
+        # --- DRY-RUN special behavior: only "load" (hash) the very first item, print everything, then exit ---
+        if DRY and processed_one_in_dry_run:
+            # We already demonstrated the first item; stop before doing more.
+            break
 
-            # --- DRY-RUN special behavior: only "load" (hash) the very first item, print everything, then exit ---
-            if DRY and processed_one_in_dry_run:
-                # We already demonstrated the first item; stop before doing more.
-                break_outer = True
-                break
+        # Always hash the directory to get a base CID (this is the "load" in dry-run).
+        # In DRY mode we *only* do this hashing step and then print what would happen.
+        base_cid = subprocess.check_output(
+            ['ipfs', '--api', api[0], 'add', '-Q', '-r', '--pin=false', '.'],
+            shell=False,
+            cwd=target_dir
+        ).decode().strip()
 
-            # Always hash the directory to get a base CID (this is the "load" in dry-run).
-            # In DRY mode we *only* do this hashing step and then print what would happen.
-            base_cid = subprocess.check_output(
-                ['ipfs', '--api', api[0], 'add', '-Q', '-r', '--pin=false', '.'],
-                shell=False,
-                cwd=sub_child_dir
-            ).decode().strip()
+        print(base_cid, target_dir)
 
-            print(base_cid, sub_child_dir)
+        # Use the detected parent and enforce `Downloads` as the fixed ancestor.
+        mfs_items = build_mfs_items_for_dir(target_dir, downloads_dir, parent_name)
 
-            # Use the detected parent (e.g., Laptop/Mimas/Ananke/Janus) and enforce current_dir == "Downloads".
-            mfs_items = [sub_child_dir.name, subdir.name, current_dir.name, parent_name]
+        # Compute output/copy/rename destinations
+        out_file = Path('H:/', 'ipfs-export', base_cid + '.car')
+        copy_dest = Path('X:', 'data', 'ipfs-staging', base_cid + '.car')
+        final_dest = Path('X:', 'data', 'ipfs-export', base_cid + '.car')
 
-            # Compute output/copy/rename destinations
-            out_file = Path('H:/', 'ipfs-export', base_cid + '.car')
-            copy_dest = Path('X:', 'data', 'ipfs-staging', base_cid + '.car')
-            final_dest = Path('X:', 'data', 'ipfs-export', base_cid + '.car')
+        # Construct new dest path for the processed folder rename
+        dest_target_dir = processed_destination_path(target_dir)
 
-            # Construct new dest path for the processed folder rename
-            new_parts = []
-            for part in sub_child_dir.parts:
-                if part == 'Downloads':
-                    new_parts.append('Downloads-Processed')
-                else:
-                    new_parts.append(part)
-            dest_sub_child_dir = Path(*new_parts)
+        if DRY:
+            print('[dry-run] First item only. No changes will be made.')
+            print('[dry-run] Hashed directory (base CID):', base_cid)
+            print('[dry-run] Source dir:', target_dir)
+            print('[dry-run] Detected top-level parent:', parent_name)
+            print('[dry-run] Would create/attach MFS links in order:')
+            for m in mfs_items:
+                print('           - name:', m)
+            print('[dry-run] Would export CAR to:', out_file)
+            print('[dry-run] Would copy staging CAR to:', copy_dest)
+            print('[dry-run] Would move final CAR to:', final_dest)
+            print('[dry-run] Would ensure parent exists for rename:', dest_target_dir.parent)
+            print('[dry-run] Would rename source dir -->', dest_target_dir)
+            print('[dry-run] Completed preview of first item. Exiting.')
+            processed_one_in_dry_run = True
+            break
 
-            if DRY:
-                print('[dry-run] First item only. No changes will be made.')
-                print('[dry-run] Hashed directory (base CID):', base_cid)
-                print('[dry-run] Source dir:', sub_child_dir)
-                print('[dry-run] Parent dir:', subdir)
-                print('[dry-run] Detected top-level parent:', parent_name)
-                print('[dry-run] Would create/attach MFS links in order:')
-                for m in mfs_items:
-                    print('           - name:', m)
-                print('[dry-run] Would export CAR to:', out_file)
-                print('[dry-run] Would copy staging CAR to:', copy_dest)
-                print('[dry-run] Would move final CAR to:', final_dest)
-                print('[dry-run] Would ensure parent exists for rename:', dest_sub_child_dir.parent)
-                print('[dry-run] Would rename source dir -->', dest_sub_child_dir)
-                print('[dry-run] Completed preview of first item. Exiting.')
-                processed_one_in_dry_run = True
-                break_outer = True
-                break
+        # --- real mode below (original behavior evolved for recursion) ---
 
-            # --- real mode below (original behavior) ---
+        # Create an empty root to add links to
+        empty_cid = subprocess.check_output(
+            ['ipfs', '--api', api[0], 'object', 'new', 'unixfs-dir'],
+            shell=False
+        ).decode().strip()
 
-            # Create an empty root to add links to
+        # Attach links in MFS-like structure (one link per name at the root)
+        for mfs_item in mfs_items:
             empty_cid = subprocess.check_output(
-                ['ipfs', '--api', api[0], 'object', 'new', 'unixfs-dir'],
+                ['ipfs', '--api', api[0], 'object', 'patch', 'add-link', '--',
+                 empty_cid, mfs_item, base_cid],
                 shell=False
             ).decode().strip()
+            print(empty_cid, mfs_item)
 
-            # Attach links in MFS-like structure
-            for mfs_item in mfs_items:
-                empty_cid = subprocess.check_output(
-                    ['ipfs', '--api', api[0], 'object', 'patch', 'add-link', '--',
-                     empty_cid, mfs_item, base_cid],
-                    shell=False
-                ).decode().strip()
-                print(empty_cid, mfs_item)
+        print(out_file)
+        process = subprocess.Popen(
+            ['ipfs', '--api', api[0], 'dag', 'export', '-p', base_cid],
+            stdout=out_file.open('+w'),
+            stderr=subprocess.PIPE
+        )
+        for c in iter(lambda: process.stderr.read(1), b""):
+            sys.stdout.buffer.write(c)
 
-            print(out_file)
-            process = subprocess.Popen(
-                ['ipfs', '--api', api[0], 'dag', 'export', '-p', base_cid],
-                stdout=out_file.open('+w'),
-                stderr=subprocess.PIPE
-            )
-            for c in iter(lambda: process.stderr.read(1), b""):
-                sys.stdout.buffer.write(c)
+        copy_large_file(out_file, copy_dest)
+        copy_dest.rename(final_dest)
+        out_file.unlink()
 
-            copy_large_file(out_file, copy_dest)
-            copy_dest.rename(final_dest)
-            out_file.unlink()
+        if not dest_target_dir.parent.exists():
+            dest_target_dir.parent.mkdir(exist_ok=True, parents=True)
+            print('Created dir', dest_target_dir.parent)
 
-            if not dest_sub_child_dir.parent.exists():
-                dest_sub_child_dir.parent.mkdir(exist_ok=True, parents=True)
-                print('Created dir', dest_sub_child_dir.parent)
+        try:
+            target_dir.rename(dest_target_dir)
+        except OSError as e:
+            print(f"[warn] Failed to rename {target_dir} -> {dest_target_dir}: {e}")
 
-            sub_child_dir.rename(dest_sub_child_dir)
-
-            # Iteration for this sub_child_dir is now finished.
-            # If a graceful stop was requested during the work above,
-            # exit *before* starting the next item.
-            if stop_requested:
-                print("[stop] Stop requested. Exiting after finishing current item.")
-                break_outer = True
-                break
-
-        if break_outer:
-            # Stop after finishing the current subdir’s active item.
+        # Iteration for this target_dir is now finished.
+        # If a graceful stop was requested during the work above,
+        # exit *before* starting the next item.
+        if stop_requested:
+            print("[stop] Stop requested. Exiting after finishing current item.")
             break
 
     if stop_requested:
