@@ -8,11 +8,7 @@ import time
 
 from datetime import datetime
 from pathlib import Path
-
-# from b2sdk.v2 import ScanPoliciesManager
-# from b2sdk.v2 import parse_folder
-# from b2sdk.v2 import Synchronizer
-# from b2sdk.v2 import SyncReport
+from typing import List, Tuple
 
 # --- graceful interrupt handling ---------------------------------------------
 
@@ -46,14 +42,14 @@ def _install_signal_handlers():
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(
-        description="Hash folders to IPFS, export as CAR, copy/move results; supports graceful SIGINT."
+        description="Hash leaf folders to IPFS, wrap them in an MFS-like DAG root, export as CAR; supports graceful SIGINT."
     )
     p.add_argument(
         "-n", "--dry-run",
         action="store_true",
         help=(
-            "Do not modify anything. Process ONLY the very first item: hash it with IPFS to get the base CID, "
-            "then print all the paths and the actions that would happen (MFS links, export, copies, renames)."
+            "Do not modify the filesystem (no copies/moves/renames). "
+            "Process ONLY the first eligible leaf. Still hashes and constructs the MFS DAG to show the actual final root CID to export."
         )
     )
     # Future flags could go here (e.g., --api, --export-dir, etc.)
@@ -61,6 +57,14 @@ def parse_args(argv=None):
 
 
 # --- helpers -----------------------------------------------------------------
+
+def run_ipfs(args: List[str], *, cwd: Path | None = None) -> str:
+    """
+    Run an ipfs command and return stdout as a stripped string.
+    """
+    out = subprocess.check_output(args, shell=False, cwd=cwd).decode().strip()
+    return out
+
 
 def copy_large_file(src, dst):
     '''
@@ -123,7 +127,7 @@ def copy_large_file(src, dst):
     print('copied "{}" --> "{}" in {:>.1f}s"'.format(src, dst, elapsed))
 
 
-def ensure_running_from_downloads_or_exit() -> tuple[Path, str]:
+def ensure_running_from_downloads_or_exit() -> Tuple[Path, str]:
     """
     Validates that CWD is .../<Parent>/Downloads and that <Parent> is allowed.
     Returns (downloads_dir, parent_name).
@@ -167,7 +171,7 @@ def has_subdirectories(p: Path) -> bool:
         return True
 
 
-def collect_leaf_dirs(downloads_dir: Path) -> list[Path]:
+def collect_leaf_dirs(downloads_dir: Path) -> List[Path]:
     """
     Collect every subdirectory under `downloads_dir` at ANY depth that is a LEAF
     (contains no subdirectories). The top-level `downloads_dir` itself is excluded.
@@ -199,12 +203,10 @@ def is_dir_empty(p: Path) -> bool:
         return False
 
 
-def build_mfs_items_for_dir(target_dir: Path, downloads_dir: Path, parent_name: str) -> list[str]:
+def build_mfs_items_for_dir(target_dir: Path, downloads_dir: Path, parent_name: str) -> List[str]:
     """
-    Construct MFS names list using the detected parent.
-    Start with the deepest directory name and walk upward to 'Downloads',
-    then append 'Downloads' and the detected parent.
-
+    Construct the list of path names for the synthetic MFS DAG we build around the leaf.
+    Order is **deepest-first**, then 'Downloads', then the device parent.
     Example:
       target_dir = .../Laptop/Downloads/2024-01-10/ClientX/Photos
       rel parts from Downloads = ('2024-01-10','ClientX','Photos')
@@ -214,6 +216,35 @@ def build_mfs_items_for_dir(target_dir: Path, downloads_dir: Path, parent_name: 
     rel_parts = list(rel.parts)
     rel_parts.reverse()  # deepest first
     return rel_parts + [downloads_dir.name, parent_name]
+
+
+def build_nested_mfs_root(api_addr: str, leaf_cid: str, names_deepest_first: List[str]) -> Tuple[str, List[Tuple[str, str]]]:
+    """
+    Build a *nested* MFS-like DAG where each name becomes a parent directory
+    containing the previous CID as a link. This yields a single root that wraps
+    the whole structure.
+
+    IMPORTANT:
+      - We are *nesting* links: parent -> child -> ... -> leaf (leaf = actual dir).
+      - This differs from adding multiple sibling links pointing to the same leaf.
+
+    Returns:
+      mfs_root_cid, steps
+      where steps is a list of (name, new_parent_cid) in the order they were created.
+    """
+    steps: List[Tuple[str, str]] = []
+    child_cid = leaf_cid  # start from the actual directory CID
+    for name in names_deepest_first:
+        # Create an empty dir to act as the new parent
+        new_parent = run_ipfs(['ipfs', '--api', api_addr, 'object', 'new', 'unixfs-dir'])
+        # Add a single link from the new parent to the current child
+        new_parent = run_ipfs(['ipfs', '--api', api_addr, 'object', 'patch', 'add-link', '--',
+                               new_parent, name, child_cid])
+        steps.append((name, new_parent))
+        # The newly created parent becomes the next child up the chain
+        child_cid = new_parent
+    # After the loop, child_cid is the final root CID that wraps the entire MFS structure
+    return child_cid, steps
 
 
 def processed_destination_path(target_dir: Path, downloads_dir_name: str = "Downloads",
@@ -240,7 +271,7 @@ def main():
     args = parse_args()
 
     DRY = args.dry_run
-    api = ['/ip4/127.0.0.1/tcp/5001']
+    api = '/ip4/127.0.0.1/tcp/5001'
 
     downloads_dir, parent_name = ensure_running_from_downloads_or_exit()
 
@@ -276,78 +307,61 @@ def main():
                 break
             continue
 
-        # --- DRY-RUN special behavior: only "load" (hash) the very first item, print everything, then exit ---
-        if DRY and processed_one_in_dry_run:
-            # We already demonstrated the first item; stop before doing more.
-            break
+        # --- 1) Hash the leaf directory to get the directory CID (this is the actual content) ---
+        # NOTE: In DRY mode we still hash and also build the MFS DAG so you can see the real export root.
+        dir_cid = run_ipfs(['ipfs', '--api', api, 'add', '-Q', '-r', '--pin=false', '.'], cwd=target_dir)
+        print(f"[info] dir_cid={dir_cid}  path={target_dir}")
 
-        # Always hash the directory to get a base CID (this is the "load" in dry-run).
-        # In DRY mode we *only* do this hashing step and then print what would happen.
-        base_cid = subprocess.check_output(
-            ['ipfs', '--api', api[0], 'add', '-Q', '-r', '--pin=false', '.'],
-            shell=False,
-            cwd=target_dir
-        ).decode().strip()
-
-        print(base_cid, target_dir)
-
-        # Use the detected parent and enforce `Downloads` as the fixed ancestor.
+        # Build the list of MFS names (deepest-first, then 'Downloads', then the device parent)
         mfs_items = build_mfs_items_for_dir(target_dir, downloads_dir, parent_name)
 
+        # --- 2) Build the *nested* MFS DAG up to the synthetic root and capture the final root CID ---
+        #     This was the previous bug: we exported the directory CID instead of the *root* that wraps it.
+        mfs_root_cid, mfs_steps = build_nested_mfs_root(api, dir_cid, mfs_items)
+        print(f"[info] mfs_root_cid={mfs_root_cid} (final export root)")
+
+        # For visibility, show each nesting step (from deepest name up to parent/device)
+        for name, parent_cid in mfs_steps:
+            print(f"[mfs] parent_dir_cid={parent_cid}  contains link '{name}' -> child")
+
         # Compute output/copy/rename destinations
-        out_file = Path('H:/', 'ipfs-export', base_cid + '.car')
-        copy_dest = Path('X:', 'data', 'ipfs-staging', base_cid + '.car')
-        final_dest = Path('X:', 'data', 'ipfs-export', base_cid + '.car')
+        car_out = Path('H:/', 'ipfs-export', mfs_root_cid + '.car')   # export the *MFS root* CID
+        copy_dest = Path('X:', 'data', 'ipfs-staging', mfs_root_cid + '.car')
+        final_dest = Path('X:', 'data', 'ipfs-export', mfs_root_cid + '.car')
 
         # Construct new dest path for the processed folder rename
         dest_target_dir = processed_destination_path(target_dir)
 
+        # --- DRY RUN: fully construct the DAG (done above), but do NOT export/copy/move/rename ---
         if DRY:
-            print('[dry-run] First item only. No changes will be made.')
-            print('[dry-run] Hashed directory (base CID):', base_cid)
-            print('[dry-run] Source dir:', target_dir)
-            print('[dry-run] Detected top-level parent:', parent_name)
-            print('[dry-run] Would create/attach MFS links in order:')
+            print('[dry-run] First item only. No filesystem changes will be made.')
+            print('[dry-run] Leaf directory CID (dir_cid):', dir_cid)
+            print('[dry-run] MFS nesting order (deepest → parent):')
             for m in mfs_items:
-                print('           - name:', m)
-            print('[dry-run] Would export CAR to:', out_file)
+                print('           -', m)
+            print('[dry-run] Final MFS root CID (mfs_root_cid):', mfs_root_cid)
+            print('[dry-run] Would export CAR from:', mfs_root_cid, 'to', car_out)
             print('[dry-run] Would copy staging CAR to:', copy_dest)
             print('[dry-run] Would move final CAR to:', final_dest)
             print('[dry-run] Would ensure parent exists for rename:', dest_target_dir.parent)
             print('[dry-run] Would rename source dir -->', dest_target_dir)
-            print('[dry-run] Completed preview of first item. Exiting.')
             processed_one_in_dry_run = True
+            # Only preview the first eligible item
             break
 
-        # --- real mode below (process the leaf) ---
-
-        # Create an empty root to add links to
-        empty_cid = subprocess.check_output(
-            ['ipfs', '--api', api[0], 'object', 'new', 'unixfs-dir'],
-            shell=False
-        ).decode().strip()
-
-        # Attach links in MFS-like structure (one link per name at the root)
-        for mfs_item in mfs_items:
-            empty_cid = subprocess.check_output(
-                ['ipfs', '--api', api[0], 'object', 'patch', 'add-link', '--',
-                 empty_cid, mfs_item, base_cid],
-                shell=False
-            ).decode().strip()
-            print(empty_cid, mfs_item)
-
-        print(out_file)
+        # --- REAL MODE: export the *MFS root* CID, not the raw directory CID ---
+        print(car_out)
         process = subprocess.Popen(
-            ['ipfs', '--api', api[0], 'dag', 'export', '-p', base_cid],
-            stdout=out_file.open('+w'),
+            ['ipfs', '--api', api, 'dag', 'export', '-p', mfs_root_cid],
+            stdout=car_out.open('+w'),
             stderr=subprocess.PIPE
         )
         for c in iter(lambda: process.stderr.read(1), b""):
             sys.stdout.buffer.write(c)
 
-        copy_large_file(out_file, copy_dest)
+        copy_large_file(car_out, copy_dest)
         copy_dest.rename(final_dest)
-        out_file.unlink()
+        car_out.unlink()
 
         if not dest_target_dir.parent.exists():
             dest_target_dir.parent.mkdir(exist_ok=True, parents=True)
