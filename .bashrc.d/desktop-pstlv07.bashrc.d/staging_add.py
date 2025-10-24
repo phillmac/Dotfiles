@@ -8,7 +8,7 @@ import time
 
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 # --- graceful interrupt handling ---------------------------------------------
 
@@ -58,7 +58,7 @@ def parse_args(argv=None):
 
 # --- helpers -----------------------------------------------------------------
 
-def run_ipfs(args: List[str], *, cwd: Path | None = None) -> str:
+def run_ipfs(args: List[str], *, cwd: Optional[Path] = None) -> str:
     """
     Run an ipfs command and return stdout as a stripped string.
     """
@@ -179,7 +179,7 @@ def collect_leaf_dirs(downloads_dir: Path) -> List[Path]:
     """
     # All directories except the top-level Downloads itself
     all_dirs = [p for p in downloads_dir.rglob('*') if p.is_dir()]
-    leaf_dirs = []
+    leaf_dirs: List[Path] = []
     for p in all_dirs:
         # Defensive filter: exclude the root (shouldn't be present anyway)
         if p.resolve() == downloads_dir:
