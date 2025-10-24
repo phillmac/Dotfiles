@@ -1,3 +1,4 @@
+import argparse
 import math
 import os
 import signal
@@ -41,7 +42,23 @@ def _install_signal_handlers():
     signal.signal(signal.SIGINT, _handle_sigint)
 
 
-# --- existing code ------------------------------------------------------------
+# --- CLI ---------------------------------------------------------------------
+
+def parse_args(argv=None):
+    p = argparse.ArgumentParser(
+        description="Hash folders to IPFS, export as CAR, copy/move results; supports graceful SIGINT."
+    )
+    p.add_argument(
+        "-n", "--dry-run",
+        action="store_true",
+        help="Do not modify anything. Process ONLY the very first item: hash it with IPFS to get the base CID, "
+             "then print all the paths and the actions that would happen (MFS links, export, copies, renames)."
+    )
+    # Future flags could go here (e.g., --api, --export-dir, etc.)
+    return p.parse_args(argv)
+
+
+# --- helpers -----------------------------------------------------------------
 
 def copy_large_file(src, dst):
     '''
@@ -64,7 +81,7 @@ def copy_large_file(src, dst):
 
     # Adjust the chunk size to the input size.
     divisor = 10000  # .1%
-    #chunk_size = size / divisor
+    # chunk_size = size / divisor
     chunk_size = math.ceil(size / divisor)  # suggested by 0xmessi to fix an error.
     while chunk_size == 0 and divisor > 0:
         divisor /= 10
@@ -107,13 +124,14 @@ def copy_large_file(src, dst):
     print('copied "{}" --> "{}" in {:>.1f}s"'.format(src, dst, elapsed))
 
 
+# --- main --------------------------------------------------------------------
+
 def main():
     _install_signal_handlers()
+    args = parse_args()
 
-    empty_cid = subprocess.check_output(
-        ['ipfs', '--api', '/ip4/127.0.0.1/tcp/5001', 'object', 'new', 'unixfs-dir'],
-        shell=False
-    ).decode().strip()
+    DRY = args.dry_run
+    api = ['/ip4/127.0.0.1/tcp/5001']
 
     # Get the current directory
     current_dir = Path.cwd()
@@ -127,6 +145,8 @@ def main():
     # Convert to list if needed
     subdirs_list = list(subdirs_sorted)
 
+    processed_one_in_dry_run = False
+
     # Print the sorted subdirectories
     for subdir in subdirs_list:
         # If a graceful stop was requested, do not start the next outer iteration.
@@ -137,7 +157,10 @@ def main():
         subdir_contents = [i for i in subdir.iterdir()]
         if not any(subdir_contents):
             print('Empty dir ', subdir)
-            subdir.rmdir()
+            if not DRY:
+                subdir.rmdir()
+            else:
+                print('[dry-run] Would remove empty directory:', subdir)
             # After completing this (very short) iteration, respect any pending stop.
             if stop_requested:
                 print("[stop] Stop requested. Exiting after finishing current directory.")
@@ -153,54 +176,86 @@ def main():
                 break_outer = True
                 break
 
+            # --- DRY-RUN special behavior: only "load" (hash) the very first item, print everything, then exit ---
+            if DRY and processed_one_in_dry_run:
+                # We already demonstrated the first item; stop before doing more.
+                break_outer = True
+                break
+
+            # Always hash the directory to get a base CID (this is the "load" in dry-run).
+            # In DRY mode we *only* do this hashing step and then print what would happen.
             base_cid = subprocess.check_output(
-                ['ipfs', '--api', '/ip4/127.0.0.1/tcp/5001', 'add', '-Q', '-r', '--pin=false', '.'],
+                ['ipfs', '--api', api[0], 'add', '-Q', '-r', '--pin=false', '.'],
                 shell=False,
                 cwd=sub_child_dir
             ).decode().strip()
 
             print(base_cid, sub_child_dir)
 
-            for mfs_item in [sub_child_dir.name, subdir.name, 'Downloads', 'Laptop']:
-                base_cid = subprocess.check_output(
-                    ['ipfs', '--api', '/ip4/127.0.0.1/tcp/5001', 'object', 'patch', 'add-link', '--',
+            # These are the MFS link names we *would* attach.
+            mfs_items = [sub_child_dir.name, subdir.name, 'Downloads', 'Laptop']
+
+            # Compute output/copy/rename destinations
+            out_file = Path('H:/', 'ipfs-export', base_cid + '.car')
+            copy_dest = Path('X:', 'data', 'ipfs-staging', base_cid + '.car')
+            final_dest = Path('X:', 'data', 'ipfs-export', base_cid + '.car')
+
+            # Construct new dest path for the processed folder rename
+            new_parts = []
+            for part in sub_child_dir.parts:
+                if part == 'Downloads':
+                    new_parts.append('Downloads-Processed')
+                else:
+                    new_parts.append(part)
+            dest_sub_child_dir = Path(*new_parts)
+
+            if DRY:
+                print('[dry-run] First item only. No changes will be made.')
+                print('[dry-run] Hashed directory (base CID):', base_cid)
+                print('[dry-run] Source dir:', sub_child_dir)
+                print('[dry-run] Parent dir:', subdir)
+                print('[dry-run] Would create/attach MFS links in order:')
+                for m in mfs_items:
+                    print('           - name:', m)
+                print('[dry-run] Would export CAR to:', out_file)
+                print('[dry-run] Would copy staging CAR to:', copy_dest)
+                print('[dry-run] Would move final CAR to:', final_dest)
+                print('[dry-run] Would ensure parent exists for rename:', dest_sub_child_dir.parent)
+                print('[dry-run] Would rename source dir -->', dest_sub_child_dir)
+                print('[dry-run] Completed preview of first item. Exiting.')
+                processed_one_in_dry_run = True
+                break_outer = True
+                break
+
+            # --- real mode below (original behavior) ---
+
+            # Create an empty root to add links to
+            empty_cid = subprocess.check_output(
+                ['ipfs', '--api', api[0], 'object', 'new', 'unixfs-dir'],
+                shell=False
+            ).decode().strip()
+
+            # Attach links in MFS-like structure
+            for mfs_item in mfs_items:
+                empty_cid = subprocess.check_output(
+                    ['ipfs', '--api', api[0], 'object', 'patch', 'add-link', '--',
                      empty_cid, mfs_item, base_cid],
                     shell=False
                 ).decode().strip()
-                print(base_cid, mfs_item)
+                print(empty_cid, mfs_item)
 
-            out_file = Path('H:/', 'ipfs-export', base_cid + '.car')
             print(out_file)
             process = subprocess.Popen(
-                ['ipfs', '--api', '/ip4/127.0.0.1/tcp/5001', 'dag', 'export', '-p', base_cid],
+                ['ipfs', '--api', api[0], 'dag', 'export', '-p', base_cid],
                 stdout=out_file.open('+w'),
                 stderr=subprocess.PIPE
             )
             for c in iter(lambda: process.stderr.read(1), b""):
                 sys.stdout.buffer.write(c)
 
-            copy_dest = Path('X:', 'data', 'ipfs-staging', base_cid + '.car')
             copy_large_file(out_file, copy_dest)
-            copy_dest.rename(Path('X:', 'data', 'ipfs-export', base_cid + '.car'))
+            copy_dest.rename(final_dest)
             out_file.unlink()
-
-            # Create a list to hold the new parts
-            new_parts = []
-
-            # Iterate through the parts of the source directory
-            for part in sub_child_dir.parts:
-                # print('part', part)
-                if part == 'Downloads':
-                    # Replace 'Downloads' with 'Downloads-Processed'
-                    new_parts.append('Downloads-Processed')
-                else:
-                    new_parts.append(part)
-
-            # Construct the new destination path
-            dest_sub_child_dir = Path(*new_parts)
-
-            # Print the destination path
-            print(dest_sub_child_dir)
 
             if not dest_sub_child_dir.parent.exists():
                 dest_sub_child_dir.parent.mkdir(exist_ok=True, parents=True)
@@ -216,23 +271,6 @@ def main():
                 break_outer = True
                 break
 
-            # exit()
-
-            # now = datetime.now()
-            # formatted_time = now.strftime('%Y%m%d%H%M')
-            # process = subprocess.Popen([
-            #   '/cygdrive/c/rclone/rclone.exe',
-            #   'move',
-            #   '-vv',
-            #   '--dry-run',
-            #   '--local-encoding=None',
-            #   '--backup-dir=b2-phill-all:Archive-Store/_/Staging/Laptop/Downloads-Backup/' + formatted_time,
-            #   '.',
-            #   'b2-phill-all:Archive-Store/_/Staging/Laptop/Downloads'
-            # ], cwd=sub_child_dir, stdout=subprocess.PIPE)
-            # for c in iter(lambda: process.stdout.read(1), b""):
-            #   sys.stdout.buffer.write(c)
-
         if break_outer:
             # Stop after finishing the current subdir’s active item.
             break
@@ -240,7 +278,13 @@ def main():
     if stop_requested:
         print("[stop] Clean exit after finishing the current work item.")
     else:
-        print("[done] Completed all work.")
+        if DRY:
+            if processed_one_in_dry_run:
+                print("[dry-run] Preview complete.")
+            else:
+                print("[dry-run] No eligible items found to preview.")
+        else:
+            print("[done] Completed all work.")
 
 
 if __name__ == "__main__":
