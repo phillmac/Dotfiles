@@ -133,8 +133,27 @@ def main():
     DRY = args.dry_run
     api = ['/ip4/127.0.0.1/tcp/5001']
 
-    # Get the current directory
-    current_dir = Path.cwd()
+    # Resolve and validate the working directory expectations.
+    current_dir = Path.cwd().resolve()
+    allowed_parents = {"Laptop", "Mimas", "Ananke", "Janus"}
+    parent_name = current_dir.parent.name
+
+    # 1) Current directory must be "Downloads"
+    if current_dir.name != "Downloads":
+        sys.stderr.write(
+            f"[error] This tool must be run from a 'Downloads' directory. "
+            f"Current directory is: {current_dir}\n"
+        )
+        sys.exit(2)
+
+    # 2) Parent must be one of the allowed names
+    if parent_name not in allowed_parents:
+        sys.stderr.write(
+            "[error] The parent of 'Downloads' must be one of: "
+            f"{', '.join(sorted(allowed_parents))}. "
+            f"Detected parent: '{parent_name}' (full path: {current_dir.parent})\n"
+        )
+        sys.exit(2)
 
     # List all subdirectories and sort them by creation date
     subdirs_sorted = sorted(
@@ -192,8 +211,8 @@ def main():
 
             print(base_cid, sub_child_dir)
 
-            # These are the MFS link names we *would* attach.
-            mfs_items = [sub_child_dir.name, subdir.name, 'Downloads', 'Laptop']
+            # Use the detected parent (e.g., Laptop/Mimas/Ananke/Janus) and enforce current_dir == "Downloads".
+            mfs_items = [sub_child_dir.name, subdir.name, current_dir.name, parent_name]
 
             # Compute output/copy/rename destinations
             out_file = Path('H:/', 'ipfs-export', base_cid + '.car')
@@ -214,6 +233,7 @@ def main():
                 print('[dry-run] Hashed directory (base CID):', base_cid)
                 print('[dry-run] Source dir:', sub_child_dir)
                 print('[dry-run] Parent dir:', subdir)
+                print('[dry-run] Detected top-level parent:', parent_name)
                 print('[dry-run] Would create/attach MFS links in order:')
                 for m in mfs_items:
                     print('           - name:', m)
