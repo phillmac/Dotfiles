@@ -83,8 +83,7 @@ def copy_large_file(src, dst):
 
     # Adjust the chunk size to the input size.
     divisor = 10000  # .1%
-    # chunk_size = size / divisor
-    chunk_size = math.ceil(size / divisor)  # suggested by 0xmessi to fix an error.
+    chunk_size = math.ceil(size / divisor)
     while chunk_size == 0 and divisor > 0:
         divisor /= 10
         chunk_size = size / divisor
@@ -97,24 +96,22 @@ def copy_large_file(src, dst):
                 copied = 0  # bytes
                 chunk = ifp.read(chunk_size)
                 while chunk:
-                    # Write and calculate how much has been written so far.
                     ofp.write(chunk)
                     copied += len(chunk)
                     per = 100. * float(copied) / float(size)
 
-                    # Calculate the estimated time remaining.
-                    elapsed = time.time() - start  # elapsed so far
+                    # Estimated time
+                    elapsed = time.time() - start
                     avg_time_per_byte = elapsed / float(copied)
                     remaining = size - copied
                     est = remaining * avg_time_per_byte
                     est1 = size * avg_time_per_byte
                     eststr = 'rem={:>.1f}s, tot={:>.1f}s'.format(est, est1)
 
-                    # Write out the status.
+                    # Status line
                     sys.stdout.write('\r\033[K{:>6.1f}%  {}  {} --> {} '.format(per, eststr, src, dst))
                     sys.stdout.flush()
 
-                    # Read in the next chunk.
                     chunk = ifp.read(chunk_size)
 
     except IOError as obj:
@@ -155,16 +152,40 @@ def ensure_running_from_downloads_or_exit() -> tuple[Path, str]:
     return current_dir, parent_name
 
 
-def collect_target_dirs(downloads_dir: Path) -> list[Path]:
+def has_subdirectories(p: Path) -> bool:
+    """Return True if directory `p` contains any subdirectories (ignores files)."""
+    try:
+        for child in p.iterdir():
+            if child.is_dir():
+                return True
+        return False
+    except PermissionError:
+        # If we can't read it, treat as having children to be safe (skip as non-leaf).
+        return True
+    except FileNotFoundError:
+        # Raced out of existence; not a leaf we can process now.
+        return True
+
+
+def collect_leaf_dirs(downloads_dir: Path) -> list[Path]:
     """
-    Collect every subdirectory under `downloads_dir` at ANY depth (excluding the top-level itself).
-    Sorted by creation time to preserve the original 'oldest-first' flavor.
-    Empty directories are included (so we can remove them), but top-level 'Downloads' is excluded.
+    Collect every subdirectory under `downloads_dir` at ANY depth that is a LEAF
+    (contains no subdirectories). The top-level `downloads_dir` itself is excluded.
+    Sorted by creation time (oldest first), then path for stability.
     """
+    # All directories except the top-level Downloads itself
     all_dirs = [p for p in downloads_dir.rglob('*') if p.is_dir()]
+    leaf_dirs = []
+    for p in all_dirs:
+        # Defensive filter: exclude the root (shouldn't be present anyway)
+        if p.resolve() == downloads_dir:
+            continue
+        if not has_subdirectories(p):
+            leaf_dirs.append(p)
+
     # Sort by ctime; if equal, fallback to path for stable ordering
-    all_dirs.sort(key=lambda p: (p.stat().st_ctime, str(p)))
-    return all_dirs
+    leaf_dirs.sort(key=lambda p: (p.stat().st_ctime, str(p)))
+    return leaf_dirs
 
 
 def is_dir_empty(p: Path) -> bool:
@@ -173,6 +194,9 @@ def is_dir_empty(p: Path) -> bool:
         return False
     except StopIteration:
         return True
+    except (PermissionError, FileNotFoundError):
+        # If unreadable or raced away, treat as non-empty to avoid destructive ops.
+        return False
 
 
 def build_mfs_items_for_dir(target_dir: Path, downloads_dir: Path, parent_name: str) -> list[str]:
@@ -220,8 +244,8 @@ def main():
 
     downloads_dir, parent_name = ensure_running_from_downloads_or_exit()
 
-    # Collect all target directories at ANY depth (excluding the top-level Downloads itself)
-    targets = collect_target_dirs(downloads_dir)
+    # Collect only LEAF directories (any depth) under Downloads
+    targets = collect_leaf_dirs(downloads_dir)
 
     processed_one_in_dry_run = False
 
@@ -231,11 +255,11 @@ def main():
             print("[stop] Stop requested. Exiting before starting a new directory.")
             break
 
-        # Skip if somehow the target is the root itself (shouldn't be in our list)
+        # Skip if somehow the target is the root itself (defensive)
         if target_dir.resolve() == downloads_dir:
             continue
 
-        # Handle empty directories (delete or preview deletion)
+        # Handle empty leaf directories (delete or preview deletion)
         if is_dir_empty(target_dir):
             print('Empty dir ', target_dir)
             if not DRY:
@@ -295,7 +319,7 @@ def main():
             processed_one_in_dry_run = True
             break
 
-        # --- real mode below (original behavior evolved for recursion) ---
+        # --- real mode below (process the leaf) ---
 
         # Create an empty root to add links to
         empty_cid = subprocess.check_output(
