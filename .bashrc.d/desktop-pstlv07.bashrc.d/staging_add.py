@@ -8,7 +8,7 @@ import time
 
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Iterator
 
 # --- graceful interrupt handling ---------------------------------------------
 
@@ -44,6 +44,7 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(
         description="Hash leaf folders to IPFS, wrap them in an MFS-like DAG root, export as CAR; supports graceful SIGINT."
     )
+
     p.add_argument(
         "-n", "--dry-run",
         action="store_true",
@@ -52,6 +53,13 @@ def parse_args(argv=None):
             "Process ONLY the first eligible leaf. Still hashes and constructs the MFS DAG to show the actual final root CID to export."
         )
     )
+
+    p.add_argument(
+        "-1", "--one",
+        action="store_true",
+        help="Process exactly ONE eligible leaf directory fully, then exit."
+    )
+
     # Future flags could go here (e.g., --api, --export-dir, etc.)
     return p.parse_args(argv)
 
@@ -170,26 +178,46 @@ def has_subdirectories(p: Path) -> bool:
         # Raced out of existence; not a leaf we can process now.
         return True
 
-
-def collect_leaf_dirs(downloads_dir: Path) -> List[Path]:
+def collect_leaf_dirs(downloads_dir: Path) -> Iterator[Path]:
     """
-    Collect every subdirectory under `downloads_dir` at ANY depth that is a LEAF
-    (contains no subdirectories). The top-level `downloads_dir` itself is excluded.
-    Sorted by creation time (oldest first), then path for stability.
-    """
-    # All directories except the top-level Downloads itself
-    all_dirs = [p for p in downloads_dir.rglob('*') if p.is_dir()]
-    leaf_dirs: List[Path] = []
-    for p in all_dirs:
-        # Defensive filter: exclude the root (shouldn't be present anyway)
-        if p.resolve() == downloads_dir:
-            continue
-        if not has_subdirectories(p):
-            leaf_dirs.append(p)
+    Generator that yields every LEAF directory (contains no subdirectories)
+    under `downloads_dir` at ANY depth.
 
-    # Sort by ctime; if equal, fallback to path for stable ordering
-    leaf_dirs.sort(key=lambda p: (p.stat().st_ctime, str(p)))
-    return leaf_dirs
+    Strategy:
+      1) Look only at the immediate children of `downloads_dir` and sort those
+         top-level directories by creation time (oldest first).
+      2) For each top-level directory (in that order), walk its subtree and
+         yield leaf directories *as soon as they are found*.
+
+    Notes:
+      - The `downloads_dir` itself is never yielded.
+      - We do not sort deeper levels; we yield as they are discovered to start
+        processing ASAP.
+    """
+    # Gather and sort ONLY the first level of subdirectories by ctime.
+    try:
+        top_dirs = [p for p in downloads_dir.iterdir() if p.is_dir()]
+    except (PermissionError, FileNotFoundError):
+        top_dirs = []
+
+    def _ctime_or_inf(p: Path) -> float:
+        try:
+            return p.stat().st_ctime
+        except OSError:
+            # If stat fails, push it to the end deterministically.
+            return float("inf")
+
+    top_dirs.sort(key=lambda p: (_ctime_or_inf(p), str(p)))
+
+    # Walk each top-level dir (oldest first) and yield leaf dirs immediately.
+    for top in top_dirs:
+        for root, dirs, files in os.walk(top, topdown=True, onerror=lambda e: None):
+            # A leaf directory has no subdirectories.
+            if not dirs:
+                p = Path(root)
+                # Exclude the Downloads root defensively.
+                if p.resolve() != downloads_dir.resolve():
+                    yield p
 
 
 def is_dir_empty(p: Path) -> bool:
@@ -280,7 +308,10 @@ def main():
 
     processed_one_in_dry_run = False
 
+    processed_one_and_quit = False
+
     for target_dir in targets:
+
         # If a graceful stop was requested, do not start a new item.
         if stop_requested:
             print("[stop] Stop requested. Exiting before starting a new directory.")
@@ -378,18 +409,26 @@ def main():
         if stop_requested:
             print("[stop] Stop requested. Exiting after finishing current item.")
             break
+        if args.one:
+            print("[one] Completed exactly one item. Exiting now.")
+            processed_one_and_quit = True
+            break
+
 
     if stop_requested:
         print("[stop] Clean exit after finishing the current work item.")
-    else:
-        if DRY:
-            if processed_one_in_dry_run:
-                print("[dry-run] Preview complete.")
-            else:
-                print("[dry-run] No eligible items found to preview.")
+    elif args.one:
+        if processed_one_and_quit:
+            print("[one] Finished one item and exited cleanly.")
         else:
-            print("[done] Completed all work.")
-
+            print("[one] No eligible items found.")
+    elif DRY:
+        if processed_one_in_dry_run:
+            print("[dry-run] Preview complete.")
+        else:
+            print("[dry-run] No eligible items found to preview.")
+    else:
+        print("[done] Completed all work.")
 
 if __name__ == "__main__":
     main()
