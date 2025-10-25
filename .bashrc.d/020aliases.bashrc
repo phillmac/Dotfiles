@@ -526,6 +526,11 @@ function sync-develop-phill-github ()
     git pull phill-github master --ff && git push phill-github master && git checkout develop && git pull phill-github develop --ff && git merge master && git push phill-github develop && git checkout master
 }
 
+function sync-develop-all ()
+{
+    sync-develop && sync-develop-github && sync-develop-phill-github
+}
+
 function monitor_output () {
     # Check if a command is provided as an argument
     if [ -z "$1" ]; then
