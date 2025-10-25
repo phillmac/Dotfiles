@@ -1,0 +1,6 @@
+for file in "${HOME}"/.bashrc.d/*
+do
+    if [[ -f "${file}" && -r "${file}" ]]; then
+        source "${file}"
+    fi
+done
