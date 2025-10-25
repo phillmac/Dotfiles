@@ -338,6 +338,8 @@ def main():
                 break
             continue
 
+        print(f"path={target_dir}")
+
         # --- 1) Hash the leaf directory to get the directory CID (this is the actual content) ---
         # NOTE: In DRY mode we still hash and also build the MFS DAG so you can see the real export root.
         dir_cid = run_ipfs(['ipfs', '--api', api, 'add', '-Q', '-r', '--pin=false', '.'], cwd=target_dir)
