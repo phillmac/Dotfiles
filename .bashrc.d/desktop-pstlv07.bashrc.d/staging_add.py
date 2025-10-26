@@ -342,12 +342,14 @@ def build_nested_mfs_root(api_addr: str, leaf_cid: str, names_deepest_first: Lis
     """
     steps: List[Tuple[str, str]] = []
     child_cid = leaf_cid  # start from the actual directory CID
+
+    # Create an empty dir to act as the new parent
+    empty_cid = run_ipfs(['ipfs', '--api', api_addr, 'object', 'new', 'unixfs-dir'])
+
     for name in names_deepest_first:
-        # Create an empty dir to act as the new parent
-        new_parent = run_ipfs(['ipfs', '--api', api_addr, 'object', 'new', 'unixfs-dir'])
         # Add a single link from the new parent to the current child
         new_parent = run_ipfs(['ipfs', '--api', api_addr, 'object', 'patch', 'add-link', '--',
-                               new_parent, name, child_cid])
+                               empty_cid, name, child_cid])
         steps.append((name, new_parent))
         # The newly created parent becomes the next child up the chain
         child_cid = new_parent
@@ -422,7 +424,7 @@ def main():
 
         # --- 1) Hash the leaf directory to get the directory CID (this is the actual content) ---
         # NOTE: In DRY mode we still hash and also build the MFS DAG so you can see the real export root.
-        dir_cid = run_ipfs(['ipfs', '--api', api, 'add', '-Q', '-r', '--pin=false', '.'], cwd=target_dir)
+        dir_cid = run_ipfs(['ipfs', '--api', api, 'add', '-Q', '-r', '--pin=false', '--timeout=2h', '.'], cwd=target_dir)
         print(f"[info] dir_cid={dir_cid}  path={target_dir}")
 
         # Build the list of MFS names (deepest-first, then 'Downloads', then the device parent)
