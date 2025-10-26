@@ -66,12 +66,22 @@ def parse_args(argv=None):
 
 # --- helpers -----------------------------------------------------------------
 
-def run_ipfs(args: List[str], *, cwd: Optional[Path] = None) -> str:
-    """
-    Run an ipfs command and return stdout as a stripped string.
-    """
-    out = subprocess.check_output(args, shell=False, cwd=cwd).decode().strip()
-    return out
+def run_ipfs(args, *, cwd=None):
+    # On Windows, creationflags=CREATE_NEW_PROCESS_GROUP
+    # On Unix, preexec_fn=os.setsid
+    kwargs = {}
+    if os.name == 'nt':
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        kwargs["preexec_fn"] = os.setsid
+
+    try:
+        out = subprocess.check_output(args, shell=False, cwd=cwd, **kwargs).decode().strip()
+        return out
+    except subprocess.CalledProcessError as e:
+        print(f"[error] IPFS command failed (exit {e.returncode}): {e.output.decode(errors='ignore')}")
+        raise
+
 
 # --- shell detection / console capabilities ----------------------------------
 
