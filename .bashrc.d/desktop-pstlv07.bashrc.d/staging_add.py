@@ -73,11 +73,71 @@ def run_ipfs(args: List[str], *, cwd: Optional[Path] = None) -> str:
     out = subprocess.check_output(args, shell=False, cwd=cwd).decode().strip()
     return out
 
+# --- shell detection / console capabilities ----------------------------------
+
+def detect_shell() -> str:
+    """
+    Best-effort detection of the invoking shell.
+    Returns one of: 'powershell', 'bash', 'cmd', 'unknown'
+    """
+    env = os.environ
+    # Strong hints for PowerShell
+    if env.get('PSModulePath') or env.get('POWERSHELL_DISTRIBUTION_CHANNEL'):
+        return 'powershell'
+    # GitHub Actions / Windows Terminal run PowerShell too, but above usually present.
+    # bash/zsh/etc on Unix
+    sh = (env.get('SHELL') or '').lower()
+    if 'bash' in sh:
+        return 'bash'
+    # Classic Windows CMD
+    if os.name == 'nt' and (env.get('ComSpec') or '').lower().endswith('cmd.exe'):
+        # If PS vars present we would have exited earlier, so this is probably cmd
+        return 'cmd'
+    return 'unknown'
+
+
+def ansi_supported() -> bool:
+    """
+    Heuristic for ANSI escape support on this console.
+    """
+    if not sys.stdout.isatty():
+        return False
+
+    if os.name != 'nt':
+        # Most POSIX ttys support ANSI unless TERM is dumb
+        term = os.environ.get('TERM', '')
+        return term and term.lower() != 'dumb'
+
+    # Windows: detect common ANSI-capable hosts/terminals
+    env = os.environ
+    return bool(
+        env.get('ANSICON') or          # ConEmu/ANSI shim
+        env.get('WT_SESSION') or       # Windows Terminal
+        env.get('ConEmuANSI') == 'ON' or
+        env.get('TERM')                # e.g., xterm-256color on msys/cygwin
+    )
+
 
 def copy_large_file(src, dst):
     '''
     Copy a large file showing progress.
     '''
+    shell_kind = detect_shell()
+    use_ansi = ansi_supported()
+
+    def write_status(line_builder=[0]):  # line_builder[0] keeps last length (mutable default trick)
+        line = status_parts()
+        if use_ansi:
+            # Clear-to-EOL then write
+            sys.stdout.write('\r\033[K' + line)
+        else:
+            # Overwrite line with padding so leftover characters are erased
+            last_len = line_builder[0]
+            pad = max(0, last_len - len(line))
+            sys.stdout.write('\r' + line + (' ' * pad))
+            line_builder[0] = len(line)
+        sys.stdout.flush()
+
     print('copying "{}" --> "{}"'.format(src, dst))
     if os.path.exists(src) is False:
         print('ERROR: file does not exist: "{}"'.format(src))
@@ -101,36 +161,46 @@ def copy_large_file(src, dst):
         chunk_size = size / divisor
     print('chunk size is {}'.format(chunk_size))
 
+    def status_parts():
+        per = 100. * float(copied) / float(size) if copied else 0.0
+        elapsed = time.time() - start if copied else 0.0
+        avg_time_per_byte = (elapsed / float(copied)) if copied else 0.0
+        remaining = size - copied
+        est = remaining * avg_time_per_byte if copied else 0.0
+        est1 = size * avg_time_per_byte if copied else 0.0
+
+        # Slightly different phrasing for PowerShell (no fancy symbols)
+        if shell_kind == 'powershell' and not use_ansi:
+            return "{:>6.1f}%  rem={:>.1f}s, tot={:>.1f}s  {} -> {}".format(
+                per, est, est1, src, dst
+            )
+        else:
+            # Same text, ANSI-capable consoles will also get the clear-to-EOL
+            return "{:>6.1f}%  rem={:>.1f}s, tot={:>.1f}s  {} -> {}".format(
+                per, est, est1, src, dst
+            )
+
     # Copy.
     try:
-        with open(src, 'rb') as ifp:
-            with open(dst, 'wb') as ofp:
-                copied = 0  # bytes
-                chunk = ifp.read(chunk_size)
-                while chunk:
-                    ofp.write(chunk)
-                    copied += len(chunk)
-                    per = 100. * float(copied) / float(size)
-
-                    # Estimated time
-                    elapsed = time.time() - start
-                    avg_time_per_byte = elapsed / float(copied)
-                    remaining = size - copied
-                    est = remaining * avg_time_per_byte
-                    est1 = size * avg_time_per_byte
-                    eststr = 'rem={:>.1f}s, tot={:>.1f}s'.format(est, est1)
-
-                    # Status line
-                    sys.stdout.write('\r\033[K{:>6.1f}%  {}  {} --> {} '.format(per, eststr, src, dst))
-                    sys.stdout.flush()
-
-                    chunk = ifp.read(chunk_size)
+        with open(src, 'rb') as ifp, open(dst, 'wb') as ofp:
+            copied = 0  # bytes
+            chunk = ifp.read(int(chunk_size))
+            while chunk:
+                ofp.write(chunk)
+                copied += len(chunk)
+                write_status()
+                chunk = ifp.read(int(chunk_size))
 
     except IOError as obj:
         print('\nERROR: {}'.format(obj))
         sys.exit(1)
 
-    sys.stdout.write('\r\033[K')  # clear to EOL
+    # Final line cleanup
+    if use_ansi:
+        sys.stdout.write('\r\033[K')
+    else:
+        # Overwrite any residual characters from the last status line
+        sys.stdout.write('\r' + ' ' * 120 + '\r')
     elapsed = time.time() - start
     print('copied "{}" --> "{}" in {:>.1f}s"'.format(src, dst, elapsed))
 
