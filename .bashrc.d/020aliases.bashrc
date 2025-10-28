@@ -531,6 +531,28 @@ function sync-develop-all ()
     sync-develop && sync-develop-github && sync-develop-phill-github
 }
 
+function sync-carpo-dev ()
+{
+    git checkout carpo-dev && git pull origin carpo-dev --ff-only && git push origin carpo-dev
+}
+
+
+function sync-carpo-dev-phill-github ()
+{
+    git checkout carpo-dev && git pull phill-github carpo-dev --ff-only && git push phill-github carpo-dev
+}
+
+function sync-develop-all ()
+{
+    sync-develop && sync-develop-github && sync-develop-phill-github
+}
+
+
+function sync-carpo-dev-all ()
+{
+    sync-carpo-dev && sync-carpo-dev-phill-github
+}
+
 function monitor_output () {
     # Check if a command is provided as an argument
     if [ -z "$1" ]; then
