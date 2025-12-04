@@ -189,7 +189,7 @@ function rhea.ipfs.ls.native.pin ()
 
 function rhea.ipfs.ls.recursive.dirs ()
 {
-    CURL_METHOD=POST CURL_SOCK_ADDR=~/.var/run/rhea-ipfs-wasabi.sock ipfs.ls.recursive "${@}"
+    CURL_METHOD=POST CURL_SOCK_ADDR=~/.var/run/rhea-ipfs-wasabi.sock ipfs.ls.recursive.dirs "${@}"
 }
 
 
