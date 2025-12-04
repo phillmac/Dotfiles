@@ -187,6 +187,96 @@ function rhea.ipfs.ls.native.pin ()
 }
 
 
+function rhea.ipfs.ls.recursive.dirs ()
+{
+    CURL_METHOD=POST CURL_SOCK_ADDR=~/.var/run/rhea-ipfs-wasabi.sock ipfs.ls.recursive
+}
+
+
+function rhea.ipfs.pin.update.recursive ()
+{
+
+    local before
+    local after
+    local last
+
+    rhea_ipfs_local_api files rm -r --flush=false "/scratchpad/${1}"
+
+    rhea_ipfs_local_api files mkdir -p --flush=false "/scratchpad/${1}"
+
+    while read -r cid dirpath
+    do
+
+        bdirpath=$(dirname "${dirpath}")
+        echo "bdirpath: ${bdirpath}"
+
+        rhea_ipfs_local_api files mkdir -p --flush=false "/scratchpad/${bdirpath}"
+
+        before=$(rhea_ipfs_local_api files stat --flush=false --hash "/scratchpad/${1}")
+        echo "Before: ${before}"
+
+        if [[ -z "${last}" ]]
+        then
+            echo "Pinning initial dir"
+            last=${before}
+            rhea_ipfs_local_api pin add --progress "${before}"
+
+        else
+            if [[ -z "${IPFS_MFS_SKIP_PIN_BEFORE}" ]]
+            then
+                if  ! rhea_ipfs_local_api pin ls --type=recursive "${before}"
+                then
+                    rhea_ipfs_local_api pin add --progress "${before}"
+                else
+                    echo "Skip already pinned ${before}"
+                fi
+            else
+                echo "Skip pin before set"
+            fi
+        fi
+
+
+        rhea_ipfs_local_api files --flush=false rm -r "/scratchpad/${dirpath}"
+
+	    echo "Copy /ipfs/${cid} /scratchpad/${dirpath}"
+
+        rhea_ipfs_local_api files cp --flush=false "/ipfs/${cid}" "/scratchpad/${dirpath}"
+
+        after=$(rhea_ipfs_local_api files stat --flush=false --hash "/scratchpad/${1}")
+
+        echo "After: ${after}"
+
+        if ! rhea_ipfs_local_api pin ls --type=recursive "${after}"
+        then
+            if [[ -n "${IPFS_MFS_SKIP_PIN_BEFORE}" ]]
+            then
+                if ! rhea_ipfs_local_api pin update --unpin=false "${last}" "${after}"
+                then
+                    echo "Failed to update pin ${last} -> ${after}"
+                    return 1
+                fi
+            else
+                if ! rhea_ipfs_local_api pin update --unpin=false "${before}" "${after}"
+                then
+                    echo "Failed to update pin ${before} -> ${after}"
+                    return 1
+                fi
+            fi
+        else
+            echo "Skip updating already pinned ${after}"
+        fi
+
+    last=${after}
+
+
+    done < <(rhea.ipfs.ls.recursive.dirs "${1}" | tac)
+
+    rhea_ipfs_local_api files rm -r --flush=false "/scratchpad/${1}"
+
+    rhea_ipfs_local_api files flush
+}
+
+
 export -f ssh_rhea
 export -f ipfs_dag_import_rhea_ssh
 export -f ipfs_pin_ls_recursive_rhea
