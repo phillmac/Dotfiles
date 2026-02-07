@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Root folder in MFS to hold everything
-MFS_DIR="/docker-images/carpo/$(date +%Y%m%d-%H%M%S)"
+MFS_DIR="/docker-images/kore/$(date +%Y%m%d-%H%M%S)"
 echo "Creating MFS dir: $MFS_DIR"
 rhea_ipfs_local_api files mkdir -p "$MFS_DIR"
 
@@ -11,6 +11,8 @@ sanitize() {
   # replace / and : with __ and strip spaces
   echo "$1" | tr '/:' '__' | tr -s ' ' '_'
 }
+
+tee kore.docker.images.txt < <(ssh -p35681 kore 'docker images --format "{{.Repository}}:{{.Tag}}\t{{.ID}}"' )
 
 # Iterate over repo:tag and ID (prefer names; fall back to ID when <none>)
 # This includes all local images; adjust query if you want to filter.
@@ -30,14 +32,14 @@ while IFS=$'\t' read -r repo_tag image_id; do
   # Stream docker save directly into MFS
   # --create: create file; --parents: ensure dirs exist
   # If you ever rerun for same file, add --truncate to overwrite.
-  while ! rhea_ipfs_local_api files write --create --parents "${mfs_path}"  < <( mbuffer -e  < <(docker save "${image_id}" ) )
+  while ! rhea_ipfs_local_api files write --create --parents "${mfs_path}"  < <( mbuffer -e  < <(ssh -n -p35681 kore "docker save \"${image_id}\" | mbuffer -e -q" ) )
   do
     date
     sleep 300
     echo "$(date) Retrying ${image_id} - ${fname}"
   done
 
-done < <(docker images --format "{{.Repository}}:{{.Tag}}\t{{.ID}}")
+done < kore.docker.images.txt
 
 # Flush MFS and get a stable directory CID for the whole folder
 rhea_ipfs_local_api files flush "$MFS_DIR" >/dev/null
