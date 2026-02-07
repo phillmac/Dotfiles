@@ -214,22 +214,99 @@ function mimas.staging.processed.upload ()
 )
 
 function mimas.staging.fetch () {
-    tee mimas.staging.dirs.txt < <(cd '//mimas/E/Staging/Mimas/Downloads' && find . -mindepth 1 -maxdepth 1 -type d -printf "%f\n")
+    local src_root='//mimas/E/Staging/Mimas/Downloads'
+    local src_parent='//mimas/E/Staging/Mimas'
+    local dst_root='G:\Staging\Mimas\Downloads'
+
+    # Persistent ledger for the 24h sliding window (epoch_seconds<TAB>bytes<TAB>dirname)
+    local state_dir="${HOME}/.mimas-staging"
+    local log_file="${state_dir}/transfer_ledger.tsv"
+    mkdir -p "$state_dir"
+
+    # --- helpers -------------------------------------------------------------
+
+    # Return size in BYTES for a directory (best-effort across du variants)
+    folder_bytes() {
+        local p="$1" out
+        if out=$(du --apparent-size -sb "$p" 2>/dev/null); then
+            printf '%s\n' "$out" | awk '{print $1}'
+        elif out=$(du -sb "$p" 2>/dev/null); then
+            printf '%s\n' "$out" | awk '{print $1}'
+        elif out=$(du --apparent-size -sk "$p" 2>/dev/null); then
+            printf '%s\n' "$out" | awk '{print $1*1024}'
+        elif out=$(du -sk "$p" 2>/dev/null); then
+            printf '%s\n' "$out" | awk '{print $1*1024}'
+        else
+            echo 0
+        fi
+    }
+
+    # Human readable bytes
+    human_bytes() {
+        local b="${1:-0}"
+        if command -v numfmt >/dev/null 2>&1; then
+            numfmt --to=iec-i --suffix=B --format="%.2f" "$b"
+        else
+            awk -v b="$b" 'BEGIN{
+                split("B KiB MiB GiB TiB PiB",u," ");
+                i=1;
+                while(b>=1024 && i<6){ b/=1024; i++ }
+                printf "%.2f %s", b, u[i]
+            }'
+        fi
+    }
+
+    # Sum bytes transferred within the last 24h (sliding window), and prune old rows
+    last24_bytes() {
+        local now cutoff tmp sum
+        now=$(date +%s)
+        cutoff=$((now - 86400))
+
+        [[ -f "$log_file" ]] || { echo 0; return; }
+
+        sum=$(awk -v cutoff="$cutoff" '$1>=cutoff {sum+=$2} END{printf "%.0f", sum+0}' "$log_file")
+        tmp="${log_file}.tmp.$$"
+        awk -v cutoff="$cutoff" '$1>=cutoff' "$log_file" > "$tmp" && mv -f "$tmp" "$log_file"
+        echo "${sum:-0}"
+    }
+
+    # --- main ----------------------------------------------------------------
+
+    tee mimas.staging.dirs.txt < <(cd "$src_root" && find . -mindepth 1 -maxdepth 1 -type d -printf "%f\n")
+    local dircount dcount=1
     dircount=$(wc -l < mimas.staging.dirs.txt)
 
-    while ((dcount < dircount)); do
-        head -n $((dcount++)) < mimas.staging.dirs.txt > >(
-            tail -n 1 > >(
-                read -r incdirname;
-                echo "$(date) Transfering ${incdirname}";
-                cd '//mimas/E/Staging/Mimas' && \
-                    /cygdrive/c/rclone/rclone.exe move -v \
-                    --delete-empty-src-dirs \
-                    --include "${incdirname}"'/**' \
-                    'Downloads' \
-                    'G:\Staging\Mimas\Downloads';
-            )
-        )
-        read -p 'Press enter'
-    done
+    while IFS= read -r incdirname; do
+        ((dcount++))
+
+        local src_dir="$src_root/$incdirname"
+        local bytes total_before total_after now
+
+        bytes=$(folder_bytes "$src_dir")
+        total_before=$(last24_bytes)
+
+        echo "[$dcount/$dircount] $(date) Transferring ${incdirname}"
+        echo "  Folder size:        $(human_bytes "$bytes") (${bytes} bytes)"
+        echo "  Last 24h (sliding): $(human_bytes "$total_before") (${total_before} bytes)"
+
+        cd "$src_parent" && \
+            /cygdrive/c/rclone/rclone.exe move -v \
+                --delete-empty-src-dirs \
+                --include "${incdirname}/**" \
+                'Downloads' \
+                "$dst_root"
+        local rc=$?
+
+        if (( rc == 0 )); then
+            now=$(date +%s)
+            printf '%s\t%s\t%s\n' "$now" "$bytes" "$incdirname" >> "$log_file"
+            total_after=$(last24_bytes)
+            echo "  ✅ Counted this transfer."
+            echo "  Last 24h (sliding): $(human_bytes "$total_after") (${total_after} bytes)"
+        else
+            echo "  ❌ rclone failed (exit $rc); not counting this transfer in 24h total." >&2
+        fi
+
+        read -p 'Press enter' </dev/tty
+    done < mimas.staging.dirs.txt
 }
