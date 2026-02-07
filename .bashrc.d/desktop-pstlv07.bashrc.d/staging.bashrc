@@ -139,7 +139,6 @@ function laptop.staging.add.export ()
     || /cygdrive/c/rclone/rclone.exe rmdirs -vv "E:\\Staging\\Laptop\\Downloads\\${bsname}"
 }
 
-
 function ipfs.mimas.add.staging () {
 
     if [[ -z "${1}" ]]
@@ -185,4 +184,52 @@ function ipfs.mimas.add.staging () {
             done
         }
     )
+}
+
+function laptop.staging.processed.upload ()
+(
+    cd  /cygdrive/E/Staging/Laptop \
+    && /cygdrive/C/rclone/rclone move \
+        --local-encoding=None \
+        --progress \
+        --transfers 15 \
+        --delete-empty-src-dirs \
+        --backup-dir="b2-phill-all:Archive-Store/_/Staging/Laptop/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
+        Downloads-Processed \
+        b2-phill-all:Archive-Store/_/Staging/Laptop/Downloads
+)
+
+
+function mimas.staging.processed.upload ()
+(
+    cd  /cygdrive/G/Staging/Mimas \
+    && /cygdrive/C/rclone/rclone move \
+        --local-encoding=None \
+        --progress \
+        --transfers 15 \
+        --delete-empty-src-dirs \
+        --backup-dir="b2-phill-all:Archive-Store/_/Staging/Mimas/Downloads-Backup/$(date '+%Y%m%d%H%M')" \
+        Downloads-Processed \
+        b2-phill-all:Archive-Store/_/Staging/Mimas/Downloads
+)
+
+function mimas.staging.fetch () {
+    tee mimas.staging.dirs.txt < <(cd '//mimas/E/Staging/Mimas/Downloads' && find . -mindepth 1 -maxdepth 1 -type d -printf "%f\n")
+    dircount=$(wc -l < mimas.staging.dirs.txt)
+
+    while ((dcount < dircount)); do
+        head -n $((dcount++)) < mimas.staging.dirs.txt > >(
+            tail -n 1 > >(
+                read -r incdirname;
+                echo "$(date) Transfering ${incdirname}";
+                cd '//mimas/E/Staging/Mimas' && \
+                    /cygdrive/c/rclone/rclone.exe move -v \
+                    --delete-empty-src-dirs \
+                    --include "${incdirname}"'/**' \
+                    'Downloads' \
+                    'G:\Staging\Mimas\Downloads';
+            )
+        )
+        read -p 'Press enter'
+    done
 }
