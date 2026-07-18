@@ -181,6 +181,48 @@ class KuboClientParsingTests(unittest.TestCase):
         self.assertIn(b'filename="root/a%2Bb%252Fquote%22name.txt"', header)
         self.assertNotIn(b"a+b%2F", header)
 
+
+    def test_post_stream_yields_events_before_reading_trailers(self):
+        body = (
+            b"1e\r\n"
+            b'{"Name":"file.txt","Bytes":5}\n'
+            b"\r\n"
+            b"0\r\n"
+            b"X-Stream-Error: delayed failure\r\n"
+            b"\r\n"
+        )
+        trailer_offset = body.index(b"X-Stream-Error")
+
+        class TrailerResponse:
+            status = 200
+
+            def __init__(self):
+                self.fp = io.BytesIO(body)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, _exc_type, _exc, _tb):
+                return False
+
+            def getheader(self, name, default=None):
+                if name == "Transfer-Encoding":
+                    return "chunked"
+                return default
+
+        response = TrailerResponse()
+        client = KuboClient("http://127.0.0.1:5001")
+
+        with mock.patch.object(client, "_open_stream_response", return_value=response):
+            events = client._post_stream("/api/v0/add", {}, None)
+            first_event = next(events)
+            position_after_first_event = response.fp.tell()
+            remaining_events = list(events)
+
+        self.assertEqual(first_event, {"Name": "file.txt", "Bytes": 5})
+        self.assertLess(position_after_first_event, trailer_offset)
+        self.assertEqual(remaining_events[0]["Message"], "delayed failure")
+
     def test_post_stream_surfaces_x_stream_error_trailer(self):
         class TrailerResponse:
             status = 200

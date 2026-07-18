@@ -159,8 +159,8 @@ class KuboClient:
             headers["Content-Type"] = content_type
         try:
             with self._open_stream_response(path + query, data, headers) as resp:
-                body_lines, trailers = self._stream_response_lines(resp)
-                for line in body_lines:
+                trailers: dict[str, str] = {}
+                for line in self._iter_stream_response_lines(resp, trailers):
                     line = line.strip()
                     if not line:
                         continue
@@ -195,36 +195,41 @@ class KuboClient:
         return resp
 
     @staticmethod
-    def _stream_response_lines(resp: http.client.HTTPResponse) -> tuple[list[bytes], dict[str, str]]:
+    def _iter_stream_response_lines(resp: http.client.HTTPResponse, trailers: dict[str, str]) -> Iterator[bytes]:
         if resp.getheader("Transfer-Encoding", "").lower() != "chunked":
-            return resp.readlines(), {}
+            while True:
+                line = resp.readline()
+                if not line:
+                    break
+                yield line
+            return
 
-        lines: list[bytes] = []
         pending = b""
-        trailers: dict[str, str] = {}
         while True:
             size_line = resp.fp.readline()
             if not size_line:
                 break
             size = int(size_line.split(b";", 1)[0].strip(), 16)
             if size == 0:
+                if pending:
+                    yield pending
+                    pending = b""
                 while True:
                     trailer_line = resp.fp.readline()
                     if trailer_line in {b"\r\n", b"\n", b""}:
-                        return lines, trailers
+                        return
                     name, _, value = trailer_line.decode("iso-8859-1").partition(":")
                     if name:
                         trailers[name.strip().lower()] = value.strip()
-                return lines, trailers
+                return
             chunk = resp.fp.read(size)
             resp.fp.read(2)
             pending += chunk
             while b"\n" in pending:
                 line, pending = pending.split(b"\n", 1)
-                lines.append(line + b"\n")
+                yield line + b"\n"
         if pending:
-            lines.append(pending)
-        return lines, trailers
+            yield pending
 
     def _post(self, path: str, options: dict[str, Any]) -> tuple[bytes, Any]:
         req = urllib.request.Request(self.api + path + self._query(options), data=b"", method="POST")
