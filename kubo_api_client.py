@@ -251,14 +251,17 @@ class KuboClient:
         entries: list[AddEntry] = []
         errors: list[KuboError] = []
         raw_events: list[dict[str, Any]] = []
-        for event in events:
-            raw_events.append(event)
-            if "Message" in event and "Code" in event:
-                errors.append(KuboError(event.get("Message", "Kubo error"), event.get("Code"), event.get("Type"), event))
-            elif event.get("Hash"):
-                entries.append(AddEntry(event.get("Name", ""), event["Hash"], event.get("Size"), event.get("Mode"), event.get("Mtime"), event.get("MtimeNsecs"), event))
-            elif "Bytes" in event:
-                progress.append(AddProgress(event.get("Name", ""), int(event.get("Bytes") or 0), event))
+        try:
+            for event in events:
+                raw_events.append(event)
+                if "Message" in event and "Code" in event:
+                    errors.append(KuboError(event.get("Message", "Kubo error"), event.get("Code"), event.get("Type"), event))
+                elif event.get("Hash"):
+                    entries.append(AddEntry(event.get("Name", ""), event["Hash"], event.get("Size"), event.get("Mode"), event.get("Mtime"), event.get("MtimeNsecs"), event))
+                elif "Bytes" in event:
+                    progress.append(AddProgress(event.get("Name", ""), int(event.get("Bytes") or 0), event))
+        except KuboErrorException as exc:
+            errors.append(exc.error)
         cid = entries[-1].hash if has_root_cid and entries and not errors else None
         return AddResult(progress, entries, cid, errors, raw_events)
 
@@ -268,15 +271,18 @@ class KuboClient:
         pins: list[str] = []
         errors: list[KuboError] = []
         raw_events: list[dict[str, Any]] = []
-        for event in events:
-            raw_events.append(event)
-            if "Message" in event and "Code" in event:
-                errors.append(KuboError(event.get("Message", "Kubo error"), event.get("Code"), event.get("Type"), event))
-            elif event.get("Pins") is not None:
-                pins.extend(str(pin) for pin in event.get("Pins") or [])
-            elif "Progress" in event:
-                bytes_value = event.get("Bytes")
-                progress.append(PinProgress(int(event.get("Progress") or 0), int(bytes_value) if bytes_value is not None else None, event))
+        try:
+            for event in events:
+                raw_events.append(event)
+                if "Message" in event and "Code" in event:
+                    errors.append(KuboError(event.get("Message", "Kubo error"), event.get("Code"), event.get("Type"), event))
+                elif event.get("Pins") is not None:
+                    pins.extend(str(pin) for pin in event.get("Pins") or [])
+                elif "Progress" in event:
+                    bytes_value = event.get("Bytes")
+                    progress.append(PinProgress(int(event.get("Progress") or 0), int(bytes_value) if bytes_value is not None else None, event))
+        except KuboErrorException as exc:
+            errors.append(exc.error)
         return PinResult(progress, pins, pins[-1] if pins else None, errors, raw_events)
 
     @staticmethod

@@ -490,6 +490,22 @@ class KuboClientParsingTests(unittest.TestCase):
         self.assertEqual(result.errors[0].message, "mid-stream add failed")
         self.assertEqual(result.errors[0].type, "stream")
 
+
+    def test_parse_add_preserves_partial_events_when_transport_fails(self):
+        def events():
+            yield {"Name": "file.txt", "Bytes": 5}
+            yield {"Name": "file.txt", "Hash": "bafyfile", "Size": "13"}
+            from kubo_api_client import KuboError, KuboErrorException
+            raise KuboErrorException(KuboError("socket timed out"))
+
+        result = KuboClient._parse_add(events())
+
+        self.assertEqual(result.progress[0].bytes, 5)
+        self.assertEqual([entry.hash for entry in result.entries], ["bafyfile"])
+        self.assertIsNone(result.cid)
+        self.assertEqual(result.errors[0].message, "socket timed out")
+        self.assertEqual(len(result.raw_events), 2)
+
     def test_parse_pin_preserves_progress_when_stream_trailer_reports_error(self):
         events = [
             {"Progress": 2},
@@ -500,6 +516,20 @@ class KuboClientParsingTests(unittest.TestCase):
 
         self.assertEqual(result.progress[0].progress, 2)
         self.assertEqual(result.errors[0].message, "pin failed after progress")
+
+
+    def test_parse_pin_preserves_partial_events_when_transport_fails(self):
+        def events():
+            yield {"Progress": 2, "Bytes": 1024}
+            from kubo_api_client import KuboError, KuboErrorException
+            raise KuboErrorException(KuboError("connection reset"))
+
+        result = KuboClient._parse_pin(events())
+
+        self.assertEqual(result.progress[0].progress, 2)
+        self.assertEqual(result.progress[0].bytes, 1024)
+        self.assertEqual(result.errors[0].message, "connection reset")
+        self.assertEqual(len(result.raw_events), 1)
 
     def test_parse_pin_accepts_progress_with_or_without_bytes(self):
         events = [
