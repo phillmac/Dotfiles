@@ -18,6 +18,18 @@ class KuboClientParsingTests(unittest.TestCase):
         self.assertEqual([entry.hash for entry in result.entries], ["bafyfile", "bafydir"])
         self.assertEqual(result.errors, [])
 
+
+    def test_parse_add_does_not_invent_root_cid_for_unwrapped_batch(self):
+        events = [
+            {"Name": "one.txt", "Hash": "bafyone", "Size": "13"},
+            {"Name": "two.txt", "Hash": "bafytwo", "Size": "21"},
+        ]
+
+        result = KuboClient._parse_add(events, has_root_cid=False)
+
+        self.assertIsNone(result.cid)
+        self.assertEqual([entry.hash for entry in result.entries], ["bafyone", "bafytwo"])
+
     def test_parse_pin_accepts_progress_with_or_without_bytes(self):
         events = [
             {"Progress": 2},

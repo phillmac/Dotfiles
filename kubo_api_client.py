@@ -116,9 +116,11 @@ class KuboClient:
 
         option_map = {"progress": True}
         option_map.update(options)
-        fields, opened = self._multipart_paths(paths)
+        path_list = [paths] if isinstance(paths, (str, os.PathLike)) else list(paths)
+        fields, opened = self._multipart_paths(path_list)
+        has_root_cid = bool(option_map.get("wrap_with_directory")) or len(path_list) == 1
         try:
-            return self._parse_add(self._post_stream("/api/v0/add", option_map, fields))
+            return self._parse_add(self._post_stream("/api/v0/add", option_map, fields), has_root_cid=has_root_cid)
         except KuboErrorException as exc:
             return AddResult([], [], None, [exc.error], [])
         finally:
@@ -168,7 +170,7 @@ class KuboClient:
             return resp.read(), resp
 
     @staticmethod
-    def _parse_add(events: Iterable[dict[str, Any]]) -> AddResult:
+    def _parse_add(events: Iterable[dict[str, Any]], has_root_cid: bool = True) -> AddResult:
         progress: list[AddProgress] = []
         entries: list[AddEntry] = []
         errors: list[KuboError] = []
@@ -181,7 +183,8 @@ class KuboClient:
                 entries.append(AddEntry(event.get("Name", ""), event["Hash"], event.get("Size"), event.get("Mode"), event.get("Mtime"), event.get("MtimeNsecs"), event))
             elif "Bytes" in event:
                 progress.append(AddProgress(event.get("Name", ""), int(event.get("Bytes") or 0), event))
-        return AddResult(progress, entries, entries[-1].hash if entries else None, errors, raw_events)
+        cid = entries[-1].hash if has_root_cid and entries else None
+        return AddResult(progress, entries, cid, errors, raw_events)
 
     @staticmethod
     def _parse_pin(events: Iterable[dict[str, Any]]) -> PinResult:
@@ -230,8 +233,7 @@ class KuboClient:
         return api
 
     @staticmethod
-    def _multipart_paths(paths: str | os.PathLike[str] | Iterable[str | os.PathLike[str]]):
-        path_list = [paths] if isinstance(paths, (str, os.PathLike)) else list(paths)
+    def _multipart_paths(path_list: Iterable[str | os.PathLike[str]]):
         fields: list[tuple[str, str, BinaryIO, str]] = []
         opened: list[BinaryIO] = []
         for item in path_list:
