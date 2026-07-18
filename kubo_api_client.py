@@ -250,7 +250,7 @@ class KuboClient:
                 fields.append(("file", root.name, io.BytesIO(os.fsencode(os.readlink(root))), "application/symlink"))
                 continue
             if root.is_dir():
-                descendants = sorted(root.rglob("*"))
+                descendants = KuboClient._directory_descendants(root, dereference_symlinks)
                 files = [child for child in descendants if child.is_file() and (dereference_symlinks or not child.is_symlink())]
                 for child in files:
                     rel = str(Path(root.name) / child.relative_to(root))
@@ -262,7 +262,7 @@ class KuboClient:
                         rel = str(Path(root.name) / child.relative_to(root))
                         fields.append(("file", rel, io.BytesIO(os.fsencode(os.readlink(child))), "application/symlink"))
                 for child in descendants:
-                    if child.is_dir() and not child.is_symlink() and not any(file.is_relative_to(child) for file in files):
+                    if child.is_dir() and (dereference_symlinks or not child.is_symlink()) and not any(file.is_relative_to(child) for file in files):
                         rel = str(Path(root.name) / child.relative_to(root))
                         fields.append(("file", rel, io.BytesIO(), "application/x-directory"))
                 if not files and not descendants:
@@ -272,6 +272,20 @@ class KuboClient:
                 opened.append(handle)
                 fields.append(("file", root.name, handle, mimetypes.guess_type(root.name)[0] or "application/octet-stream"))
         return fields, opened
+
+    @staticmethod
+    def _directory_descendants(root: Path, dereference_symlinks: bool) -> list[Path]:
+        if not dereference_symlinks:
+            return sorted(root.rglob("*"))
+
+        descendants: list[Path] = []
+        for current, dirnames, filenames in os.walk(root, followlinks=True):
+            current_path = Path(current)
+            dirnames.sort()
+            filenames.sort()
+            descendants.extend(current_path / dirname for dirname in dirnames)
+            descendants.extend(current_path / filename for filename in filenames)
+        return descendants
 
     @staticmethod
     def _encode_multipart(fields: list[tuple[str, str, BinaryIO, str]]) -> tuple[Iterable[bytes], str]:
