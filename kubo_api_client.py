@@ -123,6 +123,7 @@ class KuboClient:
             path_list,
             dereference_symlinks=bool(option_map.get("dereference_symlinks")),
             hidden=bool(option_map.get("hidden")),
+            nocopy=bool(option_map.get("nocopy")),
         )
         has_root_cid = bool(option_map.get("wrap_with_directory")) or len(path_list) == 1
         try:
@@ -150,7 +151,7 @@ class KuboClient:
         except KuboErrorException as exc:
             return PinResult([], [], None, [exc.error], [])
 
-    def _post_stream(self, path: str, options: dict[str, Any], fields: list[tuple[str, str, BinaryIO, str]] | None, args: list[str] | None = None):
+    def _post_stream(self, path: str, options: dict[str, Any], fields: list[tuple[str, str, BinaryIO, str, str | None]] | None, args: list[str] | None = None):
         query = self._query(options, args=args)
         headers = {"Accept": "application/json"}
         data: bytes | Iterable[bytes] = b""
@@ -304,13 +305,14 @@ class KuboClient:
         path_list: Iterable[str | os.PathLike[str]],
         dereference_symlinks: bool = False,
         hidden: bool = False,
+        nocopy: bool = False,
     ):
-        fields: list[tuple[str, str, BinaryIO, str]] = []
+        fields: list[tuple[str, str, BinaryIO, str, str | None]] = []
         opened: list[BinaryIO] = []
         for item in path_list:
             root = Path(item)
             if root.is_symlink() and not dereference_symlinks:
-                fields.append(("file", root.name, io.BytesIO(os.fsencode(os.readlink(root))), "application/symlink"))
+                fields.append(("file", root.name, io.BytesIO(os.fsencode(os.readlink(root))), "application/symlink", None))
                 continue
             if root.is_dir():
                 descendants = KuboClient._directory_descendants(root, dereference_symlinks, hidden)
@@ -319,21 +321,21 @@ class KuboClient:
                     rel = str(Path(root.name) / child.relative_to(root))
                     handle = child.open("rb")
                     opened.append(handle)
-                    fields.append(("file", rel, handle, mimetypes.guess_type(child.name)[0] or "application/octet-stream"))
+                    fields.append(("file", rel, handle, mimetypes.guess_type(child.name)[0] or "application/octet-stream", str(child.absolute()) if nocopy else None))
                 for child in descendants:
                     if child.is_symlink() and not dereference_symlinks:
                         rel = str(Path(root.name) / child.relative_to(root))
-                        fields.append(("file", rel, io.BytesIO(os.fsencode(os.readlink(child))), "application/symlink"))
+                        fields.append(("file", rel, io.BytesIO(os.fsencode(os.readlink(child))), "application/symlink", None))
                 for child in descendants:
                     if child.is_dir() and (dereference_symlinks or not child.is_symlink()) and not any(file.is_relative_to(child) for file in files):
                         rel = str(Path(root.name) / child.relative_to(root))
-                        fields.append(("file", rel, io.BytesIO(), "application/x-directory"))
+                        fields.append(("file", rel, io.BytesIO(), "application/x-directory", None))
                 if not files and not descendants:
-                    fields.append(("file", root.name, io.BytesIO(), "application/x-directory"))
+                    fields.append(("file", root.name, io.BytesIO(), "application/x-directory", None))
             else:
                 handle = root.open("rb")
                 opened.append(handle)
-                fields.append(("file", root.name, handle, mimetypes.guess_type(root.name)[0] or "application/octet-stream"))
+                fields.append(("file", root.name, handle, mimetypes.guess_type(root.name)[0] or "application/octet-stream", str(root.absolute()) if nocopy else None))
         return fields, opened
 
     @staticmethod
@@ -370,7 +372,7 @@ class KuboClient:
         return any(part.startswith(".") for part in path.relative_to(root).parts)
 
     @staticmethod
-    def _encode_multipart(fields: list[tuple[str, str, BinaryIO, str]]) -> tuple[Iterable[bytes], str]:
+    def _encode_multipart(fields: list[tuple[str, str, BinaryIO, str, str | None]]) -> tuple[Iterable[bytes], str]:
         boundary = "----kubo-python-" + uuid.uuid4().hex
         return _MultipartStream(fields, boundary), f"multipart/form-data; boundary={boundary}"
 
@@ -412,16 +414,19 @@ class _MultipartStream:
 
     chunk_size = 64 * 1024
 
-    def __init__(self, fields: list[tuple[str, str, BinaryIO, str]], boundary: str):
+    def __init__(self, fields: list[tuple[str, str, BinaryIO, str, str | None]], boundary: str):
         self.fields = fields
         self.boundary = boundary
 
     def __iter__(self) -> Iterator[bytes]:
-        for field, filename, handle, content_type in self.fields:
+        for field, filename, handle, content_type, abspath in self.fields:
             yield f"--{self.boundary}\r\n".encode()
             encoded_filename = KuboClient._multipart_filename(filename)
             yield f'Content-Disposition: form-data; name="{field}"; filename="{encoded_filename}"\r\n'.encode()
-            yield f"Content-Type: {content_type}\r\n\r\n".encode()
+            yield f"Content-Type: {content_type}\r\n".encode()
+            if abspath is not None:
+                yield f"Abspath: {abspath}\r\n".encode()
+            yield b"\r\n"
             while True:
                 chunk = handle.read(self.chunk_size)
                 if not chunk:

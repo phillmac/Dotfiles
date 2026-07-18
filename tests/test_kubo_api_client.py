@@ -44,7 +44,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root])
 
             try:
-                parts = [(field, filename, content_type) for field, filename, _handle, content_type in fields]
+                parts = [(field, filename, content_type) for field, filename, _handle, content_type, _abspath in fields]
                 self.assertIn(("file", "root/with-file/file.txt", "text/plain"), parts)
                 self.assertIn(("file", "root/empty", "application/x-directory"), parts)
                 self.assertIn(("file", "root/empty/nested-empty", "application/x-directory"), parts)
@@ -67,7 +67,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root])
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
                 self.assertIn(("root/visible.txt", b"public", "text/plain"), parts)
                 self.assertNotIn("root/.env", [filename for filename, _content, _content_type in parts])
                 self.assertNotIn("root/.ssh/id_rsa", [filename for filename, _content, _content_type in parts])
@@ -88,12 +88,37 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root], hidden=True)
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
                 self.assertIn(("root/.env", b"SECRET=value", "application/octet-stream"), parts)
                 self.assertIn(("root/.ssh/id_rsa", b"private key", "application/octet-stream"), parts)
             finally:
                 for handle in opened:
                     handle.close()
+
+    def test_multipart_paths_emits_abspath_header_for_nocopy_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            root.mkdir()
+            file_path = root / "file.txt"
+            file_path.write_text("content", encoding="utf-8")
+
+            fields, opened = KuboClient._multipart_paths([root], nocopy=True)
+
+            try:
+                self.assertEqual(len(fields), 1)
+                field, filename, handle, content_type, abspath = fields[0]
+                self.assertEqual((field, filename, content_type), ("file", "root/file.txt", "text/plain"))
+                self.assertEqual(abspath, str(file_path.absolute()))
+
+                body, _content_type = KuboClient._encode_multipart(fields)
+                part = b"".join(body)
+
+                self.assertIn(f"Abspath: {file_path.absolute()}\r\n".encode(), part)
+                self.assertIn(b"content", part)
+            finally:
+                for handle in opened:
+                    handle.close()
+
 
     def test_multipart_paths_preserves_symlinks_without_dereferencing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -106,7 +131,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root])
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
                 self.assertIn(("root/link.txt", bytes(outside), "application/symlink"), parts)
                 self.assertNotIn(b"secret target bytes", [content for _filename, content, _content_type in parts])
                 self.assertEqual(opened, [])
@@ -125,7 +150,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root], dereference_symlinks=True)
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
                 self.assertIn(("root/link.txt", b"target bytes", "text/plain"), parts)
             finally:
                 for handle in opened:
@@ -143,7 +168,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root], dereference_symlinks=True)
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
                 self.assertIn(("root/linked-dir/nested.txt", b"nested target bytes", "text/plain"), parts)
                 self.assertNotIn(("root/linked-dir", bytes(target), "application/symlink"), parts)
             finally:
@@ -162,7 +187,7 @@ class KuboClientParsingTests(unittest.TestCase):
 
         handle = ChunkedHandle()
 
-        body, content_type = KuboClient._encode_multipart([("file", "large.bin", handle, "application/octet-stream")])
+        body, content_type = KuboClient._encode_multipart([("file", "large.bin", handle, "application/octet-stream", None)])
 
         self.assertIsInstance(body, _MultipartStream)
         self.assertIn("multipart/form-data; boundary=", content_type)
@@ -173,7 +198,7 @@ class KuboClientParsingTests(unittest.TestCase):
 
     def test_encode_multipart_percent_encodes_filename_parameter(self):
         body, _content_type = KuboClient._encode_multipart([
-            ("file", "root/a+b%2Fquote\"name.txt", io.BytesIO(b"content"), "text/plain")
+            ("file", "root/a+b%2Fquote\"name.txt", io.BytesIO(b"content"), "text/plain", None)
         ])
 
         header = next(part for part in body if part.startswith(b"Content-Disposition"))
