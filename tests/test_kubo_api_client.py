@@ -215,9 +215,61 @@ class KuboClientParsingTests(unittest.TestCase):
 
         self.assertIsInstance(body, _MultipartStream)
         self.assertIn("multipart/form-data; boundary=", content_type)
-        self.assertIn(b"alphabeta", b"".join(body))
+        joined = b"".join(body)
+        self.assertIn(b"alphabeta", joined)
         self.assertNotIn(-1, handle.read_sizes)
         self.assertEqual(handle.read_sizes, [_MultipartStream.chunk_size, _MultipartStream.chunk_size, _MultipartStream.chunk_size])
+
+    def test_recursive_multipart_paths_defer_file_opening_until_streamed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            root.mkdir()
+            first = root / "first.txt"
+            second = root / "second.txt"
+            first.write_text("alpha", encoding="utf-8")
+            second.write_text("beta", encoding="utf-8")
+            open_counts = {first: 0, second: 0}
+            close_counts = {first: 0, second: 0}
+            real_open = Path.open
+
+            class TrackingHandle:
+                def __init__(self, path, handle):
+                    self.path = path
+                    self.handle = handle
+
+                def read(self, size=-1):
+                    return self.handle.read(size)
+
+                def close(self):
+                    close_counts[self.path] += 1
+                    return self.handle.close()
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc, tb):
+                    self.close()
+                    return False
+
+            def tracking_open(path, *args, **kwargs):
+                path = Path(path)
+                if path in open_counts:
+                    open_counts[path] += 1
+                    return TrackingHandle(path, real_open(path, *args, **kwargs))
+                return real_open(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "open", tracking_open):
+                fields, opened = KuboClient._multipart_paths([root])
+                self.assertEqual(open_counts, {first: 0, second: 0})
+                self.assertEqual(opened, [])
+
+                body, _content_type = KuboClient._encode_multipart(fields)
+                joined = b"".join(body)
+                self.assertIn(b"alpha", joined)
+                self.assertIn(b"beta", joined)
+
+            self.assertEqual(open_counts, {first: 1, second: 1})
+            self.assertEqual(close_counts, {first: 1, second: 1})
 
 
     def test_encode_multipart_percent_encodes_filename_parameter(self):

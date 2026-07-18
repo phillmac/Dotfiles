@@ -85,6 +85,9 @@ class PinResult:
     raw_events: list[dict[str, Any]]
 
 
+MultipartField = tuple[str, str, BinaryIO, str, str | None]
+
+
 class KuboClient:
     """HTTP RPC client compatible with Kubo daemon `/api/v0` endpoints.
 
@@ -153,7 +156,7 @@ class KuboClient:
         except KuboErrorException as exc:
             return PinResult([], [], None, [exc.error], [])
 
-    def _post_stream(self, path: str, options: dict[str, Any], fields: list[tuple[str, str, BinaryIO, str, str | None]] | None, args: list[str] | None = None):
+    def _post_stream(self, path: str, options: dict[str, Any], fields: list[MultipartField] | None, args: list[str] | None = None):
         query = self._query(options, args=args)
         headers = {"Accept": "application/json"}
         data: bytes | Iterable[bytes] = b""
@@ -310,7 +313,7 @@ class KuboClient:
         hidden: bool = False,
         nocopy: bool = False,
     ):
-        fields: list[tuple[str, str, BinaryIO, str, str | None]] = []
+        fields: list[MultipartField] = []
         opened: list[BinaryIO] = []
         for item in path_list:
             root = Path(item)
@@ -324,8 +327,7 @@ class KuboClient:
                 files = [child for child in descendants if child.is_file() and (dereference_symlinks or not child.is_symlink())]
                 for child in files:
                     rel = str(Path(root.name) / child.relative_to(root))
-                    handle = child.open("rb")
-                    opened.append(handle)
+                    handle = _LazyFile(child)
                     fields.append(("file", rel, handle, mimetypes.guess_type(child.name)[0] or "application/octet-stream", str(child.absolute()) if nocopy else None))
                 for child in descendants:
                     if child.is_symlink() and not dereference_symlinks:
@@ -338,8 +340,7 @@ class KuboClient:
                 if not files and not descendants:
                     fields.append(("file", root.name, io.BytesIO(), "application/x-directory", None))
             else:
-                handle = root.open("rb")
-                opened.append(handle)
+                handle = _LazyFile(root)
                 fields.append(("file", root.name, handle, mimetypes.guess_type(root.name)[0] or "application/octet-stream", str(root.absolute()) if nocopy else None))
         return fields, opened
 
@@ -377,7 +378,7 @@ class KuboClient:
         return any(part.startswith(".") for part in path.relative_to(root).parts)
 
     @staticmethod
-    def _encode_multipart(fields: list[tuple[str, str, BinaryIO, str, str | None]]) -> tuple[Iterable[bytes], str]:
+    def _encode_multipart(fields: list[MultipartField]) -> tuple[Iterable[bytes], str]:
         boundary = "----kubo-python-" + uuid.uuid4().hex
         return _MultipartStream(fields, boundary), f"multipart/form-data; boundary={boundary}"
 
@@ -419,7 +420,7 @@ class _MultipartStream:
 
     chunk_size = 64 * 1024
 
-    def __init__(self, fields: list[tuple[str, str, BinaryIO, str, str | None]], boundary: str):
+    def __init__(self, fields: list[MultipartField], boundary: str):
         self.fields = fields
         self.boundary = boundary
 
@@ -432,13 +433,42 @@ class _MultipartStream:
             if abspath is not None:
                 yield f"Abspath: {abspath}\r\n".encode()
             yield b"\r\n"
-            while True:
-                chunk = handle.read(self.chunk_size)
-                if not chunk:
-                    break
-                yield chunk
+            try:
+                while True:
+                    chunk = handle.read(self.chunk_size)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                if hasattr(handle, "close"):
+                    handle.close()
             yield b"\r\n"
         yield f"--{self.boundary}--\r\n".encode()
+
+
+class _LazyFile:
+    """Binary file-like wrapper that opens a path only while it is being read."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._handle: BinaryIO | None = None
+
+    def read(self, size: int = -1) -> bytes:
+        if size is None or size < 0:
+            with self.path.open("rb") as handle:
+                return handle.read()
+
+        if self._handle is None:
+            self._handle = self.path.open("rb")
+        chunk = self._handle.read(size)
+        if not chunk:
+            self.close()
+        return chunk
+
+    def close(self) -> None:
+        if self._handle is not None:
+            self._handle.close()
+            self._handle = None
 
 
 class KuboErrorException(Exception):
