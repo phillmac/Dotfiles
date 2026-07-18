@@ -320,6 +320,10 @@ class KuboClient:
         return _MultipartStream(fields, boundary), f"multipart/form-data; boundary={boundary}"
 
     @staticmethod
+    def _multipart_filename(filename: str) -> str:
+        return urllib.parse.quote(filename, safe="/-._~")
+
+    @staticmethod
     def _stream_error_from_trailers(resp: Any) -> KuboError | None:
         message = None
         for source_name in ("trailers", "headers"):
@@ -357,7 +361,8 @@ class _MultipartStream:
     def __iter__(self) -> Iterator[bytes]:
         for field, filename, handle, content_type in self.fields:
             yield f"--{self.boundary}\r\n".encode()
-            yield f'Content-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'.encode()
+            encoded_filename = KuboClient._multipart_filename(filename)
+            yield f'Content-Disposition: form-data; name="{field}"; filename="{encoded_filename}"\r\n'.encode()
             yield f"Content-Type: {content_type}\r\n\r\n".encode()
             while True:
                 chunk = handle.read(self.chunk_size)

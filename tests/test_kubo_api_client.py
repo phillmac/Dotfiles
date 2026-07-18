@@ -1,3 +1,4 @@
+import io
 from pathlib import Path
 import tempfile
 import unittest
@@ -168,6 +169,17 @@ class KuboClientParsingTests(unittest.TestCase):
         self.assertIn(b"alphabeta", b"".join(body))
         self.assertNotIn(-1, handle.read_sizes)
         self.assertEqual(handle.read_sizes, [_MultipartStream.chunk_size, _MultipartStream.chunk_size, _MultipartStream.chunk_size])
+
+
+    def test_encode_multipart_percent_encodes_filename_parameter(self):
+        body, _content_type = KuboClient._encode_multipart([
+            ("file", "root/a+b%2Fquote\"name.txt", io.BytesIO(b"content"), "text/plain")
+        ])
+
+        header = next(part for part in body if part.startswith(b"Content-Disposition"))
+
+        self.assertIn(b'filename="root/a%2Bb%252Fquote%22name.txt"', header)
+        self.assertNotIn(b"a+b%2F", header)
 
     def test_post_stream_surfaces_x_stream_error_trailer(self):
         class TrailerResponse:
