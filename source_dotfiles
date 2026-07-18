@@ -1,3 +1,4 @@
+#! /bin/bash
 
 #Source ~/bashrc.d
 for file in "${HOME}"/.bashrc.d/*
