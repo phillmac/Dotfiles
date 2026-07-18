@@ -166,8 +166,10 @@ class KuboClient:
         if fields is not None:
             data, content_type = self._encode_multipart(fields)
             headers["Content-Type"] = content_type
+        resp = None
         try:
-            with self._open_stream_response(path + query, data, headers) as resp:
+            resp = self._open_stream_response(path + query, data, headers)
+            with resp:
                 trailers: dict[str, str] = {}
                 for line in self._iter_stream_response_lines(resp, trailers):
                     line = line.strip()
@@ -183,7 +185,10 @@ class KuboClient:
                     }
         except (urllib.error.URLError, TimeoutError, socket.timeout, OSError, http.client.HTTPException) as err:
             raise KuboErrorException(KuboError(str(err), raw=err)) from err
-
+        finally:
+            connection = getattr(resp, "_kubo_connection", None)
+            if connection is not None:
+                connection.close()
 
     def _open_stream_response(self, path_and_query: str, data: bytes | Iterable[bytes], headers: dict[str, str]):
         url = urllib.parse.urlsplit(self.api)

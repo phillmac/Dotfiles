@@ -455,6 +455,35 @@ class KuboClientParsingTests(unittest.TestCase):
         self.assertLess(position_after_first_event, trailer_offset)
         self.assertEqual(remaining_events[0]["Message"], "delayed failure")
 
+    def test_post_stream_closes_underlying_connection_after_success(self):
+        class TrailerResponse:
+            status = 200
+
+            def __init__(self):
+                self.fp = io.BytesIO(b'{"Name":"file.txt","Bytes":5}\n')
+                self._kubo_connection = mock.Mock()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, _exc_type, _exc, _tb):
+                return False
+
+            def getheader(self, name, default=None):
+                return default
+
+            def readline(self):
+                return self.fp.readline()
+
+        response = TrailerResponse()
+        client = KuboClient("http://127.0.0.1:5001")
+
+        with mock.patch.object(client, "_open_stream_response", return_value=response):
+            events = list(client._post_stream("/api/v0/add", {}, None))
+
+        self.assertEqual(events, [{"Name": "file.txt", "Bytes": 5}])
+        response._kubo_connection.close.assert_called_once_with()
+
     def test_post_stream_surfaces_x_stream_error_trailer(self):
         class TrailerResponse:
             status = 200
