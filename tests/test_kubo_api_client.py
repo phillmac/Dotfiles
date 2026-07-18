@@ -1,6 +1,6 @@
 import io
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import tempfile
 import unittest
 from unittest import mock
@@ -71,6 +71,16 @@ class KuboClientParsingTests(unittest.TestCase):
                     client.add(root)
 
             open_mock.assert_not_called()
+
+    def test_multipart_relative_name_uses_posix_separators_for_windows_paths(self):
+        root = PureWindowsPath(r"C:\uploads\root")
+        child = PureWindowsPath(r"C:\uploads\root\sub\file.txt")
+
+        self.assertEqual(
+            KuboClient._multipart_relative_name(root, child),
+            "root/sub/file.txt",
+        )
+
 
     def test_multipart_paths_emits_directory_parts_for_empty_directories(self):
         with tempfile.TemporaryDirectory() as tmpdir:

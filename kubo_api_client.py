@@ -13,7 +13,7 @@ import io
 import json
 import mimetypes
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import socket
 import stat
 import urllib.error
@@ -349,7 +349,7 @@ class KuboClient:
                     if child.is_file() and (dereference_symlinks or not child.is_symlink())
                 ]
                 for child in files:
-                    rel = str(Path(root.name) / child.relative_to(root))
+                    rel = KuboClient._multipart_relative_name(root, child)
                     handle = _LazyFile(child)
                     field, metadata_headers = KuboClient._multipart_field_name(
                         "file",
@@ -368,7 +368,7 @@ class KuboClient:
                     ))
                 for child in descendants:
                     if child.is_symlink() and not dereference_symlinks:
-                        rel = str(Path(root.name) / child.relative_to(root))
+                        rel = KuboClient._multipart_relative_name(root, child)
                         field, metadata_headers = KuboClient._multipart_field_name(
                             "file", child, preserve_mode, preserve_mtime, follow_symlinks=False
                         )
@@ -386,7 +386,7 @@ class KuboClient:
                         and (dereference_symlinks or not child.is_symlink())
                         and not any(file.is_relative_to(child) for file in files)
                     ):
-                        rel = str(Path(root.name) / child.relative_to(root))
+                        rel = KuboClient._multipart_relative_name(root, child)
                         field, metadata_headers = KuboClient._multipart_field_name(
                             "file",
                             child,
@@ -422,6 +422,11 @@ class KuboClient:
                     metadata_headers,
                 ))
         return fields, opened
+
+
+    @staticmethod
+    def _multipart_relative_name(root: Path, child: Path) -> str:
+        return str(PurePosixPath(root.name, *child.relative_to(root).parts))
 
     @staticmethod
     def _multipart_field_name(
