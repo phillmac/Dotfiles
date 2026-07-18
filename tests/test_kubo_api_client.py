@@ -35,6 +35,19 @@ class KuboClientParsingTests(unittest.TestCase):
         self.assertEqual([entry.hash for entry in result.entries], ["bafyone", "bafytwo"])
 
 
+    def test_parse_add_suppresses_cid_when_stream_reports_error(self):
+        events = [
+            {"Name": "root/child.txt", "Hash": "bafychild", "Size": "13"},
+            {"Message": "add failed before root", "Code": 200, "Type": "stream"},
+        ]
+
+        result = KuboClient._parse_add(events)
+
+        self.assertIsNone(result.cid)
+        self.assertEqual([entry.hash for entry in result.entries], ["bafychild"])
+        self.assertEqual(result.errors[0].message, "add failed before root")
+
+
     def test_multipart_paths_rejects_directories_when_recursive_is_false(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / "root"

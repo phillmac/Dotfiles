@@ -256,7 +256,7 @@ class KuboClient:
                 entries.append(AddEntry(event.get("Name", ""), event["Hash"], event.get("Size"), event.get("Mode"), event.get("Mtime"), event.get("MtimeNsecs"), event))
             elif "Bytes" in event:
                 progress.append(AddProgress(event.get("Name", ""), int(event.get("Bytes") or 0), event))
-        cid = entries[-1].hash if has_root_cid and entries else None
+        cid = entries[-1].hash if has_root_cid and entries and not errors else None
         return AddResult(progress, entries, cid, errors, raw_events)
 
     @staticmethod
