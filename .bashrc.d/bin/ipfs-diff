@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Recursively compare two IPFS DAGs using `ipfs links`.
+# Usage: ipfs-diff.sh <CID_OR_PATH_1> <CID_OR_PATH_2>
+#
+# Behaviour:
+# - Prints differences between the two trees.
+# - If a child name exists only on one side, it is reported as added/removed.
+# - If a child exists on both sides:
+#     - If CIDs are equal: subtree is assumed identical; recursion stops there.
+#     - If CIDs differ: the path is reported as differing, and recursion continues.
+#
+# Notes:
+# - Requires: bash 4+ (for associative arrays) and `ipfs` CLI.
+# - Assumes link names do not contain whitespace. If they might, you’ll need
+#   to adjust the parsing of `ipfs links` output.
+
+if [[ $# -ne 2 ]]; then
+  echo "Usage: $0 <CID_OR_PATH_1> <CID_OR_PATH_2>" >&2
+  exit 1
+fi
+
+ROOT_A="$1"
+ROOT_B="$2"
+
+# Get direct children of a CID/path using `ipfs links`.
+# Output format: "name cid" per line.
+get_links() {
+  local cid="$1"
+
+  # `ipfs links` typically prints: <link_cid> <name>
+  # We swap them to "name cid" for easier associative-array handling.
+  # Suppress errors in case the object has no links (e.g. file).
+  ipfs ls --size=false --resolve-type=false "$cid" 2>/dev/null | awk '{print $2, $1}'
+}
+
+# Recursive comparison function.
+# Args:
+#   $1 - CID/path in tree A
+#   $2 - CID/path in tree B
+#   $3 - current logical path (for display), e.g. "", "dir", "dir/subdir"
+compare_nodes() {
+  local cid_a="$1"
+  local cid_b="$2"
+  local path="$3"
+
+  # If the CIDs are identical, the whole subtree is identical; skip recursion.
+  if [[ "$cid_a" == "$cid_b" ]]; then
+    # Uncomment this if you want to see which subtrees were skipped:
+    echo "SAME: ${path:-/} -> $cid_a"
+    return
+  fi
+
+  # Try to list links on each side.
+  local links_a links_b
+  links_a="$(get_links "$cid_a" || true)"
+  links_b="$(get_links "$cid_b" || true)"
+
+  # If neither side has children (leaf nodes) and CIDs differ, just report.
+  if [[ -z "$links_a" && -z "$links_b" ]]; then
+    echo "DIFF LEAF: ${path:-/}"
+    echo "  A: $cid_a"
+    echo "  B: $cid_b"
+    return
+  fi
+
+  # Build name->cid maps for each side.
+  declare -A map_a=()
+  declare -A map_b=()
+
+  local name child_cid
+
+  # Populate map for A
+  while read -r name child_cid; do
+    [[ -z "$name" ]] && continue
+    map_a["$name"]="$child_cid"
+  done <<< "$links_a"
+
+  # Populate map for B
+  while read -r name child_cid; do
+    [[ -z "$name" ]] && continue
+    map_b["$name"]="$child_cid"
+  done <<< "$links_b"
+
+  # Track which names we've seen in B so we can later find "only in B"
+  declare -A seen_b=()
+
+  # First, iterate over names in A
+  for name in "${!map_a[@]}"; do
+    local a_child="${map_a[$name]}"
+    local b_child="${map_b[$name]+${map_b[$name]}}"
+
+    if [[ -z "${map_b[$name]+_}" ]]; then
+      # Exists only in A
+      echo "ONLY IN A: ${path}/${name} -> $a_child"
+    else
+      seen_b["$name"]=1
+      if [[ "$a_child" == "$b_child" ]]; then
+        # Matching children, same CID: skip recursion under this subtree.
+        # echo "SAME: ${path}/${name} -> $a_child"
+        continue
+      else
+        # Child exists on both sides but with different CIDs:
+        # report and recurse deeper.
+        echo "DIFF: ${path}/${name}"
+        echo "  A: $a_child"
+        echo "  B: $b_child"
+        compare_nodes "$a_child" "$b_child" "${path}/${name}"
+      fi
+    fi
+  done
+
+  # Now find names only in B
+  for name in "${!map_b[@]}"; do
+    if [[ -z "${seen_b[$name]+_}" && -z "${map_a[$name]+_}" ]]; then
+      local b_child="${map_b[$name]}"
+      echo "ONLY IN B: ${path}/${name} -> $b_child"
+    fi
+  done
+}
+
+compare_nodes "$ROOT_A" "$ROOT_B" ""

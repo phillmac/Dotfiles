@@ -106,7 +106,7 @@ function rhea.export.laptop.dag ()
     while read -r cid;
     do
         echo "$(date) - Exporting ${cid}"
-        while ! ssh phill@192.99.21.37 'docker exec -i \
+        while ! ssh ubuntu@192.99.21.37 'docker exec -i \
             phill-dev-ipfs-1 \
                 ipfs dag import \
                     --pin-roots=false < <(mbuffer)' < <( docker run --rm \
@@ -121,6 +121,115 @@ function rhea.export.laptop.dag ()
         done
         echo "$(date) - Done"
     done < <(tail -f rhea.export.laptop.dag.queue)
+}
+
+function rhea.wasabi.pebble.export.laptop.dag ()
+{
+    # Socket on carpo that forwards to the laptop's 127.0.0.1:5001.
+    local laptop_socket="${HOME}/.var/run/ipfs-laptop-api.sock"
+
+    # Existing socket on carpo that forwards to the IPFS daemon on rhea.
+    local rhea_socket="${HOME}/.var/run/rhea-ipfs-wasabi.sock"
+
+    local queue="rhea.wasabi.pebble.export.laptop.dag.queue"
+
+    local source_image="${LAPTOP_IPFS_CLI_IMAGE:-ipfs/go-ipfs:v0.8.0}"
+    local destination_image="${RHEA_IPFS_CLI_IMAGE:-ipfs/go-ipfs:v0.31.0}"
+
+    local retry_delay="${IPFS_DAG_RETRY_DELAY:-300}"
+
+    command -v docker >/dev/null 2>&1 || {
+        echo "docker is not installed or not in PATH" >&2
+        return 1
+    }
+
+    command -v mbuffer >/dev/null 2>&1 || {
+        echo "mbuffer is not installed or not in PATH" >&2
+        return 1
+    }
+
+    if [[ -e "$queue" && ! -p "$queue" ]]
+    then
+        echo "${queue} exists but is not a FIFO" >&2
+        return 1
+    fi
+
+    if [[ ! -p "$queue" ]]
+    then
+        mkfifo -- "$queue" || return 1
+    fi
+
+    echo "$(date) - Waiting for CIDs on ${queue}"
+    echo "$(date) - Export source: ${laptop_socket}"
+    echo "$(date) - Import destination: ${rhea_socket}"
+
+    # Reopen the FIFO whenever the current writer closes it. This keeps the
+    # worker alive without needing tail -f.
+    while true
+    do
+        while IFS= read -r cid
+        do
+            # Ignore blank queue entries.
+            [[ -n "$cid" ]] || continue
+
+            echo "$(date) - Exporting ${cid} from laptop and importing to rhea"
+
+            while true
+            do
+                if [[ ! -S "$laptop_socket" ]]
+                then
+                    echo "$(date) - Laptop IPFS socket is unavailable: ${laptop_socket}" >&2
+                    echo "$(date) - Retrying ${cid} in ${retry_delay} seconds" >&2
+                    sleep "$retry_delay"
+                    continue
+                fi
+
+                if [[ ! -S "$rhea_socket" ]]
+                then
+                    echo "$(date) - Rhea IPFS socket is unavailable: ${rhea_socket}" >&2
+                    echo "$(date) - Retrying ${cid} in ${retry_delay} seconds" >&2
+                    sleep "$retry_delay"
+                    continue
+                fi
+
+                if (
+                    set -o pipefail
+
+                    docker run --rm \
+                        --log-driver none \
+                        --mount \
+                            "type=bind,src=${laptop_socket},dst=/run/ipfs-laptop-api.sock" \
+                        --entrypoint /usr/local/bin/ipfs \
+                        "$source_image" \
+                        --api=/unix/run/ipfs-laptop-api.sock \
+                        dag export \
+                            --progress=false \
+                            "$cid" \
+                    |
+                    mbuffer -e \
+                    |
+                    docker run --rm -i \
+                        --log-driver none \
+                        --mount \
+                            "type=bind,src=${rhea_socket},dst=/run/rhea-ipfs-wasabi.sock" \
+                        --entrypoint /usr/local/bin/ipfs \
+                        "$destination_image" \
+                        --api=/unix/run/rhea-ipfs-wasabi.sock \
+                        dag import \
+                            --pin-roots=false \
+                            --allow-big-block
+                )
+                then
+                    echo "$(date) - Done ${cid}"
+                    break
+                fi
+
+                echo "$(date) - Failed ${cid}" >&2
+                echo "$(date) - Retrying in ${retry_delay} seconds" >&2
+                sleep "$retry_delay"
+            done
+        done < "$queue"
+    done
 }
 
 
