@@ -358,16 +358,25 @@ class KuboClient:
             ]
 
         descendants: list[Path] = []
+        root_identity = KuboClient._directory_identity(root)
+        seen_directories = {root_identity} if root_identity is not None else set()
         for current, dirnames, filenames in os.walk(root, followlinks=True):
             current_path = Path(current)
             dirnames.sort()
             filenames.sort()
+            pruned_dirnames = []
+            for dirname in dirnames:
+                child = current_path / dirname
+                if not hidden and KuboClient._is_hidden_descendant(root, child):
+                    continue
+                identity = KuboClient._directory_identity(child)
+                if identity is not None and identity in seen_directories:
+                    continue
+                if identity is not None:
+                    seen_directories.add(identity)
+                pruned_dirnames.append(dirname)
+            dirnames[:] = pruned_dirnames
             if not hidden:
-                dirnames[:] = [
-                    dirname
-                    for dirname in dirnames
-                    if not KuboClient._is_hidden_descendant(root, current_path / dirname)
-                ]
                 filenames = [
                     filename
                     for filename in filenames
@@ -376,6 +385,14 @@ class KuboClient:
             descendants.extend(current_path / dirname for dirname in dirnames)
             descendants.extend(current_path / filename for filename in filenames)
         return descendants
+
+    @staticmethod
+    def _directory_identity(path: Path) -> tuple[int, int] | None:
+        try:
+            stat = path.stat()
+        except OSError:
+            return None
+        return (stat.st_dev, stat.st_ino)
 
     @staticmethod
     def _is_hidden_descendant(root: Path, path: Path) -> bool:
