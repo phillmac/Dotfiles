@@ -2,7 +2,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from kubo_api_client import KuboClient
+from kubo_api_client import KuboClient, _MultipartStream
 
 
 class KuboClientParsingTests(unittest.TestCase):
@@ -85,6 +85,26 @@ class KuboClientParsingTests(unittest.TestCase):
             finally:
                 for handle in opened:
                     handle.close()
+
+    def test_encode_multipart_streams_file_handles_incrementally(self):
+        class ChunkedHandle:
+            def __init__(self):
+                self.read_sizes = []
+                self.chunks = [b"alpha", b"beta", b""]
+
+            def read(self, size=-1):
+                self.read_sizes.append(size)
+                return self.chunks.pop(0)
+
+        handle = ChunkedHandle()
+
+        body, content_type = KuboClient._encode_multipart([("file", "large.bin", handle, "application/octet-stream")])
+
+        self.assertIsInstance(body, _MultipartStream)
+        self.assertIn("multipart/form-data; boundary=", content_type)
+        self.assertIn(b"alphabeta", b"".join(body))
+        self.assertNotIn(-1, handle.read_sizes)
+        self.assertEqual(handle.read_sizes, [_MultipartStream.chunk_size, _MultipartStream.chunk_size, _MultipartStream.chunk_size])
 
     def test_parse_pin_accepts_progress_with_or_without_bytes(self):
         events = [

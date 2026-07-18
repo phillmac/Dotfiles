@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from typing import Any, BinaryIO, Iterable
+from typing import Any, BinaryIO, Iterable, Iterator
 
 
 @dataclass(frozen=True)
@@ -148,11 +148,11 @@ class KuboClient:
     def _post_stream(self, path: str, options: dict[str, Any], fields: list[tuple[str, str, BinaryIO, str]] | None, args: list[str] | None = None):
         query = self._query(options, args=args)
         headers = {"Accept": "application/json"}
-        data = None
+        data: bytes | Iterable[bytes] = b""
         if fields is not None:
             data, content_type = self._encode_multipart(fields)
             headers["Content-Type"] = content_type
-        req = urllib.request.Request(self.api + path + query, data=data or b"", headers=headers, method="POST")
+        req = urllib.request.Request(self.api + path + query, data=data, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 for line in resp:
@@ -267,17 +267,9 @@ class KuboClient:
         return fields, opened
 
     @staticmethod
-    def _encode_multipart(fields: list[tuple[str, str, BinaryIO, str]]) -> tuple[bytes, str]:
+    def _encode_multipart(fields: list[tuple[str, str, BinaryIO, str]]) -> tuple[Iterable[bytes], str]:
         boundary = "----kubo-python-" + uuid.uuid4().hex
-        chunks: list[bytes] = []
-        for field, filename, handle, content_type in fields:
-            chunks.append(f"--{boundary}\r\n".encode())
-            chunks.append(f'Content-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'.encode())
-            chunks.append(f"Content-Type: {content_type}\r\n\r\n".encode())
-            chunks.append(handle.read())
-            chunks.append(b"\r\n")
-        chunks.append(f"--{boundary}--\r\n".encode())
-        return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
+        return _MultipartStream(fields, boundary), f"multipart/form-data; boundary={boundary}"
 
     @staticmethod
     def _error_from_http(err: urllib.error.HTTPError) -> KuboError:
@@ -287,6 +279,29 @@ class KuboClient:
             return KuboError(parsed.get("Message", err.reason), parsed.get("Code", err.code), parsed.get("Type"), parsed)
         except Exception:
             return KuboError(body.decode("utf-8", "replace") or err.reason, err.code, raw=body)
+
+
+class _MultipartStream:
+    """Iterable multipart body that reads file handles incrementally."""
+
+    chunk_size = 64 * 1024
+
+    def __init__(self, fields: list[tuple[str, str, BinaryIO, str]], boundary: str):
+        self.fields = fields
+        self.boundary = boundary
+
+    def __iter__(self) -> Iterator[bytes]:
+        for field, filename, handle, content_type in self.fields:
+            yield f"--{self.boundary}\r\n".encode()
+            yield f'Content-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'.encode()
+            yield f"Content-Type: {content_type}\r\n\r\n".encode()
+            while True:
+                chunk = handle.read(self.chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+            yield b"\r\n"
+        yield f"--{self.boundary}--\r\n".encode()
 
 
 class KuboErrorException(Exception):
