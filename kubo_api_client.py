@@ -118,7 +118,11 @@ class KuboClient:
         option_map = {"progress": True}
         option_map.update(options)
         path_list = [paths] if isinstance(paths, (str, os.PathLike)) else list(paths)
-        fields, opened = self._multipart_paths(path_list, dereference_symlinks=bool(option_map.get("dereference_symlinks")))
+        fields, opened = self._multipart_paths(
+            path_list,
+            dereference_symlinks=bool(option_map.get("dereference_symlinks")),
+            hidden=bool(option_map.get("hidden")),
+        )
         has_root_cid = bool(option_map.get("wrap_with_directory")) or len(path_list) == 1
         try:
             return self._parse_add(self._post_stream("/api/v0/add", option_map, fields), has_root_cid=has_root_cid)
@@ -241,7 +245,11 @@ class KuboClient:
         return api
 
     @staticmethod
-    def _multipart_paths(path_list: Iterable[str | os.PathLike[str]], dereference_symlinks: bool = False):
+    def _multipart_paths(
+        path_list: Iterable[str | os.PathLike[str]],
+        dereference_symlinks: bool = False,
+        hidden: bool = False,
+    ):
         fields: list[tuple[str, str, BinaryIO, str]] = []
         opened: list[BinaryIO] = []
         for item in path_list:
@@ -250,7 +258,7 @@ class KuboClient:
                 fields.append(("file", root.name, io.BytesIO(os.fsencode(os.readlink(root))), "application/symlink"))
                 continue
             if root.is_dir():
-                descendants = KuboClient._directory_descendants(root, dereference_symlinks)
+                descendants = KuboClient._directory_descendants(root, dereference_symlinks, hidden)
                 files = [child for child in descendants if child.is_file() and (dereference_symlinks or not child.is_symlink())]
                 for child in files:
                     rel = str(Path(root.name) / child.relative_to(root))
@@ -274,18 +282,37 @@ class KuboClient:
         return fields, opened
 
     @staticmethod
-    def _directory_descendants(root: Path, dereference_symlinks: bool) -> list[Path]:
+    def _directory_descendants(root: Path, dereference_symlinks: bool, hidden: bool) -> list[Path]:
         if not dereference_symlinks:
-            return sorted(root.rglob("*"))
+            return [
+                child
+                for child in sorted(root.rglob("*"))
+                if hidden or not KuboClient._is_hidden_descendant(root, child)
+            ]
 
         descendants: list[Path] = []
         for current, dirnames, filenames in os.walk(root, followlinks=True):
             current_path = Path(current)
             dirnames.sort()
             filenames.sort()
+            if not hidden:
+                dirnames[:] = [
+                    dirname
+                    for dirname in dirnames
+                    if not KuboClient._is_hidden_descendant(root, current_path / dirname)
+                ]
+                filenames = [
+                    filename
+                    for filename in filenames
+                    if not KuboClient._is_hidden_descendant(root, current_path / filename)
+                ]
             descendants.extend(current_path / dirname for dirname in dirnames)
             descendants.extend(current_path / filename for filename in filenames)
         return descendants
+
+    @staticmethod
+    def _is_hidden_descendant(root: Path, path: Path) -> bool:
+        return any(part.startswith(".") for part in path.relative_to(root).parts)
 
     @staticmethod
     def _encode_multipart(fields: list[tuple[str, str, BinaryIO, str]]) -> tuple[Iterable[bytes], str]:

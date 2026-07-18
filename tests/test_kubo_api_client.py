@@ -51,6 +51,49 @@ class KuboClientParsingTests(unittest.TestCase):
                 for handle in opened:
                     handle.close()
 
+
+    def test_multipart_paths_excludes_hidden_descendants_by_default(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            root.mkdir()
+            (root / "visible.txt").write_text("public", encoding="utf-8")
+            (root / ".env").write_text("SECRET=value", encoding="utf-8")
+            (root / ".ssh").mkdir()
+            (root / ".ssh" / "id_rsa").write_text("private key", encoding="utf-8")
+            (root / "visible-dir").mkdir()
+            (root / "visible-dir" / ".nested-secret").write_text("nested", encoding="utf-8")
+
+            fields, opened = KuboClient._multipart_paths([root])
+
+            try:
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type in fields]
+                self.assertIn(("root/visible.txt", b"public", "text/plain"), parts)
+                self.assertNotIn("root/.env", [filename for filename, _content, _content_type in parts])
+                self.assertNotIn("root/.ssh/id_rsa", [filename for filename, _content, _content_type in parts])
+                self.assertNotIn("root/visible-dir/.nested-secret", [filename for filename, _content, _content_type in parts])
+                self.assertNotIn(b"SECRET=value", [content for _filename, content, _content_type in parts])
+            finally:
+                for handle in opened:
+                    handle.close()
+
+    def test_multipart_paths_includes_hidden_descendants_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            root.mkdir()
+            (root / ".env").write_text("SECRET=value", encoding="utf-8")
+            (root / ".ssh").mkdir()
+            (root / ".ssh" / "id_rsa").write_text("private key", encoding="utf-8")
+
+            fields, opened = KuboClient._multipart_paths([root], hidden=True)
+
+            try:
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type in fields]
+                self.assertIn(("root/.env", b"SECRET=value", "application/octet-stream"), parts)
+                self.assertIn(("root/.ssh/id_rsa", b"private key", "application/octet-stream"), parts)
+            finally:
+                for handle in opened:
+                    handle.close()
+
     def test_multipart_paths_preserves_symlinks_without_dereferencing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / "root"
