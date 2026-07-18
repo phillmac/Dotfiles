@@ -1,6 +1,7 @@
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from kubo_api_client import KuboClient, _MultipartStream
 
@@ -105,6 +106,43 @@ class KuboClientParsingTests(unittest.TestCase):
         self.assertIn(b"alphabeta", b"".join(body))
         self.assertNotIn(-1, handle.read_sizes)
         self.assertEqual(handle.read_sizes, [_MultipartStream.chunk_size, _MultipartStream.chunk_size, _MultipartStream.chunk_size])
+
+    def test_post_stream_surfaces_x_stream_error_trailer(self):
+        class TrailerResponse:
+            status = 200
+            trailers = {"X-Stream-Error": "mid-stream add failed"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, _exc_type, _exc, _tb):
+                return False
+
+            def __iter__(self):
+                return iter([b'{"Name":"file.txt","Bytes":5}\n'])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "file.txt"
+            path.write_text("content", encoding="utf-8")
+            client = KuboClient("http://127.0.0.1:5001")
+
+            with mock.patch("urllib.request.urlopen", return_value=TrailerResponse()):
+                result = client.add(path)
+
+        self.assertEqual(result.progress[0].bytes, 5)
+        self.assertEqual(result.errors[0].message, "mid-stream add failed")
+        self.assertEqual(result.errors[0].type, "stream")
+
+    def test_parse_pin_preserves_progress_when_stream_trailer_reports_error(self):
+        events = [
+            {"Progress": 2},
+            {"Message": "pin failed after progress", "Code": 200, "Type": "stream"},
+        ]
+
+        result = KuboClient._parse_pin(events)
+
+        self.assertEqual(result.progress[0].progress, 2)
+        self.assertEqual(result.errors[0].message, "pin failed after progress")
 
     def test_parse_pin_accepts_progress_with_or_without_bytes(self):
         events = [

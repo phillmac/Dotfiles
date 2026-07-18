@@ -160,6 +160,13 @@ class KuboClient:
                     if not line:
                         continue
                     yield json.loads(line.decode("utf-8"))
+                stream_error = self._stream_error_from_trailers(resp)
+                if stream_error is not None:
+                    yield {
+                        "Message": stream_error.message,
+                        "Code": stream_error.code,
+                        "Type": stream_error.type,
+                    }
         except urllib.error.HTTPError as err:
             raise KuboErrorException(self._error_from_http(err)) from err
         except (urllib.error.URLError, TimeoutError, socket.timeout, OSError) as err:
@@ -270,6 +277,22 @@ class KuboClient:
     def _encode_multipart(fields: list[tuple[str, str, BinaryIO, str]]) -> tuple[Iterable[bytes], str]:
         boundary = "----kubo-python-" + uuid.uuid4().hex
         return _MultipartStream(fields, boundary), f"multipart/form-data; boundary={boundary}"
+
+    @staticmethod
+    def _stream_error_from_trailers(resp: Any) -> KuboError | None:
+        message = None
+        for source_name in ("trailers", "headers"):
+            source = getattr(resp, source_name, None)
+            if source is not None and hasattr(source, "get"):
+                message = source.get("X-Stream-Error") or source.get("x-stream-error")
+                if message:
+                    break
+        if not message and hasattr(resp, "getheader"):
+            message = resp.getheader("X-Stream-Error")
+        if not message:
+            return None
+        code = getattr(resp, "status", None) or getattr(resp, "code", None)
+        return KuboError(str(message), code, "stream", {"X-Stream-Error": str(message)})
 
     @staticmethod
     def _error_from_http(err: urllib.error.HTTPError) -> KuboError:
