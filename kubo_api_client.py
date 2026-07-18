@@ -8,6 +8,7 @@ can inspect them programmatically instead of scraping CLI stdout/stderr.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import io
 import json
 import mimetypes
 import os
@@ -239,11 +240,19 @@ class KuboClient:
         for item in path_list:
             root = Path(item)
             if root.is_dir():
-                for child in sorted(p for p in root.rglob("*") if p.is_file()):
+                descendants = sorted(root.rglob("*"))
+                files = [child for child in descendants if child.is_file()]
+                for child in files:
                     rel = str(Path(root.name) / child.relative_to(root))
                     handle = child.open("rb")
                     opened.append(handle)
                     fields.append(("file", rel, handle, mimetypes.guess_type(child.name)[0] or "application/octet-stream"))
+                for child in descendants:
+                    if child.is_dir() and not any(file.is_relative_to(child) for file in files):
+                        rel = str(Path(root.name) / child.relative_to(root))
+                        fields.append(("file", rel, io.BytesIO(), "application/x-directory"))
+                if not files and not descendants:
+                    fields.append(("file", root.name, io.BytesIO(), "application/x-directory"))
             else:
                 handle = root.open("rb")
                 opened.append(handle)

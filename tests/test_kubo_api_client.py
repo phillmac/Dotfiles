@@ -1,3 +1,5 @@
+from pathlib import Path
+import tempfile
 import unittest
 
 from kubo_api_client import KuboClient
@@ -29,6 +31,24 @@ class KuboClientParsingTests(unittest.TestCase):
 
         self.assertIsNone(result.cid)
         self.assertEqual([entry.hash for entry in result.entries], ["bafyone", "bafytwo"])
+
+    def test_multipart_paths_emits_directory_parts_for_empty_directories(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            (root / "with-file").mkdir(parents=True)
+            (root / "with-file" / "file.txt").write_text("content", encoding="utf-8")
+            (root / "empty" / "nested-empty").mkdir(parents=True)
+
+            fields, opened = KuboClient._multipart_paths([root])
+
+            try:
+                parts = [(field, filename, content_type) for field, filename, _handle, content_type in fields]
+                self.assertIn(("file", "root/with-file/file.txt", "text/plain"), parts)
+                self.assertIn(("file", "root/empty", "application/x-directory"), parts)
+                self.assertIn(("file", "root/empty/nested-empty", "application/x-directory"), parts)
+            finally:
+                for handle in opened:
+                    handle.close()
 
     def test_parse_pin_accepts_progress_with_or_without_bytes(self):
         events = [
