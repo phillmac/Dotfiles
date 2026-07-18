@@ -376,7 +376,7 @@ class KuboClient:
 
     @staticmethod
     def _multipart_filename(filename: str) -> str:
-        return urllib.parse.quote(filename, safe="/-._~")
+        return urllib.parse.quote(filename, safe="-._~")
 
     @staticmethod
     def _stream_error_from_trailers(resp: Any, trailers: dict[str, str] | None = None) -> KuboError | None:

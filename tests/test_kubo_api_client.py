@@ -178,7 +178,7 @@ class KuboClientParsingTests(unittest.TestCase):
 
         header = next(part for part in body if part.startswith(b"Content-Disposition"))
 
-        self.assertIn(b'filename="root/a%2Bb%252Fquote%22name.txt"', header)
+        self.assertIn(b'filename="root%2Fa%2Bb%252Fquote%22name.txt"', header)
         self.assertNotIn(b"a+b%2F", header)
 
 
