@@ -118,7 +118,7 @@ class KuboClient:
         option_map = {"progress": True}
         option_map.update(options)
         path_list = [paths] if isinstance(paths, (str, os.PathLike)) else list(paths)
-        fields, opened = self._multipart_paths(path_list)
+        fields, opened = self._multipart_paths(path_list, dereference_symlinks=bool(option_map.get("dereference_symlinks")))
         has_root_cid = bool(option_map.get("wrap_with_directory")) or len(path_list) == 1
         try:
             return self._parse_add(self._post_stream("/api/v0/add", option_map, fields), has_root_cid=has_root_cid)
@@ -234,21 +234,28 @@ class KuboClient:
         return api
 
     @staticmethod
-    def _multipart_paths(path_list: Iterable[str | os.PathLike[str]]):
+    def _multipart_paths(path_list: Iterable[str | os.PathLike[str]], dereference_symlinks: bool = False):
         fields: list[tuple[str, str, BinaryIO, str]] = []
         opened: list[BinaryIO] = []
         for item in path_list:
             root = Path(item)
+            if root.is_symlink() and not dereference_symlinks:
+                fields.append(("file", root.name, io.BytesIO(os.fsencode(os.readlink(root))), "application/symlink"))
+                continue
             if root.is_dir():
                 descendants = sorted(root.rglob("*"))
-                files = [child for child in descendants if child.is_file()]
+                files = [child for child in descendants if child.is_file() and (dereference_symlinks or not child.is_symlink())]
                 for child in files:
                     rel = str(Path(root.name) / child.relative_to(root))
                     handle = child.open("rb")
                     opened.append(handle)
                     fields.append(("file", rel, handle, mimetypes.guess_type(child.name)[0] or "application/octet-stream"))
                 for child in descendants:
-                    if child.is_dir() and not any(file.is_relative_to(child) for file in files):
+                    if child.is_symlink() and not dereference_symlinks:
+                        rel = str(Path(root.name) / child.relative_to(root))
+                        fields.append(("file", rel, io.BytesIO(os.fsencode(os.readlink(child))), "application/symlink"))
+                for child in descendants:
+                    if child.is_dir() and not child.is_symlink() and not any(file.is_relative_to(child) for file in files):
                         rel = str(Path(root.name) / child.relative_to(root))
                         fields.append(("file", rel, io.BytesIO(), "application/x-directory"))
                 if not files and not descendants:

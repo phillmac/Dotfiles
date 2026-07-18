@@ -50,6 +50,42 @@ class KuboClientParsingTests(unittest.TestCase):
                 for handle in opened:
                     handle.close()
 
+    def test_multipart_paths_preserves_symlinks_without_dereferencing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            outside = Path(tmpdir) / "outside.txt"
+            root.mkdir()
+            outside.write_text("secret target bytes", encoding="utf-8")
+            (root / "link.txt").symlink_to(outside)
+
+            fields, opened = KuboClient._multipart_paths([root])
+
+            try:
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type in fields]
+                self.assertIn(("root/link.txt", bytes(outside), "application/symlink"), parts)
+                self.assertNotIn(b"secret target bytes", [content for _filename, content, _content_type in parts])
+                self.assertEqual(opened, [])
+            finally:
+                for handle in opened:
+                    handle.close()
+
+    def test_multipart_paths_dereferences_symlinks_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            outside = Path(tmpdir) / "outside.txt"
+            root.mkdir()
+            outside.write_text("target bytes", encoding="utf-8")
+            (root / "link.txt").symlink_to(outside)
+
+            fields, opened = KuboClient._multipart_paths([root], dereference_symlinks=True)
+
+            try:
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type in fields]
+                self.assertIn(("root/link.txt", b"target bytes", "text/plain"), parts)
+            finally:
+                for handle in opened:
+                    handle.close()
+
     def test_parse_pin_accepts_progress_with_or_without_bytes(self):
         events = [
             {"Progress": 2},
