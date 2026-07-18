@@ -184,7 +184,14 @@ class KuboClientParsingTests(unittest.TestCase):
     def test_post_stream_surfaces_x_stream_error_trailer(self):
         class TrailerResponse:
             status = 200
-            trailers = {"X-Stream-Error": "mid-stream add failed"}
+            fp = io.BytesIO(
+                b"1e\r\n"
+                b'{"Name":"file.txt","Bytes":5}\n'
+                b"\r\n"
+                b"0\r\n"
+                b"X-Stream-Error: mid-stream add failed\r\n"
+                b"\r\n"
+            )
 
             def __enter__(self):
                 return self
@@ -192,15 +199,17 @@ class KuboClientParsingTests(unittest.TestCase):
             def __exit__(self, _exc_type, _exc, _tb):
                 return False
 
-            def __iter__(self):
-                return iter([b'{"Name":"file.txt","Bytes":5}\n'])
+            def getheader(self, name, default=None):
+                if name == "Transfer-Encoding":
+                    return "chunked"
+                return default
 
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "file.txt"
             path.write_text("content", encoding="utf-8")
             client = KuboClient("http://127.0.0.1:5001")
 
-            with mock.patch("urllib.request.urlopen", return_value=TrailerResponse()):
+            with mock.patch.object(client, "_open_stream_response", return_value=TrailerResponse()):
                 result = client.add(path)
 
         self.assertEqual(result.progress[0].bytes, 5)

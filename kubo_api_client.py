@@ -8,6 +8,7 @@ can inspect them programmatically instead of scraping CLI stdout/stderr.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import http.client
 import io
 import json
 import mimetypes
@@ -156,25 +157,74 @@ class KuboClient:
         if fields is not None:
             data, content_type = self._encode_multipart(fields)
             headers["Content-Type"] = content_type
-        req = urllib.request.Request(self.api + path + query, data=data, headers=headers, method="POST")
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                for line in resp:
+            with self._open_stream_response(path + query, data, headers) as resp:
+                body_lines, trailers = self._stream_response_lines(resp)
+                for line in body_lines:
                     line = line.strip()
                     if not line:
                         continue
                     yield json.loads(line.decode("utf-8"))
-                stream_error = self._stream_error_from_trailers(resp)
+                stream_error = self._stream_error_from_trailers(resp, trailers)
                 if stream_error is not None:
                     yield {
                         "Message": stream_error.message,
                         "Code": stream_error.code,
                         "Type": stream_error.type,
                     }
-        except urllib.error.HTTPError as err:
-            raise KuboErrorException(self._error_from_http(err)) from err
-        except (urllib.error.URLError, TimeoutError, socket.timeout, OSError) as err:
+        except (urllib.error.URLError, TimeoutError, socket.timeout, OSError, http.client.HTTPException) as err:
             raise KuboErrorException(KuboError(str(err), raw=err)) from err
+
+
+    def _open_stream_response(self, path_and_query: str, data: bytes | Iterable[bytes], headers: dict[str, str]):
+        url = urllib.parse.urlsplit(self.api)
+        if url.scheme not in {"http", "https"}:
+            raise urllib.error.URLError(f"Unsupported Kubo API scheme for streaming trailers: {url.scheme}")
+        host = url.hostname or ""
+        port = url.port
+        connection_class = http.client.HTTPSConnection if url.scheme == "https" else http.client.HTTPConnection
+        connection = connection_class(host, port, timeout=self.timeout)
+        target = (url.path.rstrip("/") + path_and_query) or path_and_query
+        connection.request("POST", target, body=data, headers=headers, encode_chunked=not isinstance(data, (bytes, bytearray)))
+        resp = connection.getresponse()
+        resp._kubo_connection = connection
+        if resp.status >= 400:
+            body = resp.read()
+            connection.close()
+            raise KuboErrorException(self._error_from_status(resp.status, resp.reason, body))
+        return resp
+
+    @staticmethod
+    def _stream_response_lines(resp: http.client.HTTPResponse) -> tuple[list[bytes], dict[str, str]]:
+        if resp.getheader("Transfer-Encoding", "").lower() != "chunked":
+            return resp.readlines(), {}
+
+        lines: list[bytes] = []
+        pending = b""
+        trailers: dict[str, str] = {}
+        while True:
+            size_line = resp.fp.readline()
+            if not size_line:
+                break
+            size = int(size_line.split(b";", 1)[0].strip(), 16)
+            if size == 0:
+                while True:
+                    trailer_line = resp.fp.readline()
+                    if trailer_line in {b"\r\n", b"\n", b""}:
+                        return lines, trailers
+                    name, _, value = trailer_line.decode("iso-8859-1").partition(":")
+                    if name:
+                        trailers[name.strip().lower()] = value.strip()
+                return lines, trailers
+            chunk = resp.fp.read(size)
+            resp.fp.read(2)
+            pending += chunk
+            while b"\n" in pending:
+                line, pending = pending.split(b"\n", 1)
+                lines.append(line + b"\n")
+        if pending:
+            lines.append(pending)
+        return lines, trailers
 
     def _post(self, path: str, options: dict[str, Any]) -> tuple[bytes, Any]:
         req = urllib.request.Request(self.api + path + self._query(options), data=b"", method="POST")
@@ -324,9 +374,9 @@ class KuboClient:
         return urllib.parse.quote(filename, safe="/-._~")
 
     @staticmethod
-    def _stream_error_from_trailers(resp: Any) -> KuboError | None:
-        message = None
-        for source_name in ("trailers", "headers"):
+    def _stream_error_from_trailers(resp: Any, trailers: dict[str, str] | None = None) -> KuboError | None:
+        message = (trailers or {}).get("x-stream-error")
+        for source_name in ("trailers", "headers") if not message else ():
             source = getattr(resp, source_name, None)
             if source is not None and hasattr(source, "get"):
                 message = source.get("X-Stream-Error") or source.get("x-stream-error")
@@ -340,13 +390,16 @@ class KuboClient:
         return KuboError(str(message), code, "stream", {"X-Stream-Error": str(message)})
 
     @staticmethod
-    def _error_from_http(err: urllib.error.HTTPError) -> KuboError:
-        body = err.read()
+    def _error_from_status(status: int, reason: str, body: bytes) -> KuboError:
         try:
             parsed = json.loads(body.decode("utf-8"))
-            return KuboError(parsed.get("Message", err.reason), parsed.get("Code", err.code), parsed.get("Type"), parsed)
+            return KuboError(parsed.get("Message", reason), parsed.get("Code", status), parsed.get("Type"), parsed)
         except Exception:
-            return KuboError(body.decode("utf-8", "replace") or err.reason, err.code, raw=body)
+            return KuboError(body.decode("utf-8", "replace") or reason, status, raw=body)
+
+    @staticmethod
+    def _error_from_http(err: urllib.error.HTTPError) -> KuboError:
+        return KuboClient._error_from_status(err.code, err.reason, err.read())
 
 
 class _MultipartStream:
