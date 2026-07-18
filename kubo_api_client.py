@@ -15,6 +15,7 @@ import mimetypes
 import os
 from pathlib import Path
 import socket
+import stat
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -129,6 +130,8 @@ class KuboClient:
             dereference_symlinks=bool(option_map.get("dereference_symlinks")),
             hidden=bool(option_map.get("hidden")),
             nocopy=bool(option_map.get("nocopy")),
+            preserve_mode=bool(option_map.get("preserve_mode")),
+            preserve_mtime=bool(option_map.get("preserve_mtime")),
         )
         has_root_cid = bool(option_map.get("wrap_with_directory")) or len(path_list) == 1
         try:
@@ -316,37 +319,130 @@ class KuboClient:
         dereference_symlinks: bool = False,
         hidden: bool = False,
         nocopy: bool = False,
+        preserve_mode: bool = False,
+        preserve_mtime: bool = False,
     ):
         fields: list[MultipartField] = []
         opened: list[BinaryIO] = []
         for item in path_list:
             root = Path(item)
             if root.is_symlink() and not dereference_symlinks:
-                fields.append(("file", root.name, io.BytesIO(os.fsencode(os.readlink(root))), "application/symlink", None))
+                field = KuboClient._multipart_field_name(
+                    "file", root, preserve_mode, preserve_mtime, follow_symlinks=False
+                )
+                fields.append((
+                    field,
+                    root.name,
+                    io.BytesIO(os.fsencode(os.readlink(root))),
+                    "application/symlink",
+                    None,
+                ))
                 continue
             if root.is_dir():
                 if not recursive:
                     raise ValueError(f"Cannot add directory without recursive=True: {root}")
                 descendants = KuboClient._directory_descendants(root, dereference_symlinks, hidden)
-                files = [child for child in descendants if child.is_file() and (dereference_symlinks or not child.is_symlink())]
+                files = [
+                    child
+                    for child in descendants
+                    if child.is_file() and (dereference_symlinks or not child.is_symlink())
+                ]
                 for child in files:
                     rel = str(Path(root.name) / child.relative_to(root))
                     handle = _LazyFile(child)
-                    fields.append(("file", rel, handle, mimetypes.guess_type(child.name)[0] or "application/octet-stream", str(child.absolute()) if nocopy else None))
+                    field = KuboClient._multipart_field_name(
+                        "file",
+                        child,
+                        preserve_mode,
+                        preserve_mtime,
+                        follow_symlinks=dereference_symlinks,
+                    )
+                    fields.append((
+                        field,
+                        rel,
+                        handle,
+                        mimetypes.guess_type(child.name)[0] or "application/octet-stream",
+                        str(child.absolute()) if nocopy else None,
+                    ))
                 for child in descendants:
                     if child.is_symlink() and not dereference_symlinks:
                         rel = str(Path(root.name) / child.relative_to(root))
-                        fields.append(("file", rel, io.BytesIO(os.fsencode(os.readlink(child))), "application/symlink", None))
+                        field = KuboClient._multipart_field_name(
+                            "file", child, preserve_mode, preserve_mtime, follow_symlinks=False
+                        )
+                        fields.append((
+                            field,
+                            rel,
+                            io.BytesIO(os.fsencode(os.readlink(child))),
+                            "application/symlink",
+                            None,
+                        ))
                 for child in descendants:
-                    if child.is_dir() and (dereference_symlinks or not child.is_symlink()) and not any(file.is_relative_to(child) for file in files):
+                    if (
+                        child.is_dir()
+                        and (dereference_symlinks or not child.is_symlink())
+                        and not any(file.is_relative_to(child) for file in files)
+                    ):
                         rel = str(Path(root.name) / child.relative_to(root))
-                        fields.append(("file", rel, io.BytesIO(), "application/x-directory", None))
+                        field = KuboClient._multipart_field_name(
+                            "file",
+                            child,
+                            preserve_mode,
+                            preserve_mtime,
+                            follow_symlinks=dereference_symlinks,
+                        )
+                        fields.append((field, rel, io.BytesIO(), "application/x-directory", None))
                 if not files and not descendants:
-                    fields.append(("file", root.name, io.BytesIO(), "application/x-directory", None))
+                    field = KuboClient._multipart_field_name(
+                        "file",
+                        root,
+                        preserve_mode,
+                        preserve_mtime,
+                        follow_symlinks=dereference_symlinks,
+                    )
+                    fields.append((field, root.name, io.BytesIO(), "application/x-directory", None))
             else:
                 handle = _LazyFile(root)
-                fields.append(("file", root.name, handle, mimetypes.guess_type(root.name)[0] or "application/octet-stream", str(root.absolute()) if nocopy else None))
+                field = KuboClient._multipart_field_name(
+                    "file",
+                    root,
+                    preserve_mode,
+                    preserve_mtime,
+                    follow_symlinks=dereference_symlinks,
+                )
+                fields.append((
+                    field,
+                    root.name,
+                    handle,
+                    mimetypes.guess_type(root.name)[0] or "application/octet-stream",
+                    str(root.absolute()) if nocopy else None,
+                ))
         return fields, opened
+
+    @staticmethod
+    def _multipart_field_name(
+        name: str,
+        path: Path,
+        preserve_mode: bool,
+        preserve_mtime: bool,
+        follow_symlinks: bool = True,
+    ) -> str:
+        if not preserve_mode and not preserve_mtime:
+            return name
+
+        try:
+            metadata = path.stat() if follow_symlinks else path.lstat()
+        except OSError:
+            return name
+
+        params: list[tuple[str, str]] = []
+        if preserve_mode:
+            params.append(("mode", format(stat.S_IMODE(metadata.st_mode), "o")))
+        if preserve_mtime:
+            mtime_ns = metadata.st_mtime_ns
+            params.append(("mtime", str(mtime_ns // 1_000_000_000)))
+            params.append(("mtime-nsecs", str(mtime_ns % 1_000_000_000)))
+        return name + "?" + urllib.parse.urlencode(params)
 
     @staticmethod
     def _directory_descendants(root: Path, dereference_symlinks: bool, hidden: bool) -> list[Path]:

@@ -1,4 +1,5 @@
 import io
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -156,6 +157,69 @@ class KuboClientParsingTests(unittest.TestCase):
                 for handle in opened:
                     handle.close()
 
+    def test_multipart_paths_embeds_preserved_mode_and_mtime_in_part_name(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_path = Path(tmpdir) / "script.sh"
+            file_path.write_text("#!/bin/sh\n", encoding="utf-8")
+            file_path.chmod(0o754)
+            os.utime(
+                file_path,
+                ns=(1_700_000_000_123_456_789, 1_700_000_001_987_654_321),
+            )
+
+            fields, opened = KuboClient._multipart_paths(
+                [file_path], preserve_mode=True, preserve_mtime=True
+            )
+
+            try:
+                field, filename, handle, content_type, abspath = fields[0]
+                self.assertEqual(filename, "script.sh")
+                self.assertEqual(content_type, "text/x-sh")
+                self.assertIsNone(abspath)
+                self.assertEqual(handle.read(), b"#!/bin/sh\n")
+                self.assertIn("mode=754", field)
+                self.assertIn("mtime=1700000001", field)
+                self.assertIn("mtime-nsecs=987654321", field)
+
+                body, _content_type = KuboClient._encode_multipart(fields)
+                header = next(
+                    part for part in body if part.startswith(b"Content-Disposition")
+                )
+                self.assertIn(
+                    b'name="file?mode=754&mtime=1700000001&mtime-nsecs=987654321"',
+                    header,
+                )
+            finally:
+                for handle in opened:
+                    handle.close()
+
+    def test_multipart_paths_embeds_directory_metadata_when_preserved(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            empty = root / "empty"
+            empty.mkdir(parents=True)
+            empty.chmod(0o750)
+            os.utime(
+                empty,
+                ns=(1_700_000_010_000_000_000, 1_700_000_011_222_333_444),
+            )
+
+            fields, opened = KuboClient._multipart_paths(
+                [root], preserve_mode=True, preserve_mtime=True
+            )
+
+            try:
+                directory_field = next(
+                    field
+                    for field, filename, _handle, content_type, _abspath in fields
+                    if filename == "root/empty" and content_type == "application/x-directory"
+                )
+                self.assertIn("mode=750", directory_field)
+                self.assertIn("mtime=1700000011", directory_field)
+                self.assertIn("mtime-nsecs=222333444", directory_field)
+            finally:
+                for handle in opened:
+                    handle.close()
 
     def test_multipart_paths_preserves_symlinks_without_dereferencing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -308,7 +372,9 @@ class KuboClientParsingTests(unittest.TestCase):
             ("file", "root/a+b%2Fquote\"name.txt", io.BytesIO(b"content"), "text/plain", None)
         ])
 
-        header = next(part for part in body if part.startswith(b"Content-Disposition"))
+        header = next(
+            part for part in body if part.startswith(b"Content-Disposition")
+        )
 
         self.assertIn(b'filename="root%2Fa%2Bb%252Fquote%22name.txt"', header)
         self.assertNotIn(b"a+b%2F", header)
