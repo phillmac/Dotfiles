@@ -384,6 +384,27 @@ class KuboClientParsingTests(unittest.TestCase):
         self.assertIsNone(result.progress[0].bytes)
         self.assertEqual(result.progress[1].bytes, 1024)
 
+
+    def test_normalize_api_honors_https_multiaddr_protocol(self):
+        self.assertEqual(
+            KuboClient._normalize_api("/ip4/203.0.113.5/tcp/443/https"),
+            "https://203.0.113.5:443",
+        )
+        self.assertEqual(
+            KuboClient._normalize_api("/dns/kubo.example.com/tcp/443/https"),
+            "https://kubo.example.com:443",
+        )
+
+    def test_normalize_api_keeps_http_multiaddrs_as_http(self):
+        self.assertEqual(
+            KuboClient._normalize_api("/ip4/127.0.0.1/tcp/5001"),
+            "http://127.0.0.1:5001",
+        )
+        self.assertEqual(
+            KuboClient._normalize_api("/dns4/localhost/tcp/5001/http"),
+            "http://localhost:5001",
+        )
+
     def test_query_converts_pythonic_options_and_repeated_args(self):
         query = KuboClient._query(
             {"wrap_with_directory": True, "cid_version": 1, "ignored": None},

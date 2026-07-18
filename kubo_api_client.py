@@ -292,15 +292,19 @@ class KuboClient:
 
     @staticmethod
     def _normalize_api(api: str) -> str:
-        if api.startswith("/ip4/") or api.startswith("/ip6/"):
+        if api.startswith("/"):
             parts = api.strip("/").split("/")
-            host = parts[1]
-            port = parts[3]
-            if ":" in host and not host.startswith("["):
-                host = f"[{host}]"
-            return f"http://{host}:{port}"
-        if api.startswith("/unix/"):
-            raise ValueError("Unix socket Kubo APIs need a custom urllib opener; pass an HTTP API URL instead")
+            if parts and parts[0] == "unix":
+                raise ValueError("Unix socket Kubo APIs need a custom urllib opener; pass an HTTP API URL instead")
+            if len(parts) >= 4 and parts[0] in {"ip4", "ip6", "dns", "dns4", "dns6"} and parts[2] == "tcp":
+                host = parts[1]
+                port = parts[3]
+                scheme = "https" if "https" in parts[4:] else "http"
+                if "http" in parts[4:] and "https" not in parts[4:]:
+                    scheme = "http"
+                if ":" in host and not host.startswith("["):
+                    host = f"[{host}]"
+                return f"{scheme}://{host}:{port}"
         if "://" not in api:
             return "http://" + api
         return api
