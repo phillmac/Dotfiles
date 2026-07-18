@@ -86,7 +86,7 @@ class PinResult:
     raw_events: list[dict[str, Any]]
 
 
-MultipartField = tuple[str, str, BinaryIO, str, str | None]
+MultipartField = tuple[str, str, BinaryIO, str, str | None, dict[str, str]]
 
 
 class KuboClient:
@@ -327,7 +327,7 @@ class KuboClient:
         for item in path_list:
             root = Path(item)
             if root.is_symlink() and not dereference_symlinks:
-                field = KuboClient._multipart_field_name(
+                field, metadata_headers = KuboClient._multipart_field_name(
                     "file", root, preserve_mode, preserve_mtime, follow_symlinks=False
                 )
                 fields.append((
@@ -336,6 +336,7 @@ class KuboClient:
                     io.BytesIO(os.fsencode(os.readlink(root))),
                     "application/symlink",
                     None,
+                    metadata_headers,
                 ))
                 continue
             if root.is_dir():
@@ -350,7 +351,7 @@ class KuboClient:
                 for child in files:
                     rel = str(Path(root.name) / child.relative_to(root))
                     handle = _LazyFile(child)
-                    field = KuboClient._multipart_field_name(
+                    field, metadata_headers = KuboClient._multipart_field_name(
                         "file",
                         child,
                         preserve_mode,
@@ -363,11 +364,12 @@ class KuboClient:
                         handle,
                         mimetypes.guess_type(child.name)[0] or "application/octet-stream",
                         str(child.absolute()) if nocopy else None,
+                        metadata_headers,
                     ))
                 for child in descendants:
                     if child.is_symlink() and not dereference_symlinks:
                         rel = str(Path(root.name) / child.relative_to(root))
-                        field = KuboClient._multipart_field_name(
+                        field, metadata_headers = KuboClient._multipart_field_name(
                             "file", child, preserve_mode, preserve_mtime, follow_symlinks=False
                         )
                         fields.append((
@@ -376,6 +378,7 @@ class KuboClient:
                             io.BytesIO(os.fsencode(os.readlink(child))),
                             "application/symlink",
                             None,
+                            metadata_headers,
                         ))
                 for child in descendants:
                     if (
@@ -384,26 +387,26 @@ class KuboClient:
                         and not any(file.is_relative_to(child) for file in files)
                     ):
                         rel = str(Path(root.name) / child.relative_to(root))
-                        field = KuboClient._multipart_field_name(
+                        field, metadata_headers = KuboClient._multipart_field_name(
                             "file",
                             child,
                             preserve_mode,
                             preserve_mtime,
                             follow_symlinks=dereference_symlinks,
                         )
-                        fields.append((field, rel, io.BytesIO(), "application/x-directory", None))
+                        fields.append((field, rel, io.BytesIO(), "application/x-directory", None, metadata_headers))
                 if not files and not descendants:
-                    field = KuboClient._multipart_field_name(
+                    field, metadata_headers = KuboClient._multipart_field_name(
                         "file",
                         root,
                         preserve_mode,
                         preserve_mtime,
                         follow_symlinks=dereference_symlinks,
                     )
-                    fields.append((field, root.name, io.BytesIO(), "application/x-directory", None))
+                    fields.append((field, root.name, io.BytesIO(), "application/x-directory", None, metadata_headers))
             else:
                 handle = _LazyFile(root)
-                field = KuboClient._multipart_field_name(
+                field, metadata_headers = KuboClient._multipart_field_name(
                     "file",
                     root,
                     preserve_mode,
@@ -416,6 +419,7 @@ class KuboClient:
                     handle,
                     mimetypes.guess_type(root.name)[0] or "application/octet-stream",
                     str(root.absolute()) if nocopy else None,
+                    metadata_headers,
                 ))
         return fields, opened
 
@@ -426,23 +430,23 @@ class KuboClient:
         preserve_mode: bool,
         preserve_mtime: bool,
         follow_symlinks: bool = True,
-    ) -> str:
+    ) -> tuple[str, dict[str, str]]:
         if not preserve_mode and not preserve_mtime:
-            return name
+            return name, {}
 
         try:
             metadata = path.stat() if follow_symlinks else path.lstat()
         except OSError:
-            return name
+            return name, {}
 
-        params: list[tuple[str, str]] = []
+        headers: dict[str, str] = {}
         if preserve_mode:
-            params.append(("mode", format(stat.S_IMODE(metadata.st_mode), "o")))
+            headers["mode"] = format(stat.S_IMODE(metadata.st_mode), "o")
         if preserve_mtime:
             mtime_ns = metadata.st_mtime_ns
-            params.append(("mtime", str(mtime_ns // 1_000_000_000)))
-            params.append(("mtime-nsecs", str(mtime_ns % 1_000_000_000)))
-        return name + "?" + urllib.parse.urlencode(params)
+            headers["mtime"] = str(mtime_ns // 1_000_000_000)
+            headers["mtime-nsecs"] = str(mtime_ns % 1_000_000_000)
+        return name, headers
 
     @staticmethod
     def _directory_descendants(root: Path, dereference_symlinks: bool, hidden: bool) -> list[Path]:
@@ -541,13 +545,15 @@ class _MultipartStream:
         self.boundary = boundary
 
     def __iter__(self) -> Iterator[bytes]:
-        for field, filename, handle, content_type, abspath in self.fields:
+        for field, filename, handle, content_type, abspath, metadata_headers in self.fields:
             yield f"--{self.boundary}\r\n".encode()
             encoded_filename = KuboClient._multipart_filename(filename)
             yield f'Content-Disposition: form-data; name="{field}"; filename="{encoded_filename}"\r\n'.encode()
             yield f"Content-Type: {content_type}\r\n".encode()
             if abspath is not None:
                 yield f"Abspath: {abspath}\r\n".encode()
+            for name, value in metadata_headers.items():
+                yield f"{name}: {value}\r\n".encode()
             yield b"\r\n"
             try:
                 while True:

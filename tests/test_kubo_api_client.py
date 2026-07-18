@@ -82,7 +82,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root])
 
             try:
-                parts = [(field, filename, content_type) for field, filename, _handle, content_type, _abspath in fields]
+                parts = [(field, filename, content_type) for field, filename, _handle, content_type, _abspath, _headers in fields]
                 self.assertIn(("file", "root/with-file/file.txt", "text/plain"), parts)
                 self.assertIn(("file", "root/empty", "application/x-directory"), parts)
                 self.assertIn(("file", "root/empty/nested-empty", "application/x-directory"), parts)
@@ -105,7 +105,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root])
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath, _headers in fields]
                 self.assertIn(("root/visible.txt", b"public", "text/plain"), parts)
                 self.assertNotIn("root/.env", [filename for filename, _content, _content_type in parts])
                 self.assertNotIn("root/.ssh/id_rsa", [filename for filename, _content, _content_type in parts])
@@ -126,7 +126,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root], hidden=True)
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath, _headers in fields]
                 self.assertIn(("root/.env", b"SECRET=value", "application/octet-stream"), parts)
                 self.assertIn(("root/.ssh/id_rsa", b"private key", "application/octet-stream"), parts)
             finally:
@@ -144,7 +144,7 @@ class KuboClientParsingTests(unittest.TestCase):
 
             try:
                 self.assertEqual(len(fields), 1)
-                field, filename, handle, content_type, abspath = fields[0]
+                field, filename, handle, content_type, abspath, headers = fields[0]
                 self.assertEqual((field, filename, content_type), ("file", "root/file.txt", "text/plain"))
                 self.assertEqual(abspath, str(file_path.absolute()))
 
@@ -157,7 +157,7 @@ class KuboClientParsingTests(unittest.TestCase):
                 for handle in opened:
                     handle.close()
 
-    def test_multipart_paths_embeds_preserved_mode_and_mtime_in_part_name(self):
+    def test_multipart_paths_emits_preserved_mode_and_mtime_part_headers(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir) / "script.sh"
             file_path.write_text("#!/bin/sh\n", encoding="utf-8")
@@ -172,23 +172,27 @@ class KuboClientParsingTests(unittest.TestCase):
             )
 
             try:
-                field, filename, handle, content_type, abspath = fields[0]
+                field, filename, handle, content_type, abspath, headers = fields[0]
                 self.assertEqual(filename, "script.sh")
                 self.assertEqual(content_type, "text/x-sh")
                 self.assertIsNone(abspath)
                 self.assertEqual(handle.read(), b"#!/bin/sh\n")
-                self.assertIn("mode=754", field)
-                self.assertIn("mtime=1700000001", field)
-                self.assertIn("mtime-nsecs=987654321", field)
+                self.assertEqual(field, "file")
+                self.assertEqual(headers["mode"], "754")
+                self.assertEqual(headers["mtime"], "1700000001")
+                self.assertEqual(headers["mtime-nsecs"], "987654321")
 
                 body, _content_type = KuboClient._encode_multipart(fields)
                 header = next(
                     part for part in body if part.startswith(b"Content-Disposition")
                 )
-                self.assertIn(
-                    b'name="file?mode=754&mtime=1700000001&mtime-nsecs=987654321"',
-                    header,
-                )
+                self.assertIn(b'name="file"', header)
+                self.assertNotIn(b"mode=754", header)
+
+                part = b"".join(body)
+                self.assertIn(b"mode: 754\r\n", part)
+                self.assertIn(b"mtime: 1700000001\r\n", part)
+                self.assertIn(b"mtime-nsecs: 987654321\r\n", part)
             finally:
                 for handle in opened:
                     handle.close()
@@ -209,14 +213,15 @@ class KuboClientParsingTests(unittest.TestCase):
             )
 
             try:
-                directory_field = next(
-                    field
-                    for field, filename, _handle, content_type, _abspath in fields
+                directory_field, directory_headers = next(
+                    (field, headers)
+                    for field, filename, _handle, content_type, _abspath, headers in fields
                     if filename == "root/empty" and content_type == "application/x-directory"
                 )
-                self.assertIn("mode=750", directory_field)
-                self.assertIn("mtime=1700000011", directory_field)
-                self.assertIn("mtime-nsecs=222333444", directory_field)
+                self.assertEqual(directory_field, "file")
+                self.assertEqual(directory_headers["mode"], "750")
+                self.assertEqual(directory_headers["mtime"], "1700000011")
+                self.assertEqual(directory_headers["mtime-nsecs"], "222333444")
             finally:
                 for handle in opened:
                     handle.close()
@@ -232,7 +237,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root])
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath, _headers in fields]
                 self.assertIn(("root/link.txt", bytes(outside), "application/symlink"), parts)
                 self.assertNotIn(b"secret target bytes", [content for _filename, content, _content_type in parts])
                 self.assertEqual(opened, [])
@@ -251,7 +256,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root], dereference_symlinks=True)
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath, _headers in fields]
                 self.assertIn(("root/link.txt", b"target bytes", "text/plain"), parts)
             finally:
                 for handle in opened:
@@ -269,7 +274,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root], dereference_symlinks=True)
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath, _headers in fields]
                 self.assertIn(("root/linked-dir/nested.txt", b"nested target bytes", "text/plain"), parts)
                 self.assertNotIn(("root/linked-dir", bytes(target), "application/symlink"), parts)
             finally:
@@ -287,7 +292,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root], dereference_symlinks=True)
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath, _headers in fields]
                 self.assertIn(("root/child/file.txt", b"nested target bytes", "text/plain"), parts)
                 self.assertNotIn("root/child/loop/child/file.txt", [filename for filename, _content, _content_type in parts])
             finally:
@@ -305,7 +310,7 @@ class KuboClientParsingTests(unittest.TestCase):
             fields, opened = KuboClient._multipart_paths([root], dereference_symlinks=True)
 
             try:
-                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath, _headers in fields]
                 self.assertIn(("root/a/file.txt", b"target bytes", "text/plain"), parts)
                 self.assertIn(("root/b/file.txt", b"target bytes", "text/plain"), parts)
                 self.assertNotIn(("root/b", bytes(target), "application/symlink"), parts)
@@ -325,7 +330,7 @@ class KuboClientParsingTests(unittest.TestCase):
 
         handle = ChunkedHandle()
 
-        body, content_type = KuboClient._encode_multipart([("file", "large.bin", handle, "application/octet-stream", None)])
+        body, content_type = KuboClient._encode_multipart([("file", "large.bin", handle, "application/octet-stream", None, {})])
 
         self.assertIsInstance(body, _MultipartStream)
         self.assertIn("multipart/form-data; boundary=", content_type)
@@ -388,7 +393,7 @@ class KuboClientParsingTests(unittest.TestCase):
 
     def test_encode_multipart_percent_encodes_filename_parameter(self):
         body, _content_type = KuboClient._encode_multipart([
-            ("file", "root/a+b%2Fquote\"name.txt", io.BytesIO(b"content"), "text/plain", None)
+            ("file", "root/a+b%2Fquote\"name.txt", io.BytesIO(b"content"), "text/plain", None, {})
         ])
 
         header = next(
