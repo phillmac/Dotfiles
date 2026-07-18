@@ -455,31 +455,30 @@ class KuboClient:
 
         descendants: list[Path] = []
         root_identity = KuboClient._directory_identity(root)
-        seen_directories = {root_identity} if root_identity is not None else set()
-        for current, dirnames, filenames in os.walk(root, followlinks=True):
-            current_path = Path(current)
-            dirnames.sort()
-            filenames.sort()
-            pruned_dirnames = []
-            for dirname in dirnames:
-                child = current_path / dirname
+
+        def walk(current: Path, ancestor_identities: frozenset[tuple[int, int]]) -> None:
+            try:
+                children = sorted(current.iterdir(), key=lambda child: child.name)
+            except OSError:
+                return
+
+            for child in children:
                 if not hidden and KuboClient._is_hidden_descendant(root, child):
                     continue
-                identity = KuboClient._directory_identity(child)
-                if identity is not None and identity in seen_directories:
-                    continue
-                if identity is not None:
-                    seen_directories.add(identity)
-                pruned_dirnames.append(dirname)
-            dirnames[:] = pruned_dirnames
-            if not hidden:
-                filenames = [
-                    filename
-                    for filename in filenames
-                    if not KuboClient._is_hidden_descendant(root, current_path / filename)
-                ]
-            descendants.extend(current_path / dirname for dirname in dirnames)
-            descendants.extend(current_path / filename for filename in filenames)
+                if child.is_dir():
+                    identity = KuboClient._directory_identity(child)
+                    if identity is not None and identity in ancestor_identities:
+                        continue
+                    descendants.append(child)
+                    next_ancestors = ancestor_identities
+                    if identity is not None:
+                        next_ancestors = ancestor_identities | {identity}
+                    walk(child, next_ancestors)
+                else:
+                    descendants.append(child)
+
+        ancestors = frozenset({root_identity}) if root_identity is not None else frozenset()
+        walk(root, ancestors)
         return descendants
 
     @staticmethod

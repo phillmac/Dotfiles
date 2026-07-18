@@ -294,6 +294,25 @@ class KuboClientParsingTests(unittest.TestCase):
                 for handle in opened:
                     handle.close()
 
+    def test_multipart_paths_keeps_duplicate_symlinked_directory_targets_when_dereferencing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            target = root / "a"
+            target.mkdir(parents=True)
+            (target / "file.txt").write_text("target bytes", encoding="utf-8")
+            (root / "b").symlink_to(target, target_is_directory=True)
+
+            fields, opened = KuboClient._multipart_paths([root], dereference_symlinks=True)
+
+            try:
+                parts = [(filename, handle.read(), content_type) for _field, filename, handle, content_type, _abspath in fields]
+                self.assertIn(("root/a/file.txt", b"target bytes", "text/plain"), parts)
+                self.assertIn(("root/b/file.txt", b"target bytes", "text/plain"), parts)
+                self.assertNotIn(("root/b", bytes(target), "application/symlink"), parts)
+            finally:
+                for handle in opened:
+                    handle.close()
+
     def test_encode_multipart_streams_file_handles_incrementally(self):
         class ChunkedHandle:
             def __init__(self):
