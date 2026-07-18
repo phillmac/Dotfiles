@@ -34,6 +34,30 @@ class KuboClientParsingTests(unittest.TestCase):
         self.assertIsNone(result.cid)
         self.assertEqual([entry.hash for entry in result.entries], ["bafyone", "bafytwo"])
 
+
+    def test_multipart_paths_rejects_directories_when_recursive_is_false(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            root.mkdir()
+            (root / "file.txt").write_text("content", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "recursive=True"):
+                KuboClient._multipart_paths([root], recursive=False)
+
+    def test_add_does_not_open_directory_files_when_recursive_is_unset(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            root.mkdir()
+            file_path = root / "file.txt"
+            file_path.write_text("content", encoding="utf-8")
+            client = KuboClient("http://127.0.0.1:5001")
+
+            with mock.patch.object(Path, "open", wraps=Path.open) as open_mock:
+                with self.assertRaisesRegex(ValueError, "recursive=True"):
+                    client.add(root)
+
+            open_mock.assert_not_called()
+
     def test_multipart_paths_emits_directory_parts_for_empty_directories(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / "root"

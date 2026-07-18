@@ -119,8 +119,10 @@ class KuboClient:
         option_map = {"progress": True}
         option_map.update(options)
         path_list = [paths] if isinstance(paths, (str, os.PathLike)) else list(paths)
+        recursive = bool(option_map.get("recursive"))
         fields, opened = self._multipart_paths(
             path_list,
+            recursive=recursive,
             dereference_symlinks=bool(option_map.get("dereference_symlinks")),
             hidden=bool(option_map.get("hidden")),
             nocopy=bool(option_map.get("nocopy")),
@@ -303,6 +305,7 @@ class KuboClient:
     @staticmethod
     def _multipart_paths(
         path_list: Iterable[str | os.PathLike[str]],
+        recursive: bool = True,
         dereference_symlinks: bool = False,
         hidden: bool = False,
         nocopy: bool = False,
@@ -315,6 +318,8 @@ class KuboClient:
                 fields.append(("file", root.name, io.BytesIO(os.fsencode(os.readlink(root))), "application/symlink", None))
                 continue
             if root.is_dir():
+                if not recursive:
+                    raise ValueError(f"Cannot add directory without recursive=True: {root}")
                 descendants = KuboClient._directory_descendants(root, dereference_symlinks, hidden)
                 files = [child for child in descendants if child.is_file() and (dereference_symlinks or not child.is_symlink())]
                 for child in files:
