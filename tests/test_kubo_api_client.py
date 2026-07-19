@@ -679,6 +679,27 @@ class PinWithExportQueueTests(unittest.TestCase):
             "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kxyz",
         )
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFOs")
+    def test_enqueue_export_writes_cid_line_to_fifo(self):
+        from pin_with_export_queue import enqueue_export
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fifo = Path(tmpdir) / "export.queue"
+            os.mkfifo(fifo)
+            reader_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+            try:
+                response = enqueue_export(
+                    fifo,
+                    "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc",
+                    timeout=10,
+                )
+                queued = os.read(reader_fd, 65536)
+            finally:
+                os.close(reader_fd)
+
+        self.assertEqual(response, b"")
+        self.assertEqual(queued, b"QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc\n")
+
     def test_pin_with_export_queue_enqueues_missing_blocks_and_retries(self):
         from kubo_api_client import KuboError, PinResult
         import pin_with_export_queue

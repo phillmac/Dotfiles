@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Pin a CID, exporting missing blocks through a queue socket as needed."""
+"""Pin a CID, exporting missing blocks through an export queue as needed."""
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import socket
+import stat
 import sys
 import time
 from pathlib import Path
@@ -31,13 +33,33 @@ def missing_block_cid_from_error(error: KuboError) -> str | None:
     return match.group(1) if match else None
 
 
-def enqueue_export(socket_path: str | Path, cid: str, timeout: float | None = None) -> bytes:
-    """Send a missing block CID to the export queue Unix socket and wait for EOF."""
+def enqueue_export(queue_path: str | Path, cid: str, timeout: float | None = None) -> bytes:
+    """Send a missing block CID to a FIFO queue or Unix stream socket.
 
+    FIFO queues consume one CID per line and do not provide a response, so this
+    returns ``b""`` for FIFO paths. Unix stream sockets are kept for callers
+    that have a socket wrapper around the queue; for sockets, the function waits
+    for the server to close its response.
+    """
+
+    path = Path(queue_path)
     payload = f"{cid}\n".encode("utf-8")
+    try:
+        mode = path.stat().st_mode
+    except FileNotFoundError:
+        mode = None
+
+    if mode is not None and stat.S_ISFIFO(mode):
+        fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
+        try:
+            os.write(fd, payload)
+        finally:
+            os.close(fd)
+        return b""
+
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
         sock.settimeout(timeout)
-        sock.connect(str(socket_path))
+        sock.connect(str(path))
         sock.sendall(payload)
         sock.shutdown(socket.SHUT_WR)
         chunks: list[bytes] = []
@@ -51,7 +73,7 @@ def enqueue_export(socket_path: str | Path, cid: str, timeout: float | None = No
 
 def pin_with_export_queue(
     cid: str,
-    socket_path: str | Path,
+    queue_path: str | Path,
     *,
     api: str = "http://127.0.0.1:5001",
     timeout: float | None = None,
@@ -83,7 +105,7 @@ def pin_with_export_queue(
 
         if verbose:
             print(f"pin attempt {attempts} is missing {missing_cid}; enqueueing export", file=sys.stderr)
-        enqueue_export(socket_path, missing_cid, timeout=timeout)
+        enqueue_export(queue_path, missing_cid, timeout=timeout)
         if retry_delay:
             time.sleep(retry_delay)
 
@@ -91,9 +113,9 @@ def pin_with_export_queue(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("cid", help="Root CID to pin, for example QmhashA")
-    parser.add_argument("socket", help="Unix socket used by the export queue")
+    parser.add_argument("queue", help="FIFO queue or Unix socket used by the exporter")
     parser.add_argument("--api", default="http://127.0.0.1:5001", help="Kubo RPC API URL or multiaddr")
-    parser.add_argument("--timeout", type=float, default=None, help="Timeout in seconds for API and socket operations")
+    parser.add_argument("--timeout", type=float, default=None, help="Timeout in seconds for Kubo API and Unix socket operations")
     parser.add_argument("--max-attempts", type=int, default=0, help="Maximum pin attempts; 0 means unlimited")
     parser.add_argument("--retry-delay", type=float, default=0.0, help="Seconds to wait after an export completes")
     parser.add_argument("--no-recursive", action="store_true", help="Pass recursive=false to pin/add")
@@ -106,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     result = pin_with_export_queue(
         args.cid,
-        args.socket,
+        args.queue,
         api=args.api,
         timeout=args.timeout,
         max_attempts=args.max_attempts,

@@ -46,21 +46,22 @@ Options are passed through to Kubo after converting underscores to hyphens, so
 `cid_version=1` becomes `cid-version=1` and newer daemon options can be used
 without changing the client.
 
-## Retrying pins through an export queue socket
+## Retrying pins through an export queue
 
 When a node is offline and `ipfs pin add --progress <cid>` fails because a child
 block is missing locally, `pin_with_export_queue.py` can retry the pin, enqueue
-the missing block CID on a Unix socket, wait for that socket request to finish,
-and retry the original pin. This is intended for sockets serviced by export
-functions such as `rhea.wasabi.pebble.export.laptop.dag`.
+the missing block CID on an export queue, and retry the original pin. This is
+intended for the FIFO created by export functions such as
+`rhea.wasabi.pebble.export.laptop.dag`, which reads from
+`rhea.wasabi.pebble.export.laptop.dag.queue`. Unix stream sockets are also
+supported when a separate socket wrapper is available.
 
 ```sh
-./pin_with_export_queue.py QmhashA /path/to/export-queue.sock --api http://127.0.0.1:5001 --verbose
+./pin_with_export_queue.py QmhashA rhea.wasabi.pebble.export.laptop.dag.queue --api http://127.0.0.1:5001 --verbose
 ```
 
 For the example error below, the script extracts `QmhashB`, writes `QmhashB\n`
-to the export queue socket, waits for the socket server to close the response,
-and then retries pinning `QmhashA`.
+to the export queue FIFO and then retries pinning `QmhashA`.
 
 ```text
 Error: pin: block was not found locally (offline): ipld: could not find QmhashB
@@ -70,6 +71,7 @@ Useful options:
 
 - `--max-attempts N` stops after `N` pin attempts; the default `0` retries until
   success or until Kubo returns an error that does not include a missing block.
-- `--timeout SECONDS` applies to both Kubo API calls and queue socket operations.
+- `--timeout SECONDS` applies to Kubo API calls and Unix socket operations.
+  FIFO writes are non-blocking and require an active reader.
 - `--retry-delay SECONDS` sleeps briefly after each export completes before the
   next pin attempt.
