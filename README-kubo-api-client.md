@@ -49,11 +49,12 @@ without changing the client.
 ## Exporting missing DAGs for pin recovery
 
 Two workflows are supported for exporting a child DAG from the laptop IPFS API
-and importing it into the Rhea IPFS API. Both workflows use the same synchronous
-exporter executable, `.bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync`, and therefore
-share the same `flock` lock. Queue-triggered exports and direct pin-recovery
-exports can run at the same time, but only one Docker/`mbuffer` export/import
-pipeline runs at once.
+and importing it into the Rhea IPFS API. Both workflows use the same Python synchronous exporter implementation,
+`rhea_wasabi_pebble_export.py`, through the compatibility executable
+`.bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync`, and
+therefore share the same Python-owned `flock` lock. Queue-triggered exports and
+direct pin-recovery exports can run at the same time, but only one
+Docker/`mbuffer` export/import pipeline runs at once.
 
 ### Queue worker
 
@@ -104,10 +105,12 @@ Useful options:
   backoff.
 - `IPFS_DAG_EXPORT_LOCK` overrides the shared lock path. By default it is
   `${HOME}/.var/run/rhea-wasabi-pebble-export-laptop-dag.lock`.
-- `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT` controls the Bash pipeline cleanup grace
-  period and accepts non-negative numeric values, including fractional seconds.
-  Python derives its exporter process-group cleanup wait from this value plus a
-  fixed safety margin, capped to avoid unbounded waits.
+- `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT` controls the Python pipeline cleanup grace
+  period and accepts non-negative finite numeric values, including fractional
+  seconds. Invalid, negative, NaN, and infinite values fall back safely to the
+  default `5.0`. `pin_with_export_retry.py` derives its outer exporter
+  process-group cleanup wait from the same normalized value plus a fixed safety
+  margin, capped to avoid unbounded waits.
 
 Signal and retry behaviour:
 
@@ -117,26 +120,26 @@ Signal and retry behaviour:
   exporter launch failures, nonzero exits, signal exits, and timeouts are reported
   as structured pin errors; Ctrl+C and SIGTERM keep normal interrupt/termination
   semantics instead of becoming ordinary pin failures.
-- The synchronous Bash exporter owns the shared `flock`, signal traps, active
-  pipeline PID, and active pipeline process-group ID in the same Bash process.
-  The exporter keeps the lock descriptor private: active test hooks and the real
-  Docker/`mbuffer` pipeline close FD 9 before running. Helper children created
-  after lock acquisition, including lock polling and retry-sleep helpers, also
-  close FD 9, so surviving children cannot keep the shared lock held after the
-  exporter exits.
+- The synchronous exporter is implemented in Python. Bash files are thin
+  compatibility wrappers only; they do not own locking, retry timers, deadline
+  calculations, pipeline creation, child PID supervision, or cleanup. The Python
+  exporter opens the lock file once, verifies the descriptor is non-inheritable,
+  acquires `fcntl.flock(lock_fd, fcntl.LOCK_EX)` before any export attempt, and
+  holds it across retries for one CID. All children are spawned with
+  `close_fds=True`, so no hook, Docker process, `mbuffer`, or retry helper
+  inherits the lock descriptor.
 - Active pipeline cleanup is bounded. Shutdown first sends SIGTERM to the
-  dedicated pipeline process group, waits up to
-  `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT` seconds (default `5`), escalates to
-  SIGKILL if the group remains, reaps the tracked child, and logs the cleanup
-  steps to stderr.
-- Signalling only the Bash exporter PID interrupts lock acquisition polling,
-  active pipeline execution, and internal retry delays. The exporter does not
-  start another export attempt after shutdown begins, and the lock is released
-  after success, ordinary failure, SIGINT, SIGTERM, and forced cleanup.
-- The FIFO worker runs in a subshell, so its INT/TERM traps are scoped to the
-  worker and do not alter the calling interactive shell. It runs the active
-  exporter and retry-delay sleep as tracked children, making PID-only SIGINT and
-  SIGTERM interrupt foreground exporter waits and retry delays promptly. If the
-  exporter fails for a queued CID, the worker logs the original status and
-  retries that same CID after `IPFS_DAG_RETRY_DELAY`; it does not read the next
-  FIFO CID until the current CID succeeds.
+  dedicated pipeline process group, waits up to the normalized
+  `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT` value, escalates to SIGKILL if the group
+  remains, reaps tracked children, and logs the cleanup steps to stderr.
+- Signalling only the exporter PID interrupts lock acquisition polling, active
+  pipeline execution, and internal retry delays. The exporter does not start
+  another export attempt after shutdown begins, returns 130 for SIGINT and 143
+  for SIGTERM, and releases the lock after success, ordinary failure, SIGINT,
+  SIGTERM, timeout, exception, and forced cleanup.
+- The FIFO worker is also implemented in Python and calls the same `process_cid()`
+  function as direct synchronous export. The Bash function remains a subshell
+  wrapper for compatibility and trap isolation. The Python worker creates or
+  reopens `rhea.wasabi.pebble.export.laptop.dag.queue`, refuses non-FIFO paths,
+  ignores blank lines, retries the current CID before reading the next CID, and
+  preserves FIFO ordering without requeueing duplicate entries.

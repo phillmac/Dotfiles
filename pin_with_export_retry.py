@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import re
 import signal
@@ -15,9 +16,9 @@ from pathlib import Path
 from kubo_api_client import KuboClient, KuboError, PinResult
 
 DEFAULT_EXPORT_COMMAND = str(Path(__file__).resolve().parent / ".bashrc.d" / "carpo.bashrc.d" / "rhea-wasabi-pebble-export-laptop-dag-sync")
-DEFAULT_BASH_TERMINATE_TIMEOUT = 5.0
+from rhea_wasabi_pebble_export import DEFAULT_TERMINATE_TIMEOUT, MAX_TERMINATE_TIMEOUT, parse_nonnegative_finite_float
+
 EXPORTER_CLEANUP_MARGIN = 2.0
-MAX_EXPORTER_CLEANUP_TIMEOUT = 60.0
 _MISSING_BLOCK_RE = re.compile(r"(?:could not find|not found locally).*?((?:Qm[1-9A-HJ-NP-Za-km-z]+)|(?:ba[a-z2-7]+))", re.IGNORECASE)
 
 
@@ -55,33 +56,58 @@ def missing_block_cid_from_error(error: KuboError) -> str | None:
 
 
 def exporter_cleanup_timeout_from_environment() -> float:
-    raw = os.environ.get("IPFS_DAG_EXPORT_TERMINATE_TIMEOUT")
-    bash_timeout = DEFAULT_BASH_TERMINATE_TIMEOUT
-    if raw is not None:
-        try:
-            parsed = float(raw)
-        except ValueError:
-            parsed = DEFAULT_BASH_TERMINATE_TIMEOUT
-        else:
-            if parsed >= 0:
-                bash_timeout = parsed
-    return min(bash_timeout + EXPORTER_CLEANUP_MARGIN, MAX_EXPORTER_CLEANUP_TIMEOUT)
+    bash_timeout = parse_nonnegative_finite_float(
+        os.environ.get("IPFS_DAG_EXPORT_TERMINATE_TIMEOUT"),
+        default=DEFAULT_TERMINATE_TIMEOUT,
+        maximum=MAX_TERMINATE_TIMEOUT,
+    )
+    return min(bash_timeout + EXPORTER_CLEANUP_MARGIN, MAX_TERMINATE_TIMEOUT)
 
+
+def _descendant_pids(pid: int) -> set[int]:
+    remaining = [pid]
+    seen: set[int] = set()
+    while remaining:
+        parent = remaining.pop()
+        try:
+            out = subprocess.run(["pgrep", "-P", str(parent)], text=True, capture_output=True, timeout=1).stdout
+        except Exception:
+            out = ""
+        for line in out.splitlines():
+            try:
+                child = int(line)
+            except ValueError:
+                continue
+            if child not in seen:
+                seen.add(child); remaining.append(child)
+    return seen
 
 def _terminate_process_group(process: subprocess.Popen[object], signum: int = signal.SIGTERM, *, wait_timeout: float | None = None) -> None:
     if wait_timeout is None:
         wait_timeout = exporter_cleanup_timeout_from_environment()
+    descendants = _descendant_pids(process.pid)
     try:
         os.killpg(process.pid, signum)
     except ProcessLookupError:
-        return
+        pass
+    for pid in descendants:
+        try:
+            os.kill(pid, signum)
+        except ProcessLookupError:
+            pass
     try:
         process.wait(timeout=wait_timeout)
     except subprocess.TimeoutExpired:
+        descendants.update(_descendant_pids(process.pid))
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
+        for pid in descendants:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         process.wait()
 
 
