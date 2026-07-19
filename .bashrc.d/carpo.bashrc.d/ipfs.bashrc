@@ -124,40 +124,42 @@ function rhea.export.laptop.dag ()
 }
 
 function rhea.wasabi.pebble.export.laptop.dag ()
-{
+(
     local queue="rhea.wasabi.pebble.export.laptop.dag.queue"
     local script_dir
     script_dir="$(
         cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" &&
         pwd
-    )" || return 1
+    )" || exit 1
     local exporter="${RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC:-${script_dir}/rhea-wasabi-pebble-export-laptop-dag-sync}"
     local shutting_down=0
-    trap 'shutting_down=1; return 130' INT
-    trap 'shutting_down=1; return 143' TERM
+    local retry_delay
+    trap 'shutting_down=1; exit 130' INT
+    trap 'shutting_down=1; exit 143' TERM
 
     if [[ -e "$queue" && ! -p "$queue" ]]
     then
         echo "${queue} exists but is not a FIFO" >&2
-        return 1
+        exit 1
     fi
 
     if [[ ! -p "$queue" ]]
     then
-        mkfifo -- "$queue" || return 1
+        mkfifo -- "$queue" || exit 1
     fi
 
     if [[ ! -x "$exporter" ]]
     then
         echo "Resolved synchronous exporter is not executable: ${exporter}" >&2
-        return 1
+        exit 1
     fi
 
     echo "$(date) - Waiting for CIDs on ${queue}"
 
     # Reopen the FIFO whenever the current writer closes it. The FIFO path stays
     # intact and usable while the shared synchronous exporter serializes actual
-    # export/import pipelines with its flock lock.
+    # export/import pipelines with its flock lock. Traps are scoped to this
+    # subshell so sourcing ipfs.bashrc never leaves stale parent-shell traps.
     while true
     do
         while IFS= read -r cid
@@ -173,16 +175,17 @@ function rhea.wasabi.pebble.export.laptop.dag ()
                 fi
                 if (( shutting_down != 0 ))
                 then
-                    return "$status"
+                    exit "$status"
                 fi
                 retry_delay="${IPFS_DAG_RETRY_DELAY:-300}"
                 echo "$(date) - Exporter failed for ${cid} with status ${status}" >&2
                 echo "$(date) - Retrying ${cid} in ${retry_delay} seconds" >&2
-                sleep "$retry_delay" || return "$status"
+                sleep "$retry_delay" || exit "$status"
             done
         done < "$queue"
     done
-}
+)
+
 
 
 export -f split-car

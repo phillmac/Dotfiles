@@ -104,3 +104,21 @@ Useful options:
   backoff.
 - `IPFS_DAG_EXPORT_LOCK` overrides the shared lock path. By default it is
   `${HOME}/.var/run/rhea-wasabi-pebble-export-laptop-dag.lock`.
+
+Signal and retry behaviour:
+
+- Python starts the exporter in its own process group. Ctrl+C, SIGTERM,
+  `--export-timeout`, and unexpected exceptions terminate that complete exporter
+  process group, wait briefly, and then escalate to SIGKILL if needed. Expected
+  exporter launch failures, nonzero exits, signal exits, and timeouts are reported
+  as structured pin errors; Ctrl+C and SIGTERM keep normal interrupt/termination
+  semantics instead of becoming ordinary pin failures.
+- The synchronous Bash exporter owns the shared `flock`, signal traps, active
+  pipeline PID, and active pipeline process-group ID in the same Bash process.
+  Signalling the exporter PID terminates the dedicated pipeline process group and
+  prevents another internal retry from starting during shutdown.
+- The FIFO worker runs in a subshell, so its INT/TERM traps are scoped to the
+  worker and do not alter the calling interactive shell. If the exporter fails for
+  a queued CID, the worker logs the original status and retries that same CID
+  after `IPFS_DAG_RETRY_DELAY`; it does not read the next FIFO CID until the
+  current CID succeeds.

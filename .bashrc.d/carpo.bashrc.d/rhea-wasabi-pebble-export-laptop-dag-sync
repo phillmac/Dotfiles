@@ -2,16 +2,27 @@
 set -u
 _shutdown_requested=0
 _active_pipeline=
-terminate_active_pipeline() {
-    _shutdown_requested=1
-    if [[ -n "${_active_pipeline:-}" ]]; then
-        pkill -TERM -P "$_active_pipeline" 2>/dev/null || true
-        kill -TERM "$_active_pipeline" 2>/dev/null || true
-    fi
-}
-trap terminate_active_pipeline INT TERM
+_active_pipeline_pgid=
 
 log() { printf '%s - %s\n' "$(date)" "$*" >&2; }
+
+terminate_active_pipeline() {
+    local sig="${1:-TERM}"
+    _shutdown_requested=1
+    if [[ -n "${_active_pipeline_pgid:-}" ]]; then
+        kill -"$sig" -- "-${_active_pipeline_pgid}" 2>/dev/null || true
+    elif [[ -n "${_active_pipeline:-}" ]]; then
+        kill -"$sig" "$_active_pipeline" 2>/dev/null || true
+    fi
+}
+
+shutdown_trap() {
+    local signum=$1
+    terminate_active_pipeline TERM
+    return "$signum"
+}
+trap 'shutdown_trap 130' INT
+trap 'shutdown_trap 143' TERM
 
 rhea_wasabi_pebble_export_laptop_dag_pipeline() {
     local cid=$1
@@ -19,44 +30,65 @@ rhea_wasabi_pebble_export_laptop_dag_pipeline() {
     local rhea_socket="${RHEA_IPFS_WASABI_SOCKET:-${HOME}/.var/run/rhea-ipfs-wasabi.sock}"
     local source_image="${LAPTOP_IPFS_CLI_IMAGE:-ipfs/go-ipfs:v0.8.0}"
     local destination_image="${RHEA_IPFS_CLI_IMAGE:-ipfs/go-ipfs:v0.31.0}"
-    local retry_delay="${IPFS_DAG_RETRY_DELAY:-300}"
 
     command -v docker >/dev/null 2>&1 || { echo "docker is not installed or not in PATH" >&2; return 1; }
     command -v mbuffer >/dev/null 2>&1 || { echo "mbuffer is not installed or not in PATH" >&2; return 1; }
 
-    while (( _shutdown_requested == 0 )); do
-        if [[ ! -S "$laptop_socket" ]]; then
-            log "Laptop IPFS socket is unavailable: ${laptop_socket}; retrying ${cid} in ${retry_delay} seconds"
-            sleep "$retry_delay" || return 130
-            continue
-        fi
-        if [[ ! -S "$rhea_socket" ]]; then
-            log "Rhea IPFS socket is unavailable: ${rhea_socket}; retrying ${cid} in ${retry_delay} seconds"
-            sleep "$retry_delay" || return 130
-            continue
-        fi
+    set -o pipefail
+    docker run --rm --log-driver none \
+        --mount "type=bind,src=${laptop_socket},dst=/run/ipfs-laptop-api.sock" \
+        --entrypoint /usr/local/bin/ipfs \
+        "$source_image" \
+        --api=/unix/run/ipfs-laptop-api.sock \
+        dag export --progress=false "$cid" \
+    | mbuffer -e \
+    | docker run --rm -i --log-driver none \
+        --mount "type=bind,src=${rhea_socket},dst=/run/rhea-ipfs-wasabi.sock" \
+        --entrypoint /usr/local/bin/ipfs \
+        "$destination_image" \
+        --api=/unix/run/rhea-ipfs-wasabi.sock \
+        dag import --pin-roots=false --allow-big-block
+}
 
+run_active_export_attempt() {
+    local cid=$1
+    local script_path=${BASH_SOURCE[0]}
+    if [[ -n "${IPFS_DAG_EXPORT_SYNC_HOOK:-}" ]]; then
+        setsid -- "$IPFS_DAG_EXPORT_SYNC_HOOK" "$cid" &
+    else
+        setsid -- bash -c 'source "$1"; trap - INT TERM; rhea_wasabi_pebble_export_laptop_dag_pipeline "$2"' bash "$script_path" "$cid" &
+    fi
+    _active_pipeline=$!
+    _active_pipeline_pgid="$(ps -o pgid= -p "$_active_pipeline" 2>/dev/null | tr -d '[:space:]')"
+    if [[ -z "$_active_pipeline_pgid" ]]; then
+        _active_pipeline_pgid=$_active_pipeline
+    fi
+    wait "$_active_pipeline"
+    local status=$?
+    _active_pipeline=
+    _active_pipeline_pgid=
+    return "$status"
+}
+
+rhea_wasabi_pebble_export_laptop_dag_sync() {
+    if [[ $# -ne 1 || -z "${1:-}" ]]; then
+        echo "usage: rhea-wasabi-pebble-export-laptop-dag-sync <cid>" >&2
+        return 2
+    fi
+    command -v flock >/dev/null 2>&1 || { echo "flock is not installed or not in PATH" >&2; return 1; }
+    command -v setsid >/dev/null 2>&1 || { echo "setsid is not installed or not in PATH" >&2; return 1; }
+    local cid=$1
+    local lock="${IPFS_DAG_EXPORT_LOCK:-${HOME}/.var/run/rhea-wasabi-pebble-export-laptop-dag.lock}"
+    local retry_delay="${IPFS_DAG_RETRY_DELAY:-300}"
+    mkdir -p -- "$(dirname -- "$lock")" || return 1
+
+    exec 9>"$lock" || return 1
+    flock -x 9 || return 1
+
+    while (( _shutdown_requested == 0 )); do
         log "Exporting ${cid} from laptop and importing to rhea"
-        (
-            set -o pipefail
-            docker run --rm --log-driver none \
-                --mount "type=bind,src=${laptop_socket},dst=/run/ipfs-laptop-api.sock" \
-                --entrypoint /usr/local/bin/ipfs \
-                "$source_image" \
-                --api=/unix/run/ipfs-laptop-api.sock \
-                dag export --progress=false "$cid" \
-            | mbuffer -e \
-            | docker run --rm -i --log-driver none \
-                --mount "type=bind,src=${rhea_socket},dst=/run/rhea-ipfs-wasabi.sock" \
-                --entrypoint /usr/local/bin/ipfs \
-                "$destination_image" \
-                --api=/unix/run/rhea-ipfs-wasabi.sock \
-                dag import --pin-roots=false --allow-big-block
-        ) &
-        _active_pipeline=$!
-        wait "$_active_pipeline"
-        status=$?
-        _active_pipeline=
+        run_active_export_attempt "$cid"
+        local status=$?
         if (( _shutdown_requested != 0 )); then
             return "$status"
         fi
@@ -68,24 +100,6 @@ rhea_wasabi_pebble_export_laptop_dag_pipeline() {
         sleep "$retry_delay" || return 130
     done
     return 130
-}
-
-rhea_wasabi_pebble_export_laptop_dag_sync() {
-    if [[ $# -ne 1 || -z "${1:-}" ]]; then
-        echo "usage: rhea-wasabi-pebble-export-laptop-dag-sync <cid>" >&2
-        return 2
-    fi
-    command -v flock >/dev/null 2>&1 || { echo "flock is not installed or not in PATH" >&2; return 1; }
-    local lock="${IPFS_DAG_EXPORT_LOCK:-${HOME}/.var/run/rhea-wasabi-pebble-export-laptop-dag.lock}"
-    mkdir -p -- "$(dirname -- "$lock")" || return 1
-    (
-        flock -x 9 || exit 1
-        if [[ -n "${IPFS_DAG_EXPORT_SYNC_HOOK:-}" ]]; then
-            "$IPFS_DAG_EXPORT_SYNC_HOOK" "$1"
-        else
-            rhea_wasabi_pebble_export_laptop_dag_pipeline "$1"
-        fi
-    ) 9>"$lock"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

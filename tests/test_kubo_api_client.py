@@ -2,6 +2,7 @@ import io
 import os
 import subprocess
 import signal
+import sys
 import time
 from pathlib import Path, PureWindowsPath
 import tempfile
@@ -860,6 +861,110 @@ class PinWithExportRetryTests(unittest.TestCase):
         self.assertIn('dirname -- "${BASH_SOURCE[0]}"', text)
         self.assertIn('RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC:-${script_dir}/rhea-wasabi-pebble-export-laptop-dag-sync', text)
         self.assertIn('[[ ! -x "$exporter" ]]', text)
+
+
+    def test_successful_export_does_not_call_process_group_cleanup(self):
+        import pin_with_export_retry
+
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen") as popen, \
+             mock.patch.object(pin_with_export_retry, "_terminate_process_group") as cleanup:
+            popen.return_value.wait.return_value = 0
+            pin_with_export_retry.export_missing_cid("Qmabc", "/tmp/exporter")
+        cleanup.assert_not_called()
+
+    def test_real_sigint_and_sigterm_delivery_cleanup_process_group(self):
+        import pin_with_export_retry
+
+        script = Path(pin_with_export_retry.DEFAULT_EXPORT_COMMAND)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            hook = tmp / "hook.py"
+            child_pid = tmp / "child.pid"
+            hook.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, signal, subprocess, sys, time\n"
+                "child = subprocess.Popen([sys.executable, '-c', \"import time; time.sleep(60)\"])\n"
+                f"open({str(child_pid)!r}, 'w').write(str(child.pid))\n"
+                "open(sys.argv[1], 'w').write(str(os.getpid()))\n"
+                "time.sleep(60)\n",
+                encoding="utf-8",
+            )
+            hook.chmod(0o755)
+            driver = tmp / "driver.py"
+            driver.write_text(
+                "import os, signal, sys, time\n"
+                f"sys.path.insert(0, {str(Path.cwd())!r})\n"
+                "import pin_with_export_retry\n"
+                "try:\n"
+                f"    pin_with_export_retry.export_missing_cid('Qmabc', {str(script)!r})\n"
+                "except KeyboardInterrupt:\n"
+                "    raise SystemExit(130)\n"
+                "except SystemExit as exc:\n"
+                "    raise\n"
+                "raise SystemExit(0)\n",
+                encoding="utf-8",
+            )
+            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(tmp / "lock")}
+            for sig, expected in ((signal.SIGINT, 130), (signal.SIGTERM, 143)):
+                marker = tmp / f"marker-{sig.value}"
+                env["IPFS_DAG_EXPORT_SYNC_HOOK"] = str(hook)
+                # wrapper passes the marker as CID-independent argv[1] via hook script's CID argument path requirement is not useful here;
+                # use a tiny shell hook to write marker and spawn a child instead.
+                shell_hook = tmp / f"hook-{sig.value}.sh"
+                code = (
+                    "import os,subprocess,sys,time; "
+                    "p=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+                    f"open({str(child_pid)!r}, 'w').write(str(p.pid)); "
+                    f"open({str(marker)!r}, 'w').write(str(os.getpid())); "
+                    "time.sleep(60)"
+                )
+                shell_hook.write_text(
+                    "#!/usr/bin/env bash\n"
+                    f"python3 -c {code!r}\n",
+                    encoding="utf-8",
+                )
+                shell_hook.chmod(0o755)
+                env["IPFS_DAG_EXPORT_SYNC_HOOK"] = str(shell_hook)
+                proc = subprocess.Popen([sys.executable, str(driver)], env=env)
+                deadline = time.time() + 5
+                while time.time() < deadline and not marker.exists():
+                    time.sleep(0.05)
+                self.assertTrue(marker.exists())
+                proc.send_signal(sig)
+                self.assertEqual(proc.wait(timeout=5), expected)
+                if child_pid.exists():
+                    pid = int(child_pid.read_text())
+                    for _ in range(20):
+                        ps = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], text=True, capture_output=True)
+                        if ps.returncode != 0 or "Z" in ps.stdout:
+                            break
+                        time.sleep(0.05)
+                    ps = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], text=True, capture_output=True)
+                    self.assertTrue(ps.returncode != 0 or "Z" in ps.stdout)
+
+    def test_fifo_worker_traps_are_scoped_to_subshell(self):
+        script = Path(".bashrc.d/carpo.bashrc.d/ipfs.bashrc").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            probe = tmp / "probe.sh"
+            probe.write_text(
+                "#!/usr/bin/env bash\n"
+                "cd \"$1\" || exit 1\n"
+                "source \"$2\"\n"
+                "trap 'echo parent-int' INT\n"
+                "trap 'echo parent-term' TERM\n"
+                "before_int=$(trap -p INT)\n"
+                "before_term=$(trap -p TERM)\n"
+                "RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC=/missing rhea.wasabi.pebble.export.laptop.dag >/dev/null 2>&1 || true\n"
+                "after_int=$(trap -p INT)\n"
+                "after_term=$(trap -p TERM)\n"
+                "[[ $before_int == $after_int && $before_term == $after_term ]] || exit 2\n"
+                "declare -p shutting_down >/dev/null 2>&1 && exit 3\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            probe.chmod(0o755)
+            subprocess.run([str(probe), str(tmp), str(script)], check=True, timeout=5)
 
     def test_direct_and_fifo_paths_use_same_lock_and_flock_serializes(self):
         script = Path(".bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync").resolve()

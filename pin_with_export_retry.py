@@ -66,6 +66,12 @@ def _terminate_process_group(process: subprocess.Popen[object], signum: int = si
         process.wait()
 
 
+class _ExporterSignalReceived(BaseException):
+    def __init__(self, signum: int):
+        super().__init__(signum)
+        self.signum = signum
+
+
 _kill_process_group = _terminate_process_group
 
 
@@ -87,16 +93,13 @@ def export_missing_cid(missing_cid: str, export_command: str | Path = DEFAULT_EX
         raise _structured_start_failure(missing_cid, command, exc) from exc
 
     installed_handlers: dict[int, object] = {}
-    received_signal: int | None = None
-
-    def cleanup(signum: int = signal.SIGTERM) -> None:
-        if process.poll() is None:
-            _terminate_process_group(process, signum)
 
     def handler(signum: int, frame: object) -> None:
-        nonlocal received_signal
-        received_signal = signum
-        cleanup(signum)
+        try:
+            os.killpg(process.pid, signum)
+        except ProcessLookupError:
+            pass
+        raise _ExporterSignalReceived(signum)
 
     can_install_handlers = threading.current_thread() is threading.main_thread()
     if can_install_handlers:
@@ -107,21 +110,21 @@ def export_missing_cid(missing_cid: str, export_command: str | Path = DEFAULT_EX
     try:
         try:
             returncode = process.wait(timeout=timeout)
+        except _ExporterSignalReceived as exc:
+            _terminate_process_group(process, signal.SIGTERM)
+            if exc.signum == signal.SIGINT:
+                raise KeyboardInterrupt
+            raise SystemExit(128 + exc.signum)
         except subprocess.TimeoutExpired as exc:
-            cleanup(signal.SIGTERM)
+            _terminate_process_group(process, signal.SIGTERM)
             raise ExportFailed(ExportFailure(missing_cid, command, f"timeout after {timeout} seconds", "The synchronous exporter did not finish before the configured timeout.")) from exc
         except BaseException:
-            cleanup(signal.SIGTERM)
+            _terminate_process_group(process, signal.SIGTERM)
             raise
     finally:
         if can_install_handlers:
             for signum, previous in installed_handlers.items():
                 signal.signal(signum, previous)
-
-    if received_signal is not None:
-        if received_signal == signal.SIGINT:
-            raise KeyboardInterrupt
-        raise SystemExit(128 + received_signal)
 
     if returncode != 0:
         if returncode < 0:
