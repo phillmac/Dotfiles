@@ -147,7 +147,14 @@ function rhea.wasabi.pebble.export.laptop.dag ()
     # status=$?
     # Exporter failed for ${cid} with status ${status}
     # done < "$queue"
-    exec env RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC="$exporter" python3 \
+    if [[ -n "${RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC:-}" ]]
+    then
+        exec env RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC="$exporter" python3 \
+            "${script_dir}/rhea_wasabi_pebble_export.py" \
+            fifo-worker --queue "$queue"
+    fi
+
+    exec python3 \
         "${script_dir}/rhea_wasabi_pebble_export.py" \
         fifo-worker --queue "$queue"
 )

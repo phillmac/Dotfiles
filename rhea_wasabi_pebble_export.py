@@ -1,26 +1,39 @@
 #!/usr/bin/env python3
-"""Synchronous Rhea Wasabi Pebble IPFS DAG exporter and FIFO worker."""
+"""Direct Kubo RPC DAG exporter and FIFO worker.
+
+Streams an opaque CAR from a source Kubo /api/v0/dag/export response to a
+bounded in-memory queue, then into a destination Kubo /api/v0/dag/import
+streaming multipart/form-data request.  No Docker, ipfs CLI, mbuffer, CAR files,
+or complete-CAR buffering are used by the built-in exporter.
+"""
 from __future__ import annotations
 
-import argparse, fcntl, math, os, signal, stat, subprocess, sys, time, threading
+import argparse, fcntl, http.client, json, math, os, queue, secrets, signal, socket, stat, sys, threading, time, urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Iterator
 
 DEFAULT_LOCK = os.path.expanduser("~/.var/run/rhea-wasabi-pebble-export-laptop-dag.lock")
 DEFAULT_RETRY_DELAY = 300.0
 DEFAULT_TERMINATE_TIMEOUT = 5.0
 MAX_TERMINATE_TIMEOUT = 60.0
 DEFAULT_LOCK_POLL_INTERVAL = 0.1
+DEFAULT_CHUNK_SIZE = 1048576
+DEFAULT_BUFFER_SIZE = 67108864
+DEFAULT_CONNECT_TIMEOUT = 10.0
+DEFAULT_READ_TIMEOUT = None
+DEFAULT_WRITE_TIMEOUT = None
+ERROR_SNIPPET_LIMIT = 65536
 QUEUE_PATH = "rhea.wasabi.pebble.export.laptop.dag.queue"
+_EOF = object()
 
 
 def log(msg: str) -> None:
     print(f"{time.strftime('%c')} - {msg}", file=sys.stderr, flush=True)
 
 
-def parse_nonnegative_finite_float(raw: str | None, *, default: float, maximum: float) -> float:
-    if raw is None:
+def parse_nonnegative_finite_float(raw: str | None, *, default: float | None, maximum: float | None = None) -> float | None:
+    if raw is None or raw == "":
         return default
     try:
         value = float(raw)
@@ -28,34 +41,93 @@ def parse_nonnegative_finite_float(raw: str | None, *, default: float, maximum: 
         return default
     if not math.isfinite(value) or value < 0:
         return default
-    return min(value, maximum)
+    return min(value, maximum) if maximum is not None else value
+
+
+def _parse_positive_int(raw: str | None, *, default: int) -> int:
+    try:
+        value = int(raw) if raw not in (None, "") else default
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+@dataclass(frozen=True)
+class KuboEndpoint:
+    base_url: str
+    unix_socket: Path | None
+
+    @classmethod
+    def parse(cls, value: str) -> "KuboEndpoint":
+        expanded = os.path.expanduser(value)
+        parsed = urllib.parse.urlparse(expanded)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            return cls(expanded.rstrip("/"), None)
+        if parsed.scheme or parsed.netloc:
+            raise ValueError(f"Malformed Kubo API endpoint: {value}")
+        if not expanded.startswith("/"):
+            raise ValueError(f"Unix-domain Kubo API socket path must be absolute: {value}")
+        return cls("http://kubo.local", Path(expanded))
+
+    def display(self) -> str:
+        return f"unix://{self.unix_socket}" if self.unix_socket else self.base_url
 
 
 @dataclass(frozen=True)
 class ExportConfig:
-    laptop_socket: str
-    rhea_socket: str
-    source_image: str
-    destination_image: str
+    source: KuboEndpoint
+    destination: KuboEndpoint
     retry_delay: float
     lock_path: Path
     terminate_timeout: float
     lock_poll_interval: float
     hook: str | None
+    chunk_size: int
+    buffer_size: int
+    connect_timeout: float
+    read_timeout: float | None
+    write_timeout: float | None
 
     @classmethod
     def from_env(cls) -> "ExportConfig":
         return cls(
-            laptop_socket=os.environ.get("IPFS_LAPTOP_API_SOCKET", os.path.expanduser("~/.var/run/ipfs-laptop-api.sock")),
-            rhea_socket=os.environ.get("RHEA_IPFS_WASABI_SOCKET", os.path.expanduser("~/.var/run/rhea-ipfs-wasabi.sock")),
-            source_image=os.environ.get("LAPTOP_IPFS_CLI_IMAGE", "ipfs/go-ipfs:v0.8.0"),
-            destination_image=os.environ.get("RHEA_IPFS_CLI_IMAGE", "ipfs/go-ipfs:v0.31.0"),
-            retry_delay=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_RETRY_DELAY"), default=DEFAULT_RETRY_DELAY, maximum=86400.0),
+            source=KuboEndpoint.parse(os.environ.get("IPFS_LAPTOP_API_SOCKET", os.path.expanduser("~/.var/run/ipfs-laptop-api.sock"))),
+            destination=KuboEndpoint.parse(os.environ.get("RHEA_IPFS_WASABI_SOCKET", os.path.expanduser("~/.var/run/rhea-ipfs-wasabi.sock"))),
+            retry_delay=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_RETRY_DELAY"), default=DEFAULT_RETRY_DELAY, maximum=86400.0) or 0.0,
             lock_path=Path(os.environ.get("IPFS_DAG_EXPORT_LOCK", DEFAULT_LOCK)).expanduser(),
-            terminate_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_EXPORT_TERMINATE_TIMEOUT"), default=DEFAULT_TERMINATE_TIMEOUT, maximum=MAX_TERMINATE_TIMEOUT),
-            lock_poll_interval=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL"), default=DEFAULT_LOCK_POLL_INTERVAL, maximum=10.0),
+            terminate_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_EXPORT_TERMINATE_TIMEOUT"), default=DEFAULT_TERMINATE_TIMEOUT, maximum=MAX_TERMINATE_TIMEOUT) or DEFAULT_TERMINATE_TIMEOUT,
+            lock_poll_interval=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL"), default=DEFAULT_LOCK_POLL_INTERVAL, maximum=10.0) or DEFAULT_LOCK_POLL_INTERVAL,
             hook=os.environ.get("IPFS_DAG_EXPORT_SYNC_HOOK"),
+            chunk_size=_parse_positive_int(os.environ.get("IPFS_DAG_CHUNK_SIZE"), default=DEFAULT_CHUNK_SIZE),
+            buffer_size=_parse_positive_int(os.environ.get("IPFS_DAG_BUFFER_SIZE"), default=DEFAULT_BUFFER_SIZE),
+            connect_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_HTTP_CONNECT_TIMEOUT"), default=DEFAULT_CONNECT_TIMEOUT, maximum=3600.0) or DEFAULT_CONNECT_TIMEOUT,
+            read_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_HTTP_READ_TIMEOUT"), default=DEFAULT_READ_TIMEOUT, maximum=86400.0),
+            write_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_HTTP_WRITE_TIMEOUT"), default=DEFAULT_WRITE_TIMEOUT, maximum=86400.0),
         )
+
+    @property
+    def max_chunks(self) -> int:
+        return max(1, self.buffer_size // self.chunk_size)
+
+
+@dataclass(frozen=True)
+class DataChunk:
+    data: bytes
+
+
+@dataclass(frozen=True)
+class ProducerFailed:
+    error: BaseException
+
+
+@dataclass
+class TransferResult:
+    cid: str
+    bytes_exported: int = 0
+    bytes_uploaded: int = 0
+    maximum_queue_depth: int = 0
+    started_at: float = 0.0
+    finished_at: float = 0.0
 
 
 class ShutdownRequested(BaseException):
@@ -63,213 +135,269 @@ class ShutdownRequested(BaseException):
         super().__init__(signum); self.signum = signum
 
 
-class Supervisor:
-    def __init__(self, config: ExportConfig):
-        self.config = config
-        self.shutdown = threading.Event()
-        self.signum: int | None = None
-        self.pgid: int | None = None
-        self.processes: list[subprocess.Popen[object]] = []
-        self.sleep_proc: subprocess.Popen[object] | None = None
-        self._old: dict[int, object] = {}
+class ExporterError(RuntimeError):
+    pass
 
-    def __enter__(self) -> "Supervisor":
+
+class UnixHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, unix_socket: Path, timeout: float | None):
+        super().__init__("localhost", timeout=timeout)
+        self.unix_socket = str(unix_socket)
+    def connect(self) -> None:
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        if self.timeout is not None:
+            self.sock.settimeout(self.timeout)
+        self.sock.connect(self.unix_socket)
+
+
+def _connection(endpoint: KuboEndpoint, timeout: float | None) -> http.client.HTTPConnection:
+    if endpoint.unix_socket:
+        return UnixHTTPConnection(endpoint.unix_socket, timeout)
+    p = urllib.parse.urlparse(endpoint.base_url)
+    cls = http.client.HTTPSConnection if p.scheme == "https" else http.client.HTTPConnection
+    return cls(p.hostname or "localhost", p.port, timeout=timeout)
+
+
+def _path(endpoint: KuboEndpoint, api_path: str, params: dict[str, str]) -> str:
+    base_path = urllib.parse.urlparse(endpoint.base_url).path.rstrip("/")
+    return f"{base_path}{api_path}?{urllib.parse.urlencode(params)}"
+
+
+def _read_error_body(resp: http.client.HTTPResponse) -> str:
+    data = resp.read(ERROR_SNIPPET_LIMIT + 1)
+    if len(data) > ERROR_SNIPPET_LIMIT:
+        data = data[:ERROR_SNIPPET_LIMIT] + b"..."
+    text = data.decode("utf-8", "replace")
+    try:
+        obj = json.loads(text)
+        return str(obj.get("Message") or obj.get("message") or text)
+    except Exception:
+        return text
+
+
+class ShutdownController:
+    def __init__(self):
+        self.event = threading.Event(); self.signum: int | None = None; self._closers: list[object] = []
+        self._old: dict[int, object] = {}
+    def __enter__(self):
         if threading.current_thread() is threading.main_thread():
             for sig in (signal.SIGINT, signal.SIGTERM):
-                self._old[sig] = signal.getsignal(sig)
-                signal.signal(sig, self._handler)
+                self._old[sig] = signal.getsignal(sig); signal.signal(sig, self._handler)
         return self
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        for sig, old in self._old.items():
-            signal.signal(sig, old)
-
+    def __exit__(self, exc_type, exc, tb):
+        for sig, old in self._old.items(): signal.signal(sig, old)
     def _handler(self, signum: int, frame: object) -> None:
-        self.signum = signum; self.shutdown.set()
-        if self.pgid is not None:
-            try: os.killpg(self.pgid, signal.SIGTERM)
-            except ProcessLookupError: pass
-        if self.sleep_proc is not None and self.sleep_proc.poll() is None:
-            try: self.sleep_proc.terminate()
-            except ProcessLookupError: pass
-        raise ShutdownRequested(signum)
-
-    def wait(self, seconds: float) -> bool:
-        return self.shutdown.wait(seconds)
-
-    def _descendants(self) -> set[int]:
-        remaining = [p.pid for p in self.processes if p.pid]
-        seen: set[int] = set()
-        while remaining:
-            pid = remaining.pop()
-            try:
-                out = subprocess.run(["pgrep", "-P", str(pid)], text=True, capture_output=True, timeout=1).stdout
-            except Exception:
-                out = ""
-            for line in out.splitlines():
-                try: child = int(line)
-                except ValueError: continue
-                if child not in seen:
-                    seen.add(child); remaining.append(child)
-        return seen
-
-    def terminate_group(self) -> None:
-        pgid = self.pgid
-        if pgid is None:
-            return
-        descendants = self._descendants()
-        log(f"Sending SIGTERM to export pipeline process group {pgid}")
-        try: os.killpg(pgid, signal.SIGTERM)
-        except ProcessLookupError: pass
-        deadline = time.monotonic() + self.config.terminate_timeout
-        while time.monotonic() < deadline:
-            for proc in self.processes:
-                proc.poll()
-            try:
-                os.killpg(pgid, 0)
-            except ProcessLookupError:
-                break
-            time.sleep(0.05)
-        try:
-            os.killpg(pgid, 0)
-            group_alive = True
-        except ProcessLookupError:
-            group_alive = False
-        if group_alive or any(p.poll() is None for p in self.processes):
-            log(f"Grace period expired for export pipeline process group {pgid}")
-            log(f"Sending SIGKILL to export pipeline process group {pgid}")
-            descendants.update(self._descendants())
-            try: os.killpg(pgid, signal.SIGKILL)
-            except ProcessLookupError: pass
-            for pid in descendants:
-                try: os.kill(pid, signal.SIGKILL)
-                except ProcessLookupError: pass
-        for p in self.processes:
-            try: p.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                try: p.kill()
-                except ProcessLookupError: pass
-                p.wait()
-        log("Export pipeline cleanup completed")
-        self.processes.clear(); self.pgid = None
+        self.signum = signum; self.event.set(); self.close_active(); raise ShutdownRequested(signum)
+    def add_closer(self, obj: object) -> None: self._closers.append(obj)
+    def close_active(self) -> None:
+        for obj in list(self._closers):
+            try: obj.close()  # type: ignore[attr-defined]
+            except Exception: pass
+    def wait(self, seconds: float) -> bool: return self.event.wait(seconds)
 
 
-def _popen(args: Sequence[str], **kwargs) -> subprocess.Popen[object]:
-    return subprocess.Popen(list(args), close_fds=True, **kwargs)
+def _queue_put(q: queue.Queue[object], item: object, shutdown: ShutdownController) -> None:
+    while not shutdown.event.is_set():
+        try: q.put(item, timeout=0.1); return
+        except queue.Full: continue
+    raise ShutdownRequested(shutdown.signum or signal.SIGTERM)
 
 
-def run_pipeline_once(cid: str, config: ExportConfig, sup: Supervisor) -> int:
-    if config.hook:
-        p = _popen([config.hook, cid], start_new_session=True)
-        sup.pgid = p.pid; sup.processes = [p]
-        try: return p.wait()
-        except ShutdownRequested: sup.terminate_group(); raise
-        finally:
-            if p.poll() is None: sup.terminate_group()
-            sup.processes = []; sup.pgid = None
-
-    export_args = ["docker", "run", "--rm", "--log-driver", "none", "--mount", f"type=bind,src={config.laptop_socket},dst=/run/ipfs-laptop-api.sock", "--entrypoint", "/usr/local/bin/ipfs", config.source_image, "--api=/unix/run/ipfs-laptop-api.sock", "dag", "export", "--progress=false", cid]
-    import_args = ["docker", "run", "--rm", "-i", "--log-driver", "none", "--mount", f"type=bind,src={config.rhea_socket},dst=/run/rhea-ipfs-wasabi.sock", "--entrypoint", "/usr/local/bin/ipfs", config.destination_image, "--api=/unix/run/rhea-ipfs-wasabi.sock", "dag", "import", "--pin-roots=false", "--allow-big-block"]
-    exp = _popen(export_args, stdout=subprocess.PIPE, start_new_session=True)
-    sup.pgid = exp.pid
-    buf = _popen(["mbuffer", "-e"], stdin=exp.stdout, stdout=subprocess.PIPE, process_group=sup.pgid)
-    if exp.stdout: exp.stdout.close()
-    imp = _popen(import_args, stdin=buf.stdout, process_group=sup.pgid)
-    if buf.stdout: buf.stdout.close()
-    sup.processes = [exp, buf, imp]
+def _producer(cid: str, config: ExportConfig, shutdown: ShutdownController, q: queue.Queue[object], result: TransferResult) -> None:
+    conn = None
     try:
-        rc_imp, rc_buf, rc_exp = imp.wait(), buf.wait(), exp.wait()
-    except ShutdownRequested:
-        sup.terminate_group(); raise
+        conn = _connection(config.source, config.connect_timeout); shutdown.add_closer(conn)
+        path = _path(config.source, "/api/v0/dag/export", {"arg": cid, "progress": "false"})
+        conn.request("POST", path, body=None, headers={"Connection": "close"})
+        resp = conn.getresponse(); shutdown.add_closer(resp)
+        if conn.sock is not None:
+            conn.sock.settimeout(config.read_timeout)
+        if resp.status < 200 or resp.status >= 300:
+            raise ExporterError(f"source {config.source.display()} HTTP {resp.status}: {_read_error_body(resp)}")
+        while not shutdown.event.is_set():
+            data = resp.read(config.chunk_size)
+            if not data: break
+            result.bytes_exported += len(data)
+            _queue_put(q, DataChunk(data), shutdown)
+            result.maximum_queue_depth = max(result.maximum_queue_depth, q.qsize())
+        _queue_put(q, _EOF, shutdown)
+        log(f"Source export completed for {cid}: {result.bytes_exported} bytes")
+    except BaseException as exc:
+        try: _queue_put(q, ProducerFailed(exc), shutdown)
+        except BaseException: pass
     finally:
-        if any(p.poll() is None for p in sup.processes): sup.terminate_group()
-    for name, rc in (("export", rc_exp), ("mbuffer", rc_buf), ("import", rc_imp)):
-        if rc != 0: log(f"{name} stage failed with exit status {rc}")
-    sup.processes = []; sup.pgid = None
-    return 0 if rc_exp == rc_buf == rc_imp == 0 else 1
-
-
-def acquire_lock_interruptibly(lock_fd: int, config: ExportConfig, sup: Supervisor) -> None:
-    while not sup.shutdown.is_set():
         try:
-            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB); return
+            if conn: conn.close()
+        except Exception: pass
+
+
+def _multipart_chunks(q: queue.Queue[object], boundary: str, shutdown: ShutdownController, result: TransferResult) -> Iterator[bytes]:
+    prefix = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"export.car\"\r\nContent-Type: application/vnd.ipld.car\r\n\r\n").encode()
+    suffix = f"\r\n--{boundary}--\r\n".encode()
+    yield prefix
+    while not shutdown.event.is_set():
+        try: item = q.get(timeout=0.1)
+        except queue.Empty: continue
+        if isinstance(item, DataChunk):
+            result.bytes_uploaded += len(item.data); yield item.data
+        elif isinstance(item, ProducerFailed):
+            raise item.error
+        elif item is _EOF:
+            yield suffix; return
+    raise ShutdownRequested(shutdown.signum or signal.SIGTERM)
+
+
+def _send_chunked(conn: http.client.HTTPConnection, chunks: Iterator[bytes], write_timeout: float | None) -> http.client.HTTPResponse:
+    sock = conn.sock
+    if sock and write_timeout is not None: sock.settimeout(write_timeout)
+    for chunk in chunks:
+        if not chunk: continue
+        conn.send(f"{len(chunk):X}\r\n".encode("ascii")); conn.send(chunk); conn.send(b"\r\n")
+    conn.send(b"0\r\n\r\n")
+    if sock and getattr(conn, "_rhea_read_timeout", None) is not None:
+        sock.settimeout(getattr(conn, "_rhea_read_timeout"))
+    return conn.getresponse()
+
+
+def transfer_dag(cid: str, config: ExportConfig, shutdown: ShutdownController) -> TransferResult:
+    result = TransferResult(cid, started_at=time.monotonic())
+    q: queue.Queue[object] = queue.Queue(maxsize=config.max_chunks)
+    producer = threading.Thread(target=_producer, args=(cid, config, shutdown, q, result), name=f"dag-export-{cid}", daemon=True)
+    producer.start()
+    conn = None
+    try:
+        boundary = "codex-" + secrets.token_hex(16)
+        conn = _connection(config.destination, config.connect_timeout); shutdown.add_closer(conn)
+        path = _path(config.destination, "/api/v0/dag/import", {"pin-roots": "false", "allow-big-block": "true"})
+        conn.putrequest("POST", path); conn.putheader("Host", "localhost"); conn.putheader("Connection", "close")
+        conn.putheader("Content-Type", f"multipart/form-data; boundary={boundary}"); conn.putheader("Transfer-Encoding", "chunked"); conn.endheaders()
+        setattr(conn, "_rhea_read_timeout", config.read_timeout)
+        resp = _send_chunked(conn, _multipart_chunks(q, boundary, shutdown, result), config.write_timeout)
+        if resp.status < 200 or resp.status >= 300:
+            raise ExporterError(f"destination {config.destination.display()} HTTP {resp.status}: {_read_error_body(resp)}")
+        _read_error_body(resp)  # bounded success drain (usually tiny JSON)
+        log(f"Destination import completed for {cid}: {result.bytes_uploaded} bytes")
+    except BaseException:
+        shutdown.event.set(); shutdown.close_active(); raise
+    finally:
+        if conn:
+            try: conn.close()
+            except Exception: pass
+        producer.join(timeout=config.terminate_timeout)
+        if producer.is_alive():
+            raise ExporterError("producer thread did not terminate")
+        result.finished_at = time.monotonic()
+    if result.bytes_exported != result.bytes_uploaded:
+        raise ExporterError(f"forwarded byte count mismatch for {cid}: exported {result.bytes_exported}, uploaded {result.bytes_uploaded}")
+    return result
+
+
+def acquire_lock_interruptibly(lock_fd: int, config: ExportConfig, shutdown: ShutdownController) -> None:
+    log(f"Waiting for export lock {config.lock_path}")
+    while not shutdown.event.is_set():
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB); log(f"Acquired export lock {config.lock_path}"); return
         except BlockingIOError:
-            if sup.wait(config.lock_poll_interval): break
-    raise ShutdownRequested(sup.signum or signal.SIGTERM)
+            shutdown.wait(config.lock_poll_interval)
+    raise ShutdownRequested(shutdown.signum or signal.SIGTERM)
 
 
 def process_cid(cid: str, config: ExportConfig | None = None) -> int:
     config = config or ExportConfig.from_env()
     config.lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with Supervisor(config) as sup:
-        with open(config.lock_path, "a+b", buffering=0) as lock_file:
-            os.set_inheritable(lock_file.fileno(), False)
-            acquire_lock_interruptibly(lock_file.fileno(), config, sup)
-            while not sup.shutdown.is_set():
-                log(f"Exporting {cid} from laptop and importing to rhea")
-                try: status = run_pipeline_once(cid, config, sup)
-                except ShutdownRequested as exc: return 128 + exc.signum
-                if status == 0:
-                    log(f"Done {cid}"); return 0
-                log(f"Failed {cid}; retrying in {config.retry_delay:g} seconds")
-                sleep_proc = _popen(["sleep", str(config.retry_delay)])
-                sup.sleep_proc = sleep_proc
-                try:
-                    sleep_proc.wait()
-                except ShutdownRequested:
-                    if sleep_proc.poll() is None:
-                        sleep_proc.terminate()
-                        try: sleep_proc.wait(timeout=1)
-                        except subprocess.TimeoutExpired:
-                            sleep_proc.kill(); sleep_proc.wait()
-                    return 128 + (sup.signum or signal.SIGTERM)
-                finally:
-                    if sup.sleep_proc is sleep_proc:
-                        sup.sleep_proc = None
-                if sup.shutdown.is_set(): break
-            return 128 + (sup.signum or signal.SIGTERM)
+    with ShutdownController() as shutdown:
+        try:
+            with open(config.lock_path, "a+b", buffering=0) as lock_file:
+                os.set_inheritable(lock_file.fileno(), False)
+                acquire_lock_interruptibly(lock_file.fileno(), config, shutdown)
+                attempt = 0
+                while not shutdown.event.is_set():
+                    attempt += 1
+                    log(f"Attempt {attempt}: transferring {cid} from {config.source.display()} to {config.destination.display()} with chunks={config.chunk_size} buffer={config.buffer_size}")
+                    try:
+                        if config.hook:
+                            import subprocess
+                            proc = subprocess.Popen([config.hook, cid], start_new_session=True, close_fds=True)
+                            try: rc = proc.wait()
+                            except ShutdownRequested: proc.terminate(); raise
+                            if rc != 0: raise ExporterError(f"hook exited with status {rc}")
+                        else:
+                            res = transfer_dag(cid, config, shutdown)
+                            log(f"Done {cid}: exported/uploaded {res.bytes_exported} bytes; max queue depth {res.maximum_queue_depth}")
+                        return 0
+                    except ShutdownRequested as exc:
+                        return 128 + exc.signum
+                    except BaseException as exc:
+                        if shutdown.event.is_set(): return 128 + (shutdown.signum or signal.SIGTERM)
+                        log(f"Exporter failed for {cid} on attempt {attempt}: {exc}")
+                        log(f"Retrying {cid} in {config.retry_delay:g} seconds")
+                        if shutdown.wait(config.retry_delay): break
+                return 128 + (shutdown.signum or signal.SIGTERM)
+        except ShutdownRequested as exc:
+            return 128 + exc.signum
+
+
+def _ensure_fifo(path: Path) -> None:
+    if path.exists() and not stat.S_ISFIFO(path.stat().st_mode):
+        raise ExporterError(f"{path} exists but is not a FIFO")
+    if not path.exists(): os.mkfifo(path)
 
 
 def run_fifo_worker(queue_path: Path = Path(QUEUE_PATH), config: ExportConfig | None = None) -> int:
-    config = config or ExportConfig.from_env()
-    if queue_path.exists() and not stat.S_ISFIFO(queue_path.stat().st_mode):
-        print(f"{queue_path} exists but is not a FIFO", file=sys.stderr); return 1
-    if not queue_path.exists(): os.mkfifo(queue_path)
-    with Supervisor(config) as sup:
+    config = config or ExportConfig.from_env(); _ensure_fifo(queue_path)
+    with ShutdownController() as shutdown:
         log(f"Waiting for CIDs on {queue_path}")
-        while not sup.shutdown.is_set():
-            try:
-                with open(queue_path, "r") as fifo:
-                    for line in fifo:
-                        if sup.shutdown.is_set(): break
-                        cid = line.strip()
-                        if cid: 
-                            rc = process_cid(cid, config)
-                            if rc in (130,143): return rc
-            except ShutdownRequested as exc:
-                return 128 + exc.signum
-    return 128 + (sup.signum or signal.SIGTERM)
+        fd = os.open(queue_path, os.O_RDONLY | os.O_NONBLOCK)
+        try:
+            buf = b""
+            while not shutdown.event.is_set():
+                import select
+                r, _, _ = select.select([fd], [], [], config.lock_poll_interval)
+                if not r: continue
+                data = os.read(fd, 4096)
+                if not data:
+                    os.close(fd); fd = os.open(queue_path, os.O_RDONLY | os.O_NONBLOCK); continue
+                buf += data
+                while b"\n" in buf and not shutdown.event.is_set():
+                    raw, buf = buf.split(b"\n", 1); cid = raw.decode("utf-8", "replace").strip()
+                    if not cid: continue
+                    override = os.environ.get("RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC")
+                    if override:
+                        import subprocess
+                        while not shutdown.event.is_set():
+                            proc = subprocess.Popen([override, cid], start_new_session=True, close_fds=True)
+                            try:
+                                rc = proc.wait()
+                            except ShutdownRequested as exc:
+                                try: os.killpg(proc.pid, signal.SIGTERM)
+                                except ProcessLookupError: pass
+                                return 128 + exc.signum
+                            if rc == 0: break
+                            log(f"Exporter failed for {cid} with status {rc}")
+                            log(f"Retrying {cid} in {config.retry_delay:g} seconds")
+                            if shutdown.wait(config.retry_delay): return 128 + (shutdown.signum or signal.SIGTERM)
+                    else:
+                        rc = process_cid(cid, config)
+                        if rc in (130, 143): return rc
+        except ShutdownRequested as exc:
+            return 128 + exc.signum
+        finally:
+            try: os.close(fd)
+            except OSError: pass
+    return 128 + (shutdown.signum or signal.SIGTERM)
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) == 1 and argv[0] not in {"-h", "--help", "export", "fifo-worker"}:
-        try:
-            return process_cid(argv[0])
-        except ShutdownRequested as exc:
-            return 128 + exc.signum
-        except Exception as exc:
-            print(f"Error: {exc}", file=sys.stderr); return 1
+        return process_cid(argv[0])
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
     ex = sub.add_parser("export"); ex.add_argument("cid")
     fw = sub.add_parser("fifo-worker"); fw.add_argument("--queue", default=QUEUE_PATH)
     ns = p.parse_args(argv)
     try:
-        if ns.cmd == "fifo-worker": return run_fifo_worker(Path(ns.queue))
-        return process_cid(ns.cid)
-    except ShutdownRequested as exc:
-        return 128 + exc.signum
+        return run_fifo_worker(Path(ns.queue)) if ns.cmd == "fifo-worker" else process_cid(ns.cid)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr); return 1
 
