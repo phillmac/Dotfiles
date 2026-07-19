@@ -359,6 +359,26 @@ class KuboClient:
                     for child in descendants
                     if child.is_file() and (dereference_symlinks or not child.is_symlink())
                 ]
+                preserve_metadata = preserve_mode or preserve_mtime
+                directory_parts: list[tuple[Path, str]] = []
+                if preserve_metadata:
+                    directory_parts.append((root, root.name))
+                for child in descendants:
+                    if child.is_dir() and (dereference_symlinks or not child.is_symlink()):
+                        has_files_beneath = any(file.is_relative_to(child) for file in files)
+                        if preserve_metadata or not has_files_beneath:
+                            directory_parts.append((child, KuboClient._multipart_relative_name(root, child)))
+                if not files and not descendants and not preserve_metadata:
+                    directory_parts.append((root, root.name))
+                for directory, rel in directory_parts:
+                    field, metadata_headers = KuboClient._multipart_field_name(
+                        "file",
+                        directory,
+                        preserve_mode,
+                        preserve_mtime,
+                        follow_symlinks=dereference_symlinks,
+                    )
+                    fields.append((field, rel, io.BytesIO(), "application/x-directory", None, metadata_headers))
                 for child in files:
                     rel = KuboClient._multipart_relative_name(root, child)
                     handle = _LazyFile(child)
@@ -391,26 +411,6 @@ class KuboClient:
                             None,
                             metadata_headers,
                         ))
-                preserve_metadata = preserve_mode or preserve_mtime
-                directory_parts: list[tuple[Path, str]] = []
-                if preserve_metadata:
-                    directory_parts.append((root, root.name))
-                for child in descendants:
-                    if child.is_dir() and (dereference_symlinks or not child.is_symlink()):
-                        has_files_beneath = any(file.is_relative_to(child) for file in files)
-                        if preserve_metadata or not has_files_beneath:
-                            directory_parts.append((child, KuboClient._multipart_relative_name(root, child)))
-                if not files and not descendants and not preserve_metadata:
-                    directory_parts.append((root, root.name))
-                for directory, rel in directory_parts:
-                    field, metadata_headers = KuboClient._multipart_field_name(
-                        "file",
-                        directory,
-                        preserve_mode,
-                        preserve_mtime,
-                        follow_symlinks=dereference_symlinks,
-                    )
-                    fields.append((field, rel, io.BytesIO(), "application/x-directory", None, metadata_headers))
             else:
                 handle = _LazyFile(root)
                 field, metadata_headers = KuboClient._multipart_field_name(

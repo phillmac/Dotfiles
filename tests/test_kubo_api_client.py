@@ -270,6 +270,25 @@ class KuboClientParsingTests(unittest.TestCase):
                 for handle in opened:
                     handle.close()
 
+    def test_multipart_paths_emits_preserved_directories_before_descendants(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            subdir = root / "subdir"
+            subdir.mkdir(parents=True)
+            (subdir / "file.txt").write_text("content", encoding="utf-8")
+
+            fields, opened = KuboClient._multipart_paths(
+                [root], preserve_mode=True, preserve_mtime=True
+            )
+
+            try:
+                filenames = [filename for _field, filename, _handle, _content_type, _abspath, _headers in fields]
+                self.assertLess(filenames.index("root"), filenames.index("root/subdir"))
+                self.assertLess(filenames.index("root/subdir"), filenames.index("root/subdir/file.txt"))
+            finally:
+                for handle in opened:
+                    handle.close()
+
     def test_multipart_paths_preserves_symlinks_without_dereferencing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / "root"
