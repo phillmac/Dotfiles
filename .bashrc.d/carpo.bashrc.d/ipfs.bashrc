@@ -126,7 +126,15 @@ function rhea.export.laptop.dag ()
 function rhea.wasabi.pebble.export.laptop.dag ()
 {
     local queue="rhea.wasabi.pebble.export.laptop.dag.queue"
-    local exporter="${RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC:-rhea-wasabi-pebble-export-laptop-dag-sync}"
+    local script_dir
+    script_dir="$(
+        cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" &&
+        pwd
+    )" || return 1
+    local exporter="${RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC:-${script_dir}/rhea-wasabi-pebble-export-laptop-dag-sync}"
+    local shutting_down=0
+    trap 'shutting_down=1; return 130' INT
+    trap 'shutting_down=1; return 143' TERM
 
     if [[ -e "$queue" && ! -p "$queue" ]]
     then
@@ -139,10 +147,11 @@ function rhea.wasabi.pebble.export.laptop.dag ()
         mkfifo -- "$queue" || return 1
     fi
 
-    command -v "$exporter" >/dev/null 2>&1 || {
-        echo "${exporter} is not installed or not in PATH" >&2
+    if [[ ! -x "$exporter" ]]
+    then
+        echo "Resolved synchronous exporter is not executable: ${exporter}" >&2
         return 1
-    }
+    fi
 
     echo "$(date) - Waiting for CIDs on ${queue}"
 
@@ -154,7 +163,23 @@ function rhea.wasabi.pebble.export.laptop.dag ()
         while IFS= read -r cid
         do
             [[ -n "$cid" ]] || continue
-            "$exporter" "$cid"
+            while (( shutting_down == 0 ))
+            do
+                "$exporter" "$cid"
+                status=$?
+                if (( status == 0 ))
+                then
+                    break
+                fi
+                if (( shutting_down != 0 ))
+                then
+                    return "$status"
+                fi
+                retry_delay="${IPFS_DAG_RETRY_DELAY:-300}"
+                echo "$(date) - Exporter failed for ${cid} with status ${status}" >&2
+                echo "$(date) - Retrying ${cid} in ${retry_delay} seconds" >&2
+                sleep "$retry_delay" || return "$status"
+            done
         done < "$queue"
     done
 }

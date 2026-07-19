@@ -50,7 +50,7 @@ without changing the client.
 
 Two workflows are supported for exporting a child DAG from the laptop IPFS API
 and importing it into the Rhea IPFS API. Both workflows use the same synchronous
-exporter executable, `rhea-wasabi-pebble-export-laptop-dag-sync`, and therefore
+exporter executable, `.bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync`, and therefore
 share the same `flock` lock. Queue-triggered exports and direct pin-recovery
 exports can run at the same time, but only one Docker/`mbuffer` export/import
 pipeline runs at once.
@@ -80,7 +80,7 @@ pin. The Python workflow does not communicate through the FIFO.
 ```sh
 ./pin_with_export_retry.py ROOT_CID \
     --api http://127.0.0.1:5001 \
-    --export-command /path/to/rhea-wasabi-pebble-export-laptop-dag-sync \
+    --export-command .bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync \
     --verbose
 ```
 
@@ -91,5 +91,16 @@ Useful options:
 - `--timeout SECONDS` applies only to Kubo API calls.
 - `--export-timeout SECONDS` limits the synchronous exporter; the default is no
   exporter timeout so large DAG exports can complete.
+- `--export-command PATH` defaults to the exporter under the sourced dotfiles
+  tree: `.bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync`.
+  The FIFO worker resolves the same default relative to `ipfs.bashrc`, so the
+  normal dotfiles symlink/source installation does not need the repository root
+  in `PATH`.
+- `RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC` overrides the FIFO worker's
+  exporter path.
+- `IPFS_LAPTOP_API_SOCKET`, `RHEA_IPFS_WASABI_SOCKET`,
+  `LAPTOP_IPFS_CLI_IMAGE`, `RHEA_IPFS_CLI_IMAGE`, and `IPFS_DAG_RETRY_DELAY`
+  keep their exporter meanings for sockets, Docker images, and internal retry
+  backoff.
 - `IPFS_DAG_EXPORT_LOCK` overrides the shared lock path. By default it is
   `${HOME}/.var/run/rhea-wasabi-pebble-export-laptop-dag.lock`.

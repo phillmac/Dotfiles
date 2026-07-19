@@ -1,6 +1,7 @@
 import io
 import os
 import subprocess
+import signal
 import time
 from pathlib import Path, PureWindowsPath
 import tempfile
@@ -748,15 +749,77 @@ class PinWithExportRetryTests(unittest.TestCase):
         import pin_with_export_retry
 
         with mock.patch.object(pin_with_export_retry.subprocess, "Popen") as popen, \
-             mock.patch.object(pin_with_export_retry, "_kill_process_group") as kill_group:
+             mock.patch.object(pin_with_export_retry, "_terminate_process_group") as kill_group:
             process = popen.return_value
             process.wait.side_effect = subprocess.TimeoutExpired(["/tmp/exporter"], 1)
             process.pid = 12345
+            process.poll.return_value = None
             with self.assertRaises(pin_with_export_retry.ExportFailed) as cm:
                 pin_with_export_retry.export_missing_cid("Qmabc", "/tmp/exporter", timeout=1)
 
-        kill_group.assert_called_once_with(process)
+        kill_group.assert_called_once_with(process, signal.SIGTERM)
         self.assertIn("timeout after 1 seconds", cm.exception.failure.status)
+
+
+    def test_default_exporter_path_is_under_bashrc_tree(self):
+        import pin_with_export_retry
+
+        self.assertEqual(
+            Path(pin_with_export_retry.DEFAULT_EXPORT_COMMAND),
+            Path("pin_with_export_retry.py").resolve().parent / ".bashrc.d" / "carpo.bashrc.d" / "rhea-wasabi-pebble-export-laptop-dag-sync",
+        )
+        self.assertTrue(Path(pin_with_export_retry.DEFAULT_EXPORT_COMMAND).is_file())
+
+    def test_exporter_launch_file_not_found_is_structured(self):
+        import pin_with_export_retry
+
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen", side_effect=FileNotFoundError(2, "No such file or directory")):
+            with self.assertRaises(pin_with_export_retry.ExportFailed) as cm:
+                pin_with_export_retry.export_missing_cid("Qmabc", "/missing/exporter")
+        self.assertIn("could not start exporter", cm.exception.failure.status)
+        self.assertIn("No synchronous export/import was performed", cm.exception.failure.message)
+
+    def test_exporter_launch_permission_error_is_structured(self):
+        import pin_with_export_retry
+
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen", side_effect=PermissionError(13, "Permission denied")):
+            with self.assertRaises(pin_with_export_retry.ExportFailed) as cm:
+                pin_with_export_retry.export_missing_cid("Qmabc", "/tmp/exporter")
+        self.assertIn("Permission denied", cm.exception.failure.status)
+
+    def test_pin_is_not_retried_after_launch_failure(self):
+        from kubo_api_client import KuboError, PinResult
+        import pin_with_export_retry
+
+        client = mock.Mock()
+        client.pin_add.return_value = PinResult([], [], None, [KuboError("ipld: could not find Qmabc")], [])
+        with mock.patch.object(pin_with_export_retry, "KuboClient", return_value=client), \
+             mock.patch.object(pin_with_export_retry.subprocess, "Popen", side_effect=FileNotFoundError(2, "No such file or directory")):
+            result = pin_with_export_retry.pin_with_export_retry("Qmroot", export_command="/missing/exporter")
+        self.assertEqual(client.pin_add.call_count, 1)
+        self.assertIn("could not start exporter", result.errors[-1].message)
+
+    def test_signal_handlers_restored_after_success(self):
+        import pin_with_export_retry
+
+        old_int = signal.getsignal(signal.SIGINT)
+        old_term = signal.getsignal(signal.SIGTERM)
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen") as popen:
+            popen.return_value.wait.return_value = 0
+            pin_with_export_retry.export_missing_cid("Qmabc", "/tmp/exporter")
+        self.assertIs(signal.getsignal(signal.SIGINT), old_int)
+        self.assertIs(signal.getsignal(signal.SIGTERM), old_term)
+
+    def test_sigkill_escalation_when_cleanup_times_out(self):
+        import pin_with_export_retry
+
+        process = mock.Mock()
+        process.pid = 123
+        process.wait.side_effect = [subprocess.TimeoutExpired(["cmd"], 5), 0]
+        with mock.patch.object(pin_with_export_retry.os, "killpg") as killpg:
+            pin_with_export_retry._terminate_process_group(process, signal.SIGTERM, wait_timeout=0.01)
+        self.assertEqual(killpg.call_args_list[0].args, (123, signal.SIGTERM))
+        self.assertEqual(killpg.call_args_list[1].args, (123, signal.SIGKILL))
 
     def test_no_fifo_or_socket_write_occurs_in_python_workflow(self):
         from kubo_api_client import KuboError, PinResult
@@ -783,8 +846,23 @@ class PinWithExportRetryTests(unittest.TestCase):
         self.assertIn('local queue="rhea.wasabi.pebble.export.laptop.dag.queue"', text)
         self.assertIn('"$exporter" "$cid"', text)
 
+
+    def test_fifo_consumer_retries_current_cid_before_next(self):
+        text = Path(".bashrc.d/carpo.bashrc.d/ipfs.bashrc").read_text(encoding="utf-8")
+        self.assertIn('while (( shutting_down == 0 ))', text)
+        self.assertIn('"$exporter" "$cid"', text)
+        self.assertIn('status=$?', text)
+        self.assertIn('Exporter failed for ${cid} with status ${status}', text)
+        self.assertLess(text.index('while (( shutting_down == 0 ))'), text.index('done < "$queue"'))
+
+    def test_fifo_consumer_resolves_default_exporter_without_path_and_override_remains(self):
+        text = Path(".bashrc.d/carpo.bashrc.d/ipfs.bashrc").read_text(encoding="utf-8")
+        self.assertIn('dirname -- "${BASH_SOURCE[0]}"', text)
+        self.assertIn('RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC:-${script_dir}/rhea-wasabi-pebble-export-laptop-dag-sync', text)
+        self.assertIn('[[ ! -x "$exporter" ]]', text)
+
     def test_direct_and_fifo_paths_use_same_lock_and_flock_serializes(self):
-        script = Path("rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
+        script = Path(".bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             hook = tmp / "hook.sh"

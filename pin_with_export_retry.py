@@ -8,12 +8,13 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
 from kubo_api_client import KuboClient, KuboError, PinResult
 
-DEFAULT_EXPORT_COMMAND = str(Path(__file__).resolve().parent / "rhea-wasabi-pebble-export-laptop-dag-sync")
+DEFAULT_EXPORT_COMMAND = str(Path(__file__).resolve().parent / ".bashrc.d" / "carpo.bashrc.d" / "rhea-wasabi-pebble-export-laptop-dag-sync")
 _MISSING_BLOCK_RE = re.compile(r"(?:could not find|not found locally).*?((?:Qm[1-9A-HJ-NP-Za-km-z]+)|(?:ba[a-z2-7]+))", re.IGNORECASE)
 
 
@@ -50,13 +51,13 @@ def missing_block_cid_from_error(error: KuboError) -> str | None:
     return match.group(1) if match else None
 
 
-def _kill_process_group(process: subprocess.Popen[object]) -> None:
+def _terminate_process_group(process: subprocess.Popen[object], signum: int = signal.SIGTERM, *, wait_timeout: float = 5) -> None:
     try:
-        os.killpg(process.pid, signal.SIGTERM)
+        os.killpg(process.pid, signum)
     except ProcessLookupError:
         return
     try:
-        process.wait(timeout=5)
+        process.wait(timeout=wait_timeout)
     except subprocess.TimeoutExpired:
         try:
             os.killpg(process.pid, signal.SIGKILL)
@@ -65,14 +66,62 @@ def _kill_process_group(process: subprocess.Popen[object]) -> None:
         process.wait()
 
 
+_kill_process_group = _terminate_process_group
+
+
+def _structured_start_failure(missing_cid: str, command: str, exc: OSError) -> ExportFailed:
+    failure = ExportFailure(
+        missing_cid,
+        command,
+        f"could not start exporter: {exc}",
+        "No synchronous export/import was performed.",
+    )
+    return ExportFailed(failure)
+
+
 def export_missing_cid(missing_cid: str, export_command: str | Path = DEFAULT_EXPORT_COMMAND, *, timeout: float | None = None) -> None:
     command = str(export_command)
-    process = subprocess.Popen([command, missing_cid], start_new_session=True)
     try:
-        returncode = process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
-        _kill_process_group(process)
-        raise ExportFailed(ExportFailure(missing_cid, command, f"timeout after {timeout} seconds", "The synchronous exporter did not finish before the configured timeout.")) from exc
+        process = subprocess.Popen([command, missing_cid], start_new_session=True)
+    except OSError as exc:
+        raise _structured_start_failure(missing_cid, command, exc) from exc
+
+    installed_handlers: dict[int, object] = {}
+    received_signal: int | None = None
+
+    def cleanup(signum: int = signal.SIGTERM) -> None:
+        if process.poll() is None:
+            _terminate_process_group(process, signum)
+
+    def handler(signum: int, frame: object) -> None:
+        nonlocal received_signal
+        received_signal = signum
+        cleanup(signum)
+
+    can_install_handlers = threading.current_thread() is threading.main_thread()
+    if can_install_handlers:
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            installed_handlers[signum] = signal.getsignal(signum)
+            signal.signal(signum, handler)
+
+    try:
+        try:
+            returncode = process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            cleanup(signal.SIGTERM)
+            raise ExportFailed(ExportFailure(missing_cid, command, f"timeout after {timeout} seconds", "The synchronous exporter did not finish before the configured timeout.")) from exc
+        except BaseException:
+            cleanup(signal.SIGTERM)
+            raise
+    finally:
+        if can_install_handlers:
+            for signum, previous in installed_handlers.items():
+                signal.signal(signum, previous)
+
+    if received_signal is not None:
+        if received_signal == signal.SIGINT:
+            raise KeyboardInterrupt
+        raise SystemExit(128 + received_signal)
 
     if returncode != 0:
         if returncode < 0:
@@ -80,7 +129,6 @@ def export_missing_cid(missing_cid: str, export_command: str | Path = DEFAULT_EX
         else:
             status = f"exit status {returncode}"
         raise ExportFailed(ExportFailure(missing_cid, command, status, "The synchronous export/import command returned failure."))
-
 
 def pin_with_export_retry(
     cid: str,
