@@ -11,7 +11,7 @@ from pathlib import Path
 
 from kubo_api_client import KuboClient, KuboError, PinResult
 
-_MISSING_BLOCK_RE = re.compile(r"(?:could not find|not found locally).*?((?:Qm[^\s:]+)|(?:ba[a-z2-7]+))", re.IGNORECASE)
+_MISSING_BLOCK_RE = re.compile(r"(?:could not find|not found locally).*?((?:Qm[1-9A-HJ-NP-Za-km-z]+)|(?:ba[a-z2-7]+))", re.IGNORECASE)
 
 
 def missing_block_cid(result: PinResult) -> str | None:

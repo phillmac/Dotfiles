@@ -666,6 +666,19 @@ class PinWithExportQueueTests(unittest.TestCase):
             "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kxyz",
         )
 
+    def test_missing_block_cid_from_error_stops_qm_cid_at_quote(self):
+        from kubo_api_client import KuboError
+        from pin_with_export_queue import missing_block_cid_from_error
+
+        error = KuboError(
+            'pin: block was not found locally (offline): ipld: could not find "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kxyz"'
+        )
+
+        self.assertEqual(
+            missing_block_cid_from_error(error),
+            "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kxyz",
+        )
+
     def test_pin_with_export_queue_enqueues_missing_blocks_and_retries(self):
         from kubo_api_client import KuboError, PinResult
         import pin_with_export_queue
