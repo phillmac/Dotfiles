@@ -236,6 +236,40 @@ class KuboClientParsingTests(unittest.TestCase):
                 for handle in opened:
                     handle.close()
 
+
+    def test_multipart_paths_embeds_metadata_for_non_empty_directories(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "root"
+            subdir = root / "subdir"
+            subdir.mkdir(parents=True)
+            (subdir / "file.txt").write_text("content", encoding="utf-8")
+            root.chmod(0o751)
+            subdir.chmod(0o750)
+            os.utime(root, ns=(1_700_000_020_000_000_000, 1_700_000_021_111_222_333))
+            os.utime(subdir, ns=(1_700_000_030_000_000_000, 1_700_000_031_444_555_666))
+
+            fields, opened = KuboClient._multipart_paths(
+                [root], preserve_mode=True, preserve_mtime=True
+            )
+
+            try:
+                directory_parts = {
+                    filename: headers
+                    for _field, filename, _handle, content_type, _abspath, headers in fields
+                    if content_type == "application/x-directory"
+                }
+                self.assertIn("root", directory_parts)
+                self.assertIn("root/subdir", directory_parts)
+                self.assertEqual(directory_parts["root"]["mode"], "751")
+                self.assertEqual(directory_parts["root"]["mtime"], "1700000021")
+                self.assertEqual(directory_parts["root"]["mtime-nsecs"], "111222333")
+                self.assertEqual(directory_parts["root/subdir"]["mode"], "750")
+                self.assertEqual(directory_parts["root/subdir"]["mtime"], "1700000031")
+                self.assertEqual(directory_parts["root/subdir"]["mtime-nsecs"], "444555666")
+            finally:
+                for handle in opened:
+                    handle.close()
+
     def test_multipart_paths_preserves_symlinks_without_dereferencing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir) / "root"
