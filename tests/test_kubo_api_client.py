@@ -167,7 +167,7 @@ class KuboClientParsingTests(unittest.TestCase):
                 for handle in opened:
                     handle.close()
 
-    def test_multipart_paths_emits_preserved_mode_and_mtime_part_headers(self):
+    def test_multipart_paths_embeds_preserved_mode_and_mtime_in_part_name(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir) / "script.sh"
             file_path.write_text("#!/bin/sh\n", encoding="utf-8")
@@ -187,22 +187,19 @@ class KuboClientParsingTests(unittest.TestCase):
                 self.assertEqual(content_type, "text/x-sh")
                 self.assertIsNone(abspath)
                 self.assertEqual(handle.read(), b"#!/bin/sh\n")
-                self.assertEqual(field, "file")
-                self.assertEqual(headers["mode"], "754")
-                self.assertEqual(headers["mtime"], "1700000001")
-                self.assertEqual(headers["mtime-nsecs"], "987654321")
+                self.assertEqual(field, "file?mode=754&mtime=1700000001&mtime-nsecs=987654321")
+                self.assertEqual(headers, {})
 
                 body, _content_type = KuboClient._encode_multipart(fields)
                 header = next(
                     part for part in body if part.startswith(b"Content-Disposition")
                 )
-                self.assertIn(b'name="file"', header)
-                self.assertNotIn(b"mode=754", header)
+                self.assertIn(b'name="file?mode=754&mtime=1700000001&mtime-nsecs=987654321"', header)
 
                 part = b"".join(body)
-                self.assertIn(b"mode: 754\r\n", part)
-                self.assertIn(b"mtime: 1700000001\r\n", part)
-                self.assertIn(b"mtime-nsecs: 987654321\r\n", part)
+                self.assertNotIn(b"mode: 754\r\n", part)
+                self.assertNotIn(b"mtime: 1700000001\r\n", part)
+                self.assertNotIn(b"mtime-nsecs: 987654321\r\n", part)
             finally:
                 for handle in opened:
                     handle.close()
@@ -228,10 +225,8 @@ class KuboClientParsingTests(unittest.TestCase):
                     for field, filename, _handle, content_type, _abspath, headers in fields
                     if filename == "root/empty" and content_type == "application/x-directory"
                 )
-                self.assertEqual(directory_field, "file")
-                self.assertEqual(directory_headers["mode"], "750")
-                self.assertEqual(directory_headers["mtime"], "1700000011")
-                self.assertEqual(directory_headers["mtime-nsecs"], "222333444")
+                self.assertEqual(directory_field, "file?mode=750&mtime=1700000011&mtime-nsecs=222333444")
+                self.assertEqual(directory_headers, {})
             finally:
                 for handle in opened:
                     handle.close()
@@ -254,18 +249,14 @@ class KuboClientParsingTests(unittest.TestCase):
 
             try:
                 directory_parts = {
-                    filename: headers
-                    for _field, filename, _handle, content_type, _abspath, headers in fields
+                    filename: field
+                    for field, filename, _handle, content_type, _abspath, _headers in fields
                     if content_type == "application/x-directory"
                 }
                 self.assertIn("root", directory_parts)
                 self.assertIn("root/subdir", directory_parts)
-                self.assertEqual(directory_parts["root"]["mode"], "751")
-                self.assertEqual(directory_parts["root"]["mtime"], "1700000021")
-                self.assertEqual(directory_parts["root"]["mtime-nsecs"], "111222333")
-                self.assertEqual(directory_parts["root/subdir"]["mode"], "750")
-                self.assertEqual(directory_parts["root/subdir"]["mtime"], "1700000031")
-                self.assertEqual(directory_parts["root/subdir"]["mtime-nsecs"], "444555666")
+                self.assertEqual(directory_parts["root"], "file?mode=751&mtime=1700000021&mtime-nsecs=111222333")
+                self.assertEqual(directory_parts["root/subdir"], "file?mode=750&mtime=1700000031&mtime-nsecs=444555666")
             finally:
                 for handle in opened:
                     handle.close()

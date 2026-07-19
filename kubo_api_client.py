@@ -451,14 +451,16 @@ class KuboClient:
         except OSError:
             return name, {}
 
-        headers: dict[str, str] = {}
+        params: list[tuple[str, str]] = []
         if preserve_mode:
-            headers["mode"] = format(stat.S_IMODE(metadata.st_mode), "o")
+            params.append(("mode", format(stat.S_IMODE(metadata.st_mode), "o")))
         if preserve_mtime:
             mtime_ns = metadata.st_mtime_ns
-            headers["mtime"] = str(mtime_ns // 1_000_000_000)
-            headers["mtime-nsecs"] = str(mtime_ns % 1_000_000_000)
-        return name, headers
+            params.extend((
+                ("mtime", str(mtime_ns // 1_000_000_000)),
+                ("mtime-nsecs", str(mtime_ns % 1_000_000_000)),
+            ))
+        return f"{name}?{urllib.parse.urlencode(params)}", {}
 
     @staticmethod
     def _directory_descendants(root: Path, dereference_symlinks: bool, hidden: bool) -> list[Path]:
@@ -564,8 +566,6 @@ class _MultipartStream:
             yield f"Content-Type: {content_type}\r\n".encode()
             if abspath is not None:
                 yield f"Abspath: {abspath}\r\n".encode()
-            for name, value in metadata_headers.items():
-                yield f"{name}: {value}\r\n".encode()
             yield b"\r\n"
             try:
                 while True:
