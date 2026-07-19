@@ -115,8 +115,18 @@ Signal and retry behaviour:
   semantics instead of becoming ordinary pin failures.
 - The synchronous Bash exporter owns the shared `flock`, signal traps, active
   pipeline PID, and active pipeline process-group ID in the same Bash process.
-  Signalling the exporter PID terminates the dedicated pipeline process group and
-  prevents another internal retry from starting during shutdown.
+  The exporter keeps the lock descriptor private: active test hooks and the real
+  Docker/`mbuffer` pipeline close FD 9 before running, so surviving pipeline
+  children cannot keep the shared lock held after the exporter exits.
+- Active pipeline cleanup is bounded. Shutdown first sends SIGTERM to the
+  dedicated pipeline process group, waits up to
+  `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT` seconds (default `5`), escalates to
+  SIGKILL if the group remains, reaps the tracked child, and logs the cleanup
+  steps to stderr.
+- Signalling only the Bash exporter PID interrupts lock acquisition polling,
+  active pipeline execution, and internal retry delays. The exporter does not
+  start another export attempt after shutdown begins, and the lock is released
+  after success, ordinary failure, SIGINT, SIGTERM, and forced cleanup.
 - The FIFO worker runs in a subshell, so its INT/TERM traps are scoped to the
   worker and do not alter the calling interactive shell. If the exporter fails for
   a queued CID, the worker logs the original status and retries that same CID

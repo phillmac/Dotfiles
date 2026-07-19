@@ -3,26 +3,108 @@ set -u
 _shutdown_requested=0
 _active_pipeline=
 _active_pipeline_pgid=
+_wait_child=
+_retry_sleep_pid=
+_signal_exit_status=143
 
 log() { printf '%s - %s\n' "$(date)" "$*" >&2; }
 
 terminate_active_pipeline() {
-    local sig="${1:-TERM}"
+    local grace="${IPFS_DAG_EXPORT_TERMINATE_TIMEOUT:-5}"
+    local deadline
+
     _shutdown_requested=1
+
+    if [[ -z "${_active_pipeline_pgid:-}" ]]; then
+        return 0
+    fi
+
+    log "Sending SIGTERM to export pipeline process group ${_active_pipeline_pgid}"
+    kill -TERM -- "-${_active_pipeline_pgid}" 2>/dev/null || true
+
+    deadline=$((SECONDS + grace))
+    while kill -0 -- "-${_active_pipeline_pgid}" 2>/dev/null
+    do
+        (( SECONDS >= deadline )) && break
+        sleep 0.1
+    done
+
+    if kill -0 -- "-${_active_pipeline_pgid}" 2>/dev/null
+    then
+        log "Grace period expired for export pipeline process group ${_active_pipeline_pgid}"
+        log "Sending SIGKILL to export pipeline process group ${_active_pipeline_pgid}"
+        kill -KILL -- "-${_active_pipeline_pgid}" 2>/dev/null || true
+    fi
+
+    if [[ -n "${_active_pipeline:-}" ]]
+    then
+        wait "$_active_pipeline" 2>/dev/null || true
+    fi
+
+    log "Export pipeline cleanup completed"
+    _active_pipeline=
+    _active_pipeline_pgid=
+}
+
+request_shutdown() {
+    local status=$1
+    _shutdown_requested=1
+    _signal_exit_status=$status
+
+    if [[ -n "${_wait_child:-}" ]]; then
+        kill "$_wait_child" 2>/dev/null || true
+    fi
+    if [[ -n "${_retry_sleep_pid:-}" ]]; then
+        kill "$_retry_sleep_pid" 2>/dev/null || true
+    fi
     if [[ -n "${_active_pipeline_pgid:-}" ]]; then
-        kill -"$sig" -- "-${_active_pipeline_pgid}" 2>/dev/null || true
+        log "Sending SIGTERM to export pipeline process group ${_active_pipeline_pgid}"
+        kill -TERM -- "-${_active_pipeline_pgid}" 2>/dev/null || true
     elif [[ -n "${_active_pipeline:-}" ]]; then
-        kill -"$sig" "$_active_pipeline" 2>/dev/null || true
+        kill -TERM "$_active_pipeline" 2>/dev/null || true
     fi
 }
 
 shutdown_trap() {
-    local signum=$1
-    terminate_active_pipeline TERM
-    return "$signum"
+    request_shutdown "$1"
 }
 trap 'shutdown_trap 130' INT
 trap 'shutdown_trap 143' TERM
+
+interruptible_sleep() {
+    local duration=$1
+    sleep "$duration" &
+    _retry_sleep_pid=$!
+    wait "$_retry_sleep_pid" 2>/dev/null
+    local status=$?
+    _retry_sleep_pid=
+    if (( _shutdown_requested != 0 )); then
+        return "$_signal_exit_status"
+    fi
+    return "$status"
+}
+
+acquire_export_lock() {
+    local poll_interval="${IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL:-0.1}"
+    local lock_acquired=0
+
+    while (( _shutdown_requested == 0 ))
+    do
+        if flock -n 9
+        then
+            lock_acquired=1
+            break
+        fi
+
+        sleep "$poll_interval" &
+        _wait_child=$!
+        wait "$_wait_child" 2>/dev/null || true
+        _wait_child=
+    done
+
+    (( lock_acquired == 1 )) || return "$_signal_exit_status"
+    return 0
+}
 
 rhea_wasabi_pebble_export_laptop_dag_pipeline() {
     local cid=$1
@@ -54,9 +136,9 @@ run_active_export_attempt() {
     local cid=$1
     local script_path=${BASH_SOURCE[0]}
     if [[ -n "${IPFS_DAG_EXPORT_SYNC_HOOK:-}" ]]; then
-        setsid -- "$IPFS_DAG_EXPORT_SYNC_HOOK" "$cid" &
+        setsid -- "$IPFS_DAG_EXPORT_SYNC_HOOK" "$cid" 9>&- &
     else
-        setsid -- bash -c 'source "$1"; trap - INT TERM; rhea_wasabi_pebble_export_laptop_dag_pipeline "$2"' bash "$script_path" "$cid" &
+        setsid -- bash -c 'exec 9>&-; source "$1"; trap - INT TERM; rhea_wasabi_pebble_export_laptop_dag_pipeline "$2"' bash "$script_path" "$cid" &
     fi
     _active_pipeline=$!
     _active_pipeline_pgid="$(ps -o pgid= -p "$_active_pipeline" 2>/dev/null | tr -d '[:space:]')"
@@ -65,6 +147,10 @@ run_active_export_attempt() {
     fi
     wait "$_active_pipeline"
     local status=$?
+    if (( _shutdown_requested != 0 )); then
+        terminate_active_pipeline
+        return "$_signal_exit_status"
+    fi
     _active_pipeline=
     _active_pipeline_pgid=
     return "$status"
@@ -83,7 +169,7 @@ rhea_wasabi_pebble_export_laptop_dag_sync() {
     mkdir -p -- "$(dirname -- "$lock")" || return 1
 
     exec 9>"$lock" || return 1
-    flock -x 9 || return 1
+    acquire_export_lock || return "$_signal_exit_status"
 
     while (( _shutdown_requested == 0 )); do
         log "Exporting ${cid} from laptop and importing to rhea"
@@ -97,9 +183,9 @@ rhea_wasabi_pebble_export_laptop_dag_sync() {
             return 0
         fi
         log "Failed ${cid}; retrying in ${retry_delay} seconds"
-        sleep "$retry_delay" || return 130
+        interruptible_sleep "$retry_delay" || return "$_signal_exit_status"
     done
-    return 130
+    return "$_signal_exit_status"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

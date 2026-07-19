@@ -986,6 +986,88 @@ class PinWithExportRetryTests(unittest.TestCase):
         self.assertEqual(events[2].split()[0], "start")
         self.assertEqual(events[3].split()[0], "end")
 
+    def test_exporter_child_does_not_inherit_lock_fd_and_lock_releases_on_signal(self):
+        script = Path(".bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            lock = tmp / "shared.lock"
+            marker = tmp / "hook-ready"
+            no_fd9 = tmp / "no-fd9"
+            keepalive = tmp / "keepalive"
+            hook = tmp / "hook.sh"
+            hook.write_text(
+                "#!/usr/bin/env bash\n"
+                "if [[ ! -e /proc/$$/fd/9 ]]; then touch \"$NO_FD9\"; fi\n"
+                "touch \"$MARKER\"\n"
+                "while [[ -e \"$KEEPALIVE\" ]]; do sleep 0.05; done\n",
+                encoding="utf-8",
+            )
+            hook.chmod(0o755)
+            keepalive.touch()
+            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(lock), "MARKER": str(marker), "NO_FD9": str(no_fd9), "KEEPALIVE": str(keepalive), "IPFS_DAG_EXPORT_TERMINATE_TIMEOUT": "1"}
+            proc = subprocess.Popen([str(script), "cid-one"], env=env, stderr=subprocess.DEVNULL)
+            deadline = time.time() + 5
+            while time.time() < deadline and not marker.exists():
+                time.sleep(0.05)
+            self.assertTrue(marker.exists())
+            self.assertTrue(no_fd9.exists())
+            proc.kill()
+            self.assertEqual(proc.wait(timeout=5), -signal.SIGKILL)
+            self.assertTrue(marker.exists())
+            # The deliberately surviving hook must not keep the export lock held.
+            probe = subprocess.run(["flock", "-n", str(lock), "true"], timeout=5)
+            self.assertEqual(probe.returncode, 0)
+            keepalive.unlink()
+
+    def test_signal_while_waiting_for_lock_exits_without_running_hook(self):
+        script = Path(".bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            lock = tmp / "shared.lock"
+            holder_marker = tmp / "holder-ready"
+            waiter_marker = tmp / "waiter-ran"
+            keepalive = tmp / "keepalive"
+            holder = tmp / "holder.sh"
+            waiter = tmp / "waiter.sh"
+            holder.write_text("#!/usr/bin/env bash\ntouch \"$HOLDER_MARKER\"\nwhile [[ -e \"$KEEPALIVE\" ]]; do sleep 0.05; done\n", encoding="utf-8")
+            waiter.write_text("#!/usr/bin/env bash\ntouch \"$WAITER_MARKER\"\n", encoding="utf-8")
+            holder.chmod(0o755); waiter.chmod(0o755); keepalive.touch()
+            env1 = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(holder), "IPFS_DAG_EXPORT_LOCK": str(lock), "HOLDER_MARKER": str(holder_marker), "KEEPALIVE": str(keepalive)}
+            a = subprocess.Popen([str(script), "cid-a"], env=env1, stderr=subprocess.DEVNULL)
+            deadline = time.time() + 5
+            while time.time() < deadline and not holder_marker.exists():
+                time.sleep(0.05)
+            self.assertTrue(holder_marker.exists())
+            env2 = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(waiter), "IPFS_DAG_EXPORT_LOCK": str(lock), "WAITER_MARKER": str(waiter_marker), "IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL": "0.05"}
+            b = subprocess.Popen([str(script), "cid-b"], env=env2, stderr=subprocess.DEVNULL)
+            time.sleep(0.2)
+            b.terminate()
+            self.assertEqual(b.wait(timeout=5), 143)
+            self.assertFalse(waiter_marker.exists())
+            self.assertIsNone(a.poll())
+            keepalive.unlink()
+            self.assertEqual(a.wait(timeout=5), 0)
+
+    def test_signal_during_retry_sleep_exits_promptly_without_next_retry(self):
+        script = Path(".bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            lock = tmp / "shared.lock"
+            count = tmp / "count"
+            hook = tmp / "fail.sh"
+            hook.write_text("#!/usr/bin/env bash\nn=$(( $(cat \"$COUNT\" 2>/dev/null || echo 0) + 1 ))\necho $n > \"$COUNT\"\nexit 7\n", encoding="utf-8")
+            hook.chmod(0o755)
+            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(lock), "IPFS_DAG_RETRY_DELAY": "30", "COUNT": str(count)}
+            proc = subprocess.Popen([str(script), "cid-one"], env=env, stderr=subprocess.DEVNULL)
+            deadline = time.time() + 5
+            while time.time() < deadline and (not count.exists() or count.read_text().strip() != "1"):
+                time.sleep(0.05)
+            self.assertTrue(count.exists())
+            proc.terminate()
+            self.assertEqual(proc.wait(timeout=5), 143)
+            self.assertEqual(count.read_text().strip(), "1")
+            self.assertEqual(subprocess.run(["flock", "-n", str(lock), "true"], timeout=5).returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
