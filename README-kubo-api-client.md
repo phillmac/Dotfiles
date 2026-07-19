@@ -46,32 +46,50 @@ Options are passed through to Kubo after converting underscores to hyphens, so
 `cid_version=1` becomes `cid-version=1` and newer daemon options can be used
 without changing the client.
 
-## Retrying pins through an export queue
+## Exporting missing DAGs for pin recovery
 
-When a node is offline and `ipfs pin add --progress <cid>` fails because a child
-block is missing locally, `pin_with_export_queue.py` can retry the pin, enqueue
-the missing block CID on an export queue, and retry the original pin. This is
-intended for the FIFO created by export functions such as
-`rhea.wasabi.pebble.export.laptop.dag`, which reads from
-`rhea.wasabi.pebble.export.laptop.dag.queue`. Unix stream sockets are also
-supported when a separate socket wrapper is available.
+Two workflows are supported for exporting a child DAG from the laptop IPFS API
+and importing it into the Rhea IPFS API. Both workflows use the same synchronous
+exporter executable, `rhea-wasabi-pebble-export-laptop-dag-sync`, and therefore
+share the same `flock` lock. Queue-triggered exports and direct pin-recovery
+exports can run at the same time, but only one Docker/`mbuffer` export/import
+pipeline runs at once.
 
-```sh
-./pin_with_export_queue.py QmhashA rhea.wasabi.pebble.export.laptop.dag.queue --api http://127.0.0.1:5001 --verbose
-```
+### Queue worker
 
-For the example error below, the script extracts `QmhashB`, writes `QmhashB\n`
-to the export queue FIFO and then retries pinning `QmhashA`.
+The long-running Bash function `rhea.wasabi.pebble.export.laptop.dag` still
+accepts newline-delimited CIDs through the existing FIFO:
 
 ```text
-Error: pin: block was not found locally (offline): ipld: could not find QmhashB
+rhea.wasabi.pebble.export.laptop.dag.queue
+```
+
+Start the worker in a shell that has `.bashrc.d/carpo.bashrc.d/ipfs.bashrc`
+loaded, then write CIDs to the FIFO as before. A FIFO write only queues work for
+the worker; it does not mean the export/import has completed.
+
+### Synchronous pin recovery
+
+When a node is offline and `ipfs pin add --progress <cid>` fails because a child
+block is missing locally, `pin_with_export_retry.py` pins the original root CID,
+parses the missing child CID from Kubo's error, directly invokes the synchronous
+exporter for that child, waits until `ipfs dag import --pin-roots=false
+--allow-big-block` succeeds on Rhea, and immediately retries the original root
+pin. The Python workflow does not communicate through the FIFO.
+
+```sh
+./pin_with_export_retry.py ROOT_CID \
+    --api http://127.0.0.1:5001 \
+    --export-command /path/to/rhea-wasabi-pebble-export-laptop-dag-sync \
+    --verbose
 ```
 
 Useful options:
 
 - `--max-attempts N` stops after `N` pin attempts; the default `0` retries until
   success or until Kubo returns an error that does not include a missing block.
-- `--timeout SECONDS` applies to Kubo API calls and Unix socket operations.
-  FIFO writes are non-blocking and require an active reader.
-- `--retry-delay SECONDS` sleeps briefly after each export completes before the
-  next pin attempt.
+- `--timeout SECONDS` applies only to Kubo API calls.
+- `--export-timeout SECONDS` limits the synchronous exporter; the default is no
+  exporter timeout so large DAG exports can complete.
+- `IPFS_DAG_EXPORT_LOCK` overrides the shared lock path. By default it is
+  `${HOME}/.var/run/rhea-wasabi-pebble-export-laptop-dag.lock`.

@@ -1,5 +1,7 @@
 import io
 import os
+import subprocess
+import time
 from pathlib import Path, PureWindowsPath
 import tempfile
 import unittest
@@ -652,10 +654,10 @@ class KuboClientParsingTests(unittest.TestCase):
         self.assertNotIn("ignored", query)
 
 
-class PinWithExportQueueTests(unittest.TestCase):
+class PinWithExportRetryTests(unittest.TestCase):
     def test_missing_block_cid_from_error_extracts_kubo_offline_error(self):
         from kubo_api_client import KuboError
-        from pin_with_export_queue import missing_block_cid_from_error
+        from pin_with_export_retry import missing_block_cid_from_error
 
         error = KuboError(
             "pin: block was not found locally (offline): ipld: could not find QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kxyz"
@@ -668,7 +670,7 @@ class PinWithExportQueueTests(unittest.TestCase):
 
     def test_missing_block_cid_from_error_stops_qm_cid_at_quote(self):
         from kubo_api_client import KuboError
-        from pin_with_export_queue import missing_block_cid_from_error
+        from pin_with_export_retry import missing_block_cid_from_error
 
         error = KuboError(
             'pin: block was not found locally (offline): ipld: could not find "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kxyz"'
@@ -679,54 +681,127 @@ class PinWithExportQueueTests(unittest.TestCase):
             "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kxyz",
         )
 
-    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFOs")
-    def test_enqueue_export_writes_cid_line_to_fifo(self):
-        from pin_with_export_queue import enqueue_export
+    def test_missing_block_cid_from_error_extracts_cidv1(self):
+        from kubo_api_client import KuboError
+        from pin_with_export_retry import missing_block_cid_from_error
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            fifo = Path(tmpdir) / "export.queue"
-            os.mkfifo(fifo)
-            reader_fd = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
-            try:
-                response = enqueue_export(
-                    fifo,
-                    "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc",
-                    timeout=10,
-                )
-                queued = os.read(reader_fd, 65536)
-            finally:
-                os.close(reader_fd)
+        error = KuboError("block was not found locally: ipld: could not find bafybeigdyrztq")
+        self.assertEqual(missing_block_cid_from_error(error), "bafybeigdyrztq")
 
-        self.assertEqual(response, b"")
-        self.assertEqual(queued, b"QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc\n")
-
-    def test_pin_with_export_queue_enqueues_missing_blocks_and_retries(self):
+    def test_pin_with_export_retry_invokes_exporter_once_then_retries(self):
         from kubo_api_client import KuboError, PinResult
-        import pin_with_export_queue
+        import pin_with_export_retry
 
+        calls = []
         results = [
             PinResult([], [], None, [KuboError("ipld: could not find QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc")], []),
             PinResult([], ["QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1root"], "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1root", [], []),
         ]
         client = mock.Mock()
-        client.pin_add.side_effect = results
+        client.pin_add.side_effect = lambda *a, **k: (calls.append("pin"), results.pop(0))[1]
 
-        with mock.patch.object(pin_with_export_queue, "KuboClient", return_value=client), \
-             mock.patch.object(pin_with_export_queue, "enqueue_export") as enqueue_mock:
-            result = pin_with_export_queue.pin_with_export_queue(
+        def fake_export(missing_cid, export_command, *, timeout=None):
+            calls.append(("export", missing_cid, str(export_command), timeout))
+
+        with mock.patch.object(pin_with_export_retry, "KuboClient", return_value=client), \
+             mock.patch.object(pin_with_export_retry, "export_missing_cid", side_effect=fake_export):
+            result = pin_with_export_retry.pin_with_export_retry(
                 "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1root",
-                "/tmp/export.sock",
                 api="http://127.0.0.1:5001",
                 timeout=10,
+                export_command="/tmp/exporter",
+                export_timeout=None,
             )
 
         self.assertEqual(result.errors, [])
-        self.assertEqual(client.pin_add.call_count, 2)
-        enqueue_mock.assert_called_once_with(
-            "/tmp/export.sock",
-            "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc",
-            timeout=10,
-        )
+        self.assertEqual(calls, ["pin", ("export", "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc", "/tmp/exporter", None), "pin"])
+
+    def test_exporter_receives_missing_cid_as_separate_argument(self):
+        import pin_with_export_retry
+
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen") as popen:
+            process = popen.return_value
+            process.wait.return_value = 0
+            pin_with_export_retry.export_missing_cid("QmCID;touch injected", "/tmp/exporter")
+
+        popen.assert_called_once()
+        self.assertEqual(popen.call_args.args[0], ["/tmp/exporter", "QmCID;touch injected"])
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+
+    def test_nonzero_exporter_status_returns_useful_error(self):
+        from kubo_api_client import KuboError, PinResult
+        import pin_with_export_retry
+
+        client = mock.Mock()
+        client.pin_add.return_value = PinResult([], [], None, [KuboError("ipld: could not find QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc")], [])
+        failure = pin_with_export_retry.ExportFailure("QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc", "/tmp/exporter", "exit status 23", "The synchronous export/import command returned failure.")
+
+        with mock.patch.object(pin_with_export_retry, "KuboClient", return_value=client), \
+             mock.patch.object(pin_with_export_retry, "export_missing_cid", side_effect=pin_with_export_retry.ExportFailed(failure)):
+            result = pin_with_export_retry.pin_with_export_retry("Qmroot", export_command="/tmp/exporter")
+
+        self.assertEqual(client.pin_add.call_count, 1)
+        self.assertIn("QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc", result.errors[-1].message)
+        self.assertIn("exit status 23", result.errors[-1].message)
+
+    def test_exporter_timeout_is_reported(self):
+        import pin_with_export_retry
+
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen") as popen, \
+             mock.patch.object(pin_with_export_retry, "_kill_process_group") as kill_group:
+            process = popen.return_value
+            process.wait.side_effect = subprocess.TimeoutExpired(["/tmp/exporter"], 1)
+            process.pid = 12345
+            with self.assertRaises(pin_with_export_retry.ExportFailed) as cm:
+                pin_with_export_retry.export_missing_cid("Qmabc", "/tmp/exporter", timeout=1)
+
+        kill_group.assert_called_once_with(process)
+        self.assertIn("timeout after 1 seconds", cm.exception.failure.status)
+
+    def test_no_fifo_or_socket_write_occurs_in_python_workflow(self):
+        from kubo_api_client import KuboError, PinResult
+        import pin_with_export_retry
+
+        client = mock.Mock()
+        client.pin_add.side_effect = [
+            PinResult([], [], None, [KuboError("ipld: could not find QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc")], []),
+            PinResult([], ["Qmroot"], "Qmroot", [], []),
+        ]
+        with mock.patch.object(pin_with_export_retry, "KuboClient", return_value=client), \
+             mock.patch.object(pin_with_export_retry, "export_missing_cid"), \
+             mock.patch("os.open") as os_open, \
+             mock.patch("socket.socket") as socket_mock, \
+             mock.patch("time.sleep") as sleep_mock:
+            pin_with_export_retry.pin_with_export_retry("Qmroot")
+
+        os_open.assert_not_called()
+        socket_mock.assert_not_called()
+        sleep_mock.assert_not_called()
+
+    def test_fifo_consumer_uses_same_sync_exporter(self):
+        text = Path(".bashrc.d/carpo.bashrc.d/ipfs.bashrc").read_text(encoding="utf-8")
+        self.assertIn('local queue="rhea.wasabi.pebble.export.laptop.dag.queue"', text)
+        self.assertIn('"$exporter" "$cid"', text)
+
+    def test_direct_and_fifo_paths_use_same_lock_and_flock_serializes(self):
+        script = Path("rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            hook = tmp / "hook.sh"
+            hook.write_text("#!/usr/bin/env bash\nprintf 'start %s %s\\n' \"$1\" \"$(date +%s%N)\" >> \"$LOG\"\nsleep 0.2\nprintf 'end %s %s\\n' \"$1\" \"$(date +%s%N)\" >> \"$LOG\"\n", encoding="utf-8")
+            hook.chmod(0o755)
+            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(tmp / "shared.lock"), "LOG": str(tmp / "log")}
+            p1 = subprocess.Popen([str(script), "cid-one"], env=env)
+            p2 = subprocess.Popen([str(script), "cid-two"], env=env)
+            self.assertEqual(p1.wait(timeout=5), 0)
+            self.assertEqual(p2.wait(timeout=5), 0)
+            events = (tmp / "log").read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual(len(events), 4)
+        self.assertEqual(events[0].split()[0], "start")
+        self.assertEqual(events[1].split()[0], "end")
+        self.assertEqual(events[2].split()[0], "start")
+        self.assertEqual(events[3].split()[0], "end")
 
 
 if __name__ == "__main__":
