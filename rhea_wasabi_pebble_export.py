@@ -247,15 +247,14 @@ def _multipart_chunks(q: queue.Queue[object], boundary: str, shutdown: ShutdownC
     raise ShutdownRequested(shutdown.signum or signal.SIGTERM)
 
 
-def _send_chunked(conn: http.client.HTTPConnection, chunks: Iterator[bytes], write_timeout: float | None) -> http.client.HTTPResponse:
-    sock = conn.sock
-    if sock and write_timeout is not None: sock.settimeout(write_timeout)
-    for chunk in chunks:
-        if not chunk: continue
-        conn.send(f"{len(chunk):X}\r\n".encode("ascii")); conn.send(chunk); conn.send(b"\r\n")
-    conn.send(b"0\r\n\r\n")
-    if sock and getattr(conn, "_rhea_read_timeout", None) is not None:
-        sock.settimeout(getattr(conn, "_rhea_read_timeout"))
+def _request_streaming_multipart(conn: http.client.HTTPConnection, path: str, chunks: Iterator[bytes], boundary: str, write_timeout: float | None, read_timeout: float | None) -> http.client.HTTPResponse:
+    headers = {
+        "Connection": "close",
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+    }
+    conn.request("POST", path, body=chunks, headers=headers, encode_chunked=True)
+    if conn.sock and read_timeout is not None:
+        conn.sock.settimeout(read_timeout)
     return conn.getresponse()
 
 
@@ -269,10 +268,9 @@ def transfer_dag(cid: str, config: ExportConfig, shutdown: ShutdownController) -
         boundary = "codex-" + secrets.token_hex(16)
         conn = _connection(config.destination, config.connect_timeout); shutdown.add_closer(conn)
         path = _path(config.destination, "/api/v0/dag/import", {"pin-roots": "false", "allow-big-block": "true"})
-        conn.putrequest("POST", path); conn.putheader("Host", "localhost"); conn.putheader("Connection", "close")
-        conn.putheader("Content-Type", f"multipart/form-data; boundary={boundary}"); conn.putheader("Transfer-Encoding", "chunked"); conn.endheaders()
-        setattr(conn, "_rhea_read_timeout", config.read_timeout)
-        resp = _send_chunked(conn, _multipart_chunks(q, boundary, shutdown, result), config.write_timeout)
+        if conn.sock and config.write_timeout is not None:
+            conn.sock.settimeout(config.write_timeout)
+        resp = _request_streaming_multipart(conn, path, _multipart_chunks(q, boundary, shutdown, result), boundary, config.write_timeout, config.read_timeout)
         if resp.status < 200 or resp.status >= 300:
             raise ExporterError(f"destination {config.destination.display()} HTTP {resp.status}: {_read_error_body(resp)}")
         _read_error_body(resp)  # bounded success drain (usually tiny JSON)
