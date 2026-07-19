@@ -1114,5 +1114,84 @@ class PinWithExportRetryTests(unittest.TestCase):
 
 
 
+class DirectRpcLifecycleRegressionTests(unittest.TestCase):
+    def test_streaming_multipart_applies_connect_write_and_read_timeouts(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        class Sock:
+            def __init__(self):
+                self.timeouts = []
+            def settimeout(self, value):
+                self.timeouts.append(value)
+
+        class Conn:
+            def __init__(self):
+                self.sock = None
+                self.events = []
+            def connect(self):
+                self.events.append("connect")
+                self.sock = Sock()
+            def request(self, method, path, body=None, headers=None, encode_chunked=False):
+                self.events.append(("request", method, path, list(body), encode_chunked, list(self.sock.timeouts)))
+            def getresponse(self):
+                self.events.append(("getresponse", list(self.sock.timeouts)))
+                return object()
+
+        conn = Conn()
+        response = exporter._request_streaming_multipart(conn, "/import", iter([b"abc"]), "boundary", None, None)
+        self.assertIsNotNone(response)
+        self.assertEqual(conn.events[0], "connect")
+        self.assertEqual(conn.events[1][5], [None])
+        self.assertEqual(conn.events[2][1], [None, None])
+
+        conn = Conn()
+        exporter._request_streaming_multipart(conn, "/import", iter([b"abc"]), "boundary", 12.5, 34.5)
+        self.assertEqual(conn.events[1][5], [12.5])
+        self.assertEqual(conn.events[2][1], [12.5, 34.5])
+
+    def test_shutdown_closer_registry_removes_completed_objects(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        class Closer:
+            def __init__(self):
+                self.closed = 0
+            def close(self):
+                self.closed += 1
+
+        shutdown = exporter.ShutdownController()
+        historical = []
+        for _ in range(300):
+            closer = Closer()
+            with shutdown.register_closer(closer):
+                self.assertEqual(shutdown.closer_count(), 1)
+            historical.append(closer)
+            self.assertEqual(shutdown.closer_count(), 0)
+        active = Closer()
+        shutdown.add_closer(active)
+        shutdown.close_active()
+        self.assertEqual(active.closed, 1)
+        self.assertTrue(all(item.closed == 0 for item in historical))
+
+    def test_fifo_worker_opens_fifo_read_write_to_avoid_idle_eof_reopen_loop(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fifo = Path(tmpdir) / "queue"
+            calls = []
+            real_open = os.open
+            real_select = __import__("select").select
+            def fake_open(path, flags, mode=0o777, *, dir_fd=None):
+                if Path(path) == fifo:
+                    calls.append(flags)
+                    raise KeyboardInterrupt
+                return real_open(path, flags, mode, dir_fd=dir_fd)
+            with mock.patch("os.open", side_effect=fake_open):
+                with self.assertRaises(KeyboardInterrupt):
+                    exporter.run_fifo_worker(fifo)
+            self.assertEqual(len(calls), 1)
+            self.assertTrue(calls[0] & os.O_RDWR)
+            self.assertTrue(calls[0] & os.O_NONBLOCK)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -166,5 +166,10 @@ Kubo endpoints may be configured as absolute Unix-domain socket paths or as
 `RHEA_IPFS_WASABI_SOCKET=~/.var/run/rhea-ipfs-wasabi.sock`.  Transfer-specific
 timeouts are separate from pin timeouts: `IPFS_DAG_HTTP_CONNECT_TIMEOUT`,
 `IPFS_DAG_HTTP_READ_TIMEOUT`, and `IPFS_DAG_HTTP_WRITE_TIMEOUT` accept
-non-negative finite fractional seconds, with long-running stream reads/uploads
-disabled by default unless explicitly configured.
+non-negative finite fractional seconds. Connection establishment uses the connect
+timeout first. After the destination connection exists, the upload socket is
+changed to the write timeout for streaming multipart writes. After the final CAR
+chunk and multipart suffix are sent, the same socket is changed to the read
+timeout before waiting for the destination import response. `None` for the read
+or write timeout means blocking stream reads or writes, so healthy multi-hour
+CAR transfers are not governed by a short whole-request timeout.

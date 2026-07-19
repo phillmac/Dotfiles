@@ -8,7 +8,7 @@ or complete-CAR buffering are used by the built-in exporter.
 """
 from __future__ import annotations
 
-import argparse, fcntl, http.client, json, math, os, queue, secrets, signal, socket, stat, sys, threading, time, urllib.parse
+import argparse, contextlib, fcntl, http.client, json, math, os, queue, secrets, signal, socket, stat, subprocess, sys, threading, time, urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
@@ -93,14 +93,14 @@ class ExportConfig:
         return cls(
             source=KuboEndpoint.parse(os.environ.get("IPFS_LAPTOP_API_SOCKET", os.path.expanduser("~/.var/run/ipfs-laptop-api.sock"))),
             destination=KuboEndpoint.parse(os.environ.get("RHEA_IPFS_WASABI_SOCKET", os.path.expanduser("~/.var/run/rhea-ipfs-wasabi.sock"))),
-            retry_delay=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_RETRY_DELAY"), default=DEFAULT_RETRY_DELAY, maximum=86400.0) or 0.0,
+            retry_delay=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_RETRY_DELAY"), default=DEFAULT_RETRY_DELAY, maximum=86400.0),
             lock_path=Path(os.environ.get("IPFS_DAG_EXPORT_LOCK", DEFAULT_LOCK)).expanduser(),
-            terminate_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_EXPORT_TERMINATE_TIMEOUT"), default=DEFAULT_TERMINATE_TIMEOUT, maximum=MAX_TERMINATE_TIMEOUT) or DEFAULT_TERMINATE_TIMEOUT,
-            lock_poll_interval=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL"), default=DEFAULT_LOCK_POLL_INTERVAL, maximum=10.0) or DEFAULT_LOCK_POLL_INTERVAL,
+            terminate_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_EXPORT_TERMINATE_TIMEOUT"), default=DEFAULT_TERMINATE_TIMEOUT, maximum=MAX_TERMINATE_TIMEOUT),
+            lock_poll_interval=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL"), default=DEFAULT_LOCK_POLL_INTERVAL, maximum=10.0),
             hook=os.environ.get("IPFS_DAG_EXPORT_SYNC_HOOK"),
             chunk_size=_parse_positive_int(os.environ.get("IPFS_DAG_CHUNK_SIZE"), default=DEFAULT_CHUNK_SIZE),
             buffer_size=_parse_positive_int(os.environ.get("IPFS_DAG_BUFFER_SIZE"), default=DEFAULT_BUFFER_SIZE),
-            connect_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_HTTP_CONNECT_TIMEOUT"), default=DEFAULT_CONNECT_TIMEOUT, maximum=3600.0) or DEFAULT_CONNECT_TIMEOUT,
+            connect_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_HTTP_CONNECT_TIMEOUT"), default=DEFAULT_CONNECT_TIMEOUT, maximum=3600.0),
             read_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_HTTP_READ_TIMEOUT"), default=DEFAULT_READ_TIMEOUT, maximum=86400.0),
             write_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_HTTP_WRITE_TIMEOUT"), default=DEFAULT_WRITE_TIMEOUT, maximum=86400.0),
         )
@@ -138,6 +138,22 @@ class ShutdownRequested(BaseException):
 class ExporterError(RuntimeError):
     pass
 
+
+
+
+def terminate_external_process(process: subprocess.Popen[object], *, grace: float) -> None:
+    """Terminate and reap a subprocess group created by this process."""
+    if process.poll() is not None:
+        with contextlib.suppress(Exception): process.wait(timeout=0)
+        return
+    pgid = process.pid
+    with contextlib.suppress(ProcessLookupError): os.killpg(pgid, signal.SIGTERM)
+    deadline = time.monotonic() + grace
+    while process.poll() is None and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if process.poll() is None:
+        with contextlib.suppress(ProcessLookupError): os.killpg(pgid, signal.SIGKILL)
+    with contextlib.suppress(Exception): process.wait(timeout=max(grace, 0.1))
 
 class UnixHTTPConnection(http.client.HTTPConnection):
     def __init__(self, unix_socket: Path, timeout: float | None):
@@ -178,7 +194,7 @@ def _read_error_body(resp: http.client.HTTPResponse) -> str:
 class ShutdownController:
     def __init__(self):
         self.event = threading.Event(); self.signum: int | None = None; self._closers: list[object] = []
-        self._old: dict[int, object] = {}
+        self._closers_lock = threading.Lock(); self._old: dict[int, object] = {}
     def __enter__(self):
         if threading.current_thread() is threading.main_thread():
             for sig in (signal.SIGINT, signal.SIGTERM):
@@ -187,13 +203,25 @@ class ShutdownController:
     def __exit__(self, exc_type, exc, tb):
         for sig, old in self._old.items(): signal.signal(sig, old)
     def _handler(self, signum: int, frame: object) -> None:
-        self.signum = signum; self.event.set(); self.close_active(); raise ShutdownRequested(signum)
-    def add_closer(self, obj: object) -> None: self._closers.append(obj)
+        self.signum = signum; self.event.set(); raise ShutdownRequested(signum)
+    def add_closer(self, obj: object) -> None:
+        with self._closers_lock: self._closers.append(obj)
+    def remove_closer(self, obj: object) -> None:
+        with self._closers_lock:
+            with contextlib.suppress(ValueError): self._closers.remove(obj)
+    @contextlib.contextmanager
+    def register_closer(self, obj: object):
+        self.add_closer(obj)
+        try: yield obj
+        finally: self.remove_closer(obj)
     def close_active(self) -> None:
-        for obj in list(self._closers):
+        with self._closers_lock: active = list(self._closers)
+        for obj in active:
             try: obj.close()  # type: ignore[attr-defined]
             except Exception: pass
     def wait(self, seconds: float) -> bool: return self.event.wait(seconds)
+    def closer_count(self) -> int:
+        with self._closers_lock: return len(self._closers)
 
 
 def _queue_put(q: queue.Queue[object], item: object, shutdown: ShutdownController) -> None:
@@ -204,7 +232,7 @@ def _queue_put(q: queue.Queue[object], item: object, shutdown: ShutdownControlle
 
 
 def _producer(cid: str, config: ExportConfig, shutdown: ShutdownController, q: queue.Queue[object], result: TransferResult) -> None:
-    conn = None
+    conn = None; resp = None
     try:
         conn = _connection(config.source, config.connect_timeout); shutdown.add_closer(conn)
         path = _path(config.source, "/api/v0/dag/export", {"arg": cid, "progress": "false"})
@@ -226,10 +254,14 @@ def _producer(cid: str, config: ExportConfig, shutdown: ShutdownController, q: q
         try: _queue_put(q, ProducerFailed(exc), shutdown)
         except BaseException: pass
     finally:
-        try:
-            if conn: conn.close()
-        except Exception: pass
-
+        if resp:
+            shutdown.remove_closer(resp)
+            try: resp.close()
+            except Exception: pass
+        if conn:
+            shutdown.remove_closer(conn)
+            try: conn.close()
+            except Exception: pass
 
 def _multipart_chunks(q: queue.Queue[object], boundary: str, shutdown: ShutdownController, result: TransferResult) -> Iterator[bytes]:
     prefix = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"export.car\"\r\nContent-Type: application/vnd.ipld.car\r\n\r\n").encode()
@@ -252,8 +284,13 @@ def _request_streaming_multipart(conn: http.client.HTTPConnection, path: str, ch
         "Connection": "close",
         "Content-Type": f"multipart/form-data; boundary={boundary}",
     }
+    # Establish explicitly with the connection timeout configured on the connection.
+    # http.client.request() will not reconnect as long as self.sock remains set.
+    conn.connect()
+    if conn.sock is not None:
+        conn.sock.settimeout(write_timeout)
     conn.request("POST", path, body=chunks, headers=headers, encode_chunked=True)
-    if conn.sock and read_timeout is not None:
+    if conn.sock is not None:
         conn.sock.settimeout(read_timeout)
     return conn.getresponse()
 
@@ -263,27 +300,34 @@ def transfer_dag(cid: str, config: ExportConfig, shutdown: ShutdownController) -
     q: queue.Queue[object] = queue.Queue(maxsize=config.max_chunks)
     producer = threading.Thread(target=_producer, args=(cid, config, shutdown, q, result), name=f"dag-export-{cid}", daemon=True)
     producer.start()
-    conn = None
+    conn = None; resp = None; primary_error: BaseException | None = None
     try:
         boundary = "codex-" + secrets.token_hex(16)
         conn = _connection(config.destination, config.connect_timeout); shutdown.add_closer(conn)
         path = _path(config.destination, "/api/v0/dag/import", {"pin-roots": "false", "allow-big-block": "true"})
-        if conn.sock and config.write_timeout is not None:
-            conn.sock.settimeout(config.write_timeout)
         resp = _request_streaming_multipart(conn, path, _multipart_chunks(q, boundary, shutdown, result), boundary, config.write_timeout, config.read_timeout)
+        shutdown.add_closer(resp)
         if resp.status < 200 or resp.status >= 300:
             raise ExporterError(f"destination {config.destination.display()} HTTP {resp.status}: {_read_error_body(resp)}")
         _read_error_body(resp)  # bounded success drain (usually tiny JSON)
         log(f"Destination import completed for {cid}: {result.bytes_uploaded} bytes")
-    except BaseException:
-        shutdown.event.set(); shutdown.close_active(); raise
+    except BaseException as exc:
+        primary_error = exc; shutdown.event.set(); shutdown.close_active(); raise
     finally:
+        if resp:
+            shutdown.remove_closer(resp)
+            try: resp.close()
+            except Exception: pass
         if conn:
+            shutdown.remove_closer(conn)
             try: conn.close()
             except Exception: pass
         producer.join(timeout=config.terminate_timeout)
         if producer.is_alive():
-            raise ExporterError("producer thread did not terminate")
+            cleanup_error = ExporterError("producer thread did not terminate")
+            if primary_error is None:
+                raise cleanup_error
+            log(f"Cleanup error after primary transfer failure: {cleanup_error}")
         result.finished_at = time.monotonic()
     if result.bytes_exported != result.bytes_uploaded:
         raise ExporterError(f"forwarded byte count mismatch for {cid}: exported {result.bytes_exported}, uploaded {result.bytes_uploaded}")
@@ -314,10 +358,11 @@ def process_cid(cid: str, config: ExportConfig | None = None) -> int:
                     log(f"Attempt {attempt}: transferring {cid} from {config.source.display()} to {config.destination.display()} with chunks={config.chunk_size} buffer={config.buffer_size}")
                     try:
                         if config.hook:
-                            import subprocess
                             proc = subprocess.Popen([config.hook, cid], start_new_session=True, close_fds=True)
                             try: rc = proc.wait()
-                            except ShutdownRequested: proc.terminate(); raise
+                            except BaseException:
+                                terminate_external_process(proc, grace=config.terminate_timeout)
+                                raise
                             if rc != 0: raise ExporterError(f"hook exited with status {rc}")
                         else:
                             res = transfer_dag(cid, config, shutdown)
@@ -345,7 +390,7 @@ def run_fifo_worker(queue_path: Path = Path(QUEUE_PATH), config: ExportConfig | 
     config = config or ExportConfig.from_env(); _ensure_fifo(queue_path)
     with ShutdownController() as shutdown:
         log(f"Waiting for CIDs on {queue_path}")
-        fd = os.open(queue_path, os.O_RDONLY | os.O_NONBLOCK)
+        fd = os.open(queue_path, os.O_RDWR | os.O_NONBLOCK)  # keep FIFO open to avoid idle EOF busy loops
         try:
             buf = b""
             while not shutdown.event.is_set():
@@ -354,7 +399,7 @@ def run_fifo_worker(queue_path: Path = Path(QUEUE_PATH), config: ExportConfig | 
                 if not r: continue
                 data = os.read(fd, 4096)
                 if not data:
-                    os.close(fd); fd = os.open(queue_path, os.O_RDONLY | os.O_NONBLOCK); continue
+                    continue
                 buf += data
                 while b"\n" in buf and not shutdown.event.is_set():
                     raw, buf = buf.split(b"\n", 1); cid = raw.decode("utf-8", "replace").strip()
@@ -367,9 +412,11 @@ def run_fifo_worker(queue_path: Path = Path(QUEUE_PATH), config: ExportConfig | 
                             try:
                                 rc = proc.wait()
                             except ShutdownRequested as exc:
-                                try: os.killpg(proc.pid, signal.SIGTERM)
-                                except ProcessLookupError: pass
+                                terminate_external_process(proc, grace=config.terminate_timeout)
                                 return 128 + exc.signum
+                            except BaseException:
+                                terminate_external_process(proc, grace=config.terminate_timeout)
+                                raise
                             if rc == 0: break
                             log(f"Exporter failed for {cid} with status {rc}")
                             log(f"Retrying {cid} in {config.retry_delay:g} seconds")
