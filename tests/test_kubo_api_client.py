@@ -762,6 +762,25 @@ class PinWithExportRetryTests(unittest.TestCase):
         self.assertIn("timeout after 1 seconds", cm.exception.failure.status)
 
 
+
+    def test_exporter_cleanup_timeout_uses_bash_timeout_plus_margin(self):
+        import pin_with_export_retry
+
+        cases = [
+            (None, 7.0),
+            ("1", 3.0),
+            ("10", 12.0),
+            ("0.5", 2.5),
+            ("not-a-number", 7.0),
+            ("-1", 7.0),
+            ("1000000", 60.0),
+        ]
+        for raw, expected in cases:
+            with self.subTest(raw=raw), mock.patch.dict(os.environ, {}, clear=True):
+                if raw is not None:
+                    os.environ["IPFS_DAG_EXPORT_TERMINATE_TIMEOUT"] = raw
+                self.assertEqual(pin_with_export_retry.exporter_cleanup_timeout_from_environment(), expected)
+
     def test_default_exporter_path_is_under_bashrc_tree(self):
         import pin_with_export_retry
 
@@ -904,7 +923,7 @@ class PinWithExportRetryTests(unittest.TestCase):
                 "raise SystemExit(0)\n",
                 encoding="utf-8",
             )
-            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(tmp / "lock")}
+            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(tmp / "lock"), "IPFS_DAG_EXPORT_TERMINATE_TIMEOUT": "1"}
             for sig, expected in ((signal.SIGINT, 130), (signal.SIGTERM, 143)):
                 marker = tmp / f"marker-{sig.value}"
                 env["IPFS_DAG_EXPORT_SYNC_HOOK"] = str(hook)
@@ -931,7 +950,7 @@ class PinWithExportRetryTests(unittest.TestCase):
                     time.sleep(0.05)
                 self.assertTrue(marker.exists())
                 proc.send_signal(sig)
-                self.assertEqual(proc.wait(timeout=5), expected)
+                self.assertEqual(proc.wait(timeout=8), expected)
                 if child_pid.exists():
                     pid = int(child_pid.read_text())
                     for _ in range(20):
@@ -1067,6 +1086,38 @@ class PinWithExportRetryTests(unittest.TestCase):
             self.assertEqual(proc.wait(timeout=5), 143)
             self.assertEqual(count.read_text().strip(), "1")
             self.assertEqual(subprocess.run(["flock", "-n", str(lock), "true"], timeout=5).returncode, 0)
+
+    def test_retry_sleep_child_does_not_inherit_lock_fd_after_exporter_sigkill(self):
+        script = Path(".bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            lock = tmp / "shared.lock"
+            count = tmp / "count"
+            hook = tmp / "fail.sh"
+            hook.write_text("#!/usr/bin/env bash\necho $(( $(cat \"$COUNT\" 2>/dev/null || echo 0) + 1 )) > \"$COUNT\"\nexit 9\n", encoding="utf-8")
+            hook.chmod(0o755)
+            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(lock), "IPFS_DAG_RETRY_DELAY": "30", "COUNT": str(count)}
+            proc = subprocess.Popen([str(script), "cid-one"], env=env, stderr=subprocess.DEVNULL)
+            try:
+                deadline = time.time() + 5
+                sleep_pid = None
+                while time.time() < deadline:
+                    if count.exists() and count.read_text().strip() == "1":
+                        children = subprocess.run(["pgrep", "-P", str(proc.pid), "sleep"], text=True, capture_output=True)
+                        if children.returncode == 0 and children.stdout.strip():
+                            sleep_pid = int(children.stdout.splitlines()[0])
+                            break
+                    time.sleep(0.05)
+                self.assertIsNotNone(sleep_pid)
+                self.assertFalse(Path(f"/proc/{sleep_pid}/fd/9").exists())
+                proc.kill()
+                self.assertEqual(proc.wait(timeout=5), -signal.SIGKILL)
+                self.assertEqual(subprocess.run(["flock", "-n", str(lock), "true"], timeout=5).returncode, 0)
+                self.assertEqual(subprocess.run(["kill", "-0", str(sleep_pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode, 0)
+            finally:
+                if sleep_pid is not None:
+                    subprocess.run(["kill", str(sleep_pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 
 
 if __name__ == "__main__":

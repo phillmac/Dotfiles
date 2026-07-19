@@ -12,6 +12,7 @@ log() { printf '%s - %s\n' "$(date)" "$*" >&2; }
 terminate_active_pipeline() {
     local grace="${IPFS_DAG_EXPORT_TERMINATE_TIMEOUT:-5}"
     local deadline
+    local now
 
     _shutdown_requested=1
 
@@ -22,11 +23,19 @@ terminate_active_pipeline() {
     log "Sending SIGTERM to export pipeline process group ${_active_pipeline_pgid}"
     kill -TERM -- "-${_active_pipeline_pgid}" 2>/dev/null || true
 
-    deadline=$((SECONDS + grace))
+    deadline=$(python3 -c 'import sys,time
+try:
+    grace=float(sys.argv[1])
+except ValueError:
+    grace=5.0
+if grace < 0:
+    grace=5.0
+print(time.monotonic() + grace)' "$grace" 2>/dev/null || echo "$((SECONDS + 5))")
     while kill -0 -- "-${_active_pipeline_pgid}" 2>/dev/null
     do
-        (( SECONDS >= deadline )) && break
-        sleep 0.1
+        now=$(python3 -c 'import time; print(time.monotonic())' 2>/dev/null || echo "$SECONDS")
+        python3 -c 'import sys; raise SystemExit(0 if float(sys.argv[1]) >= float(sys.argv[2]) else 1)' "$now" "$deadline" && break
+        sleep 0.1 9>&-
     done
 
     if kill -0 -- "-${_active_pipeline_pgid}" 2>/dev/null
@@ -73,7 +82,7 @@ trap 'shutdown_trap 143' TERM
 
 interruptible_sleep() {
     local duration=$1
-    sleep "$duration" &
+    sleep "$duration" 9>&- &
     _retry_sleep_pid=$!
     wait "$_retry_sleep_pid" 2>/dev/null
     local status=$?
@@ -96,7 +105,7 @@ acquire_export_lock() {
             break
         fi
 
-        sleep "$poll_interval" &
+        sleep "$poll_interval" 9>&- &
         _wait_child=$!
         wait "$_wait_child" 2>/dev/null || true
         _wait_child=

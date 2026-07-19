@@ -132,10 +132,80 @@ function rhea.wasabi.pebble.export.laptop.dag ()
         pwd
     )" || exit 1
     local exporter="${RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC:-${script_dir}/rhea-wasabi-pebble-export-laptop-dag-sync}"
+    local active_exporter_pid=
+    local retry_sleep_pid=
+    local signal_exit_status=143
     local shutting_down=0
     local retry_delay
-    trap 'shutting_down=1; exit 130' INT
-    trap 'shutting_down=1; exit 143' TERM
+    local status
+
+    terminate_fifo_child() {
+        if [[ -n "${active_exporter_pid:-}" ]]
+        then
+            kill -TERM -- "-${active_exporter_pid}" 2>/dev/null || kill -TERM "$active_exporter_pid" 2>/dev/null || true
+        fi
+        if [[ -n "${retry_sleep_pid:-}" ]]
+        then
+            kill "$retry_sleep_pid" 2>/dev/null || true
+        fi
+    }
+
+    cleanup_active_exporter() {
+        local pid="${active_exporter_pid:-}"
+        local deadline
+        local now
+        [[ -n "$pid" ]] || return 0
+        kill -TERM -- "-${pid}" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+        deadline=$(python3 -c 'import time; print(time.monotonic() + 5.0)' 2>/dev/null || echo "$SECONDS")
+        while kill -0 "$pid" 2>/dev/null
+        do
+            now=$(python3 -c 'import time; print(time.monotonic())' 2>/dev/null || echo "$SECONDS")
+            python3 -c 'import sys; raise SystemExit(0 if float(sys.argv[1]) >= float(sys.argv[2]) else 1)' "$now" "$deadline" && break
+            sleep 0.1
+        done
+        if kill -0 "$pid" 2>/dev/null
+        then
+            kill -KILL -- "-${pid}" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+        fi
+        wait "$pid" 2>/dev/null || true
+        active_exporter_pid=
+    }
+
+    fifo_shutdown() {
+        shutting_down=1
+        signal_exit_status=$1
+        terminate_fifo_child
+    }
+
+    wait_for_active_exporter() {
+        "$exporter" "$cid" &
+        active_exporter_pid=$!
+        wait "$active_exporter_pid"
+        status=$?
+        if (( shutting_down != 0 ))
+        then
+            cleanup_active_exporter
+            return "$signal_exit_status"
+        fi
+        active_exporter_pid=
+        return "$status"
+    }
+
+    wait_for_retry_delay() {
+        sleep "$retry_delay" &
+        retry_sleep_pid=$!
+        wait "$retry_sleep_pid" 2>/dev/null
+        status=$?
+        retry_sleep_pid=
+        if (( shutting_down != 0 ))
+        then
+            return "$signal_exit_status"
+        fi
+        return "$status"
+    }
+
+    trap 'fifo_shutdown 130' INT
+    trap 'fifo_shutdown 143' TERM
 
     if [[ -e "$queue" && ! -p "$queue" ]]
     then
@@ -160,14 +230,14 @@ function rhea.wasabi.pebble.export.laptop.dag ()
     # intact and usable while the shared synchronous exporter serializes actual
     # export/import pipelines with its flock lock. Traps are scoped to this
     # subshell so sourcing ipfs.bashrc never leaves stale parent-shell traps.
-    while true
+    while (( shutting_down == 0 ))
     do
-        while IFS= read -r cid
+        while (( shutting_down == 0 )) && IFS= read -r cid
         do
             [[ -n "$cid" ]] || continue
             while (( shutting_down == 0 ))
             do
-                "$exporter" "$cid"
+                wait_for_active_exporter
                 status=$?
                 if (( status == 0 ))
                 then
@@ -175,15 +245,16 @@ function rhea.wasabi.pebble.export.laptop.dag ()
                 fi
                 if (( shutting_down != 0 ))
                 then
-                    exit "$status"
+                    exit "$signal_exit_status"
                 fi
                 retry_delay="${IPFS_DAG_RETRY_DELAY:-300}"
                 echo "$(date) - Exporter failed for ${cid} with status ${status}" >&2
                 echo "$(date) - Retrying ${cid} in ${retry_delay} seconds" >&2
-                sleep "$retry_delay" || exit "$status"
+                wait_for_retry_delay || exit "$signal_exit_status"
             done
         done < "$queue"
     done
+    exit "$signal_exit_status"
 )
 
 

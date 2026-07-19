@@ -15,6 +15,9 @@ from pathlib import Path
 from kubo_api_client import KuboClient, KuboError, PinResult
 
 DEFAULT_EXPORT_COMMAND = str(Path(__file__).resolve().parent / ".bashrc.d" / "carpo.bashrc.d" / "rhea-wasabi-pebble-export-laptop-dag-sync")
+DEFAULT_BASH_TERMINATE_TIMEOUT = 5.0
+EXPORTER_CLEANUP_MARGIN = 2.0
+MAX_EXPORTER_CLEANUP_TIMEOUT = 60.0
 _MISSING_BLOCK_RE = re.compile(r"(?:could not find|not found locally).*?((?:Qm[1-9A-HJ-NP-Za-km-z]+)|(?:ba[a-z2-7]+))", re.IGNORECASE)
 
 
@@ -51,7 +54,23 @@ def missing_block_cid_from_error(error: KuboError) -> str | None:
     return match.group(1) if match else None
 
 
-def _terminate_process_group(process: subprocess.Popen[object], signum: int = signal.SIGTERM, *, wait_timeout: float = 5) -> None:
+def exporter_cleanup_timeout_from_environment() -> float:
+    raw = os.environ.get("IPFS_DAG_EXPORT_TERMINATE_TIMEOUT")
+    bash_timeout = DEFAULT_BASH_TERMINATE_TIMEOUT
+    if raw is not None:
+        try:
+            parsed = float(raw)
+        except ValueError:
+            parsed = DEFAULT_BASH_TERMINATE_TIMEOUT
+        else:
+            if parsed >= 0:
+                bash_timeout = parsed
+    return min(bash_timeout + EXPORTER_CLEANUP_MARGIN, MAX_EXPORTER_CLEANUP_TIMEOUT)
+
+
+def _terminate_process_group(process: subprocess.Popen[object], signum: int = signal.SIGTERM, *, wait_timeout: float | None = None) -> None:
+    if wait_timeout is None:
+        wait_timeout = exporter_cleanup_timeout_from_environment()
     try:
         os.killpg(process.pid, signum)
     except ProcessLookupError:

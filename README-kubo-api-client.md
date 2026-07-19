@@ -104,6 +104,10 @@ Useful options:
   backoff.
 - `IPFS_DAG_EXPORT_LOCK` overrides the shared lock path. By default it is
   `${HOME}/.var/run/rhea-wasabi-pebble-export-laptop-dag.lock`.
+- `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT` controls the Bash pipeline cleanup grace
+  period and accepts non-negative numeric values, including fractional seconds.
+  Python derives its exporter process-group cleanup wait from this value plus a
+  fixed safety margin, capped to avoid unbounded waits.
 
 Signal and retry behaviour:
 
@@ -116,8 +120,10 @@ Signal and retry behaviour:
 - The synchronous Bash exporter owns the shared `flock`, signal traps, active
   pipeline PID, and active pipeline process-group ID in the same Bash process.
   The exporter keeps the lock descriptor private: active test hooks and the real
-  Docker/`mbuffer` pipeline close FD 9 before running, so surviving pipeline
-  children cannot keep the shared lock held after the exporter exits.
+  Docker/`mbuffer` pipeline close FD 9 before running. Helper children created
+  after lock acquisition, including lock polling and retry-sleep helpers, also
+  close FD 9, so surviving children cannot keep the shared lock held after the
+  exporter exits.
 - Active pipeline cleanup is bounded. Shutdown first sends SIGTERM to the
   dedicated pipeline process group, waits up to
   `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT` seconds (default `5`), escalates to
@@ -128,7 +134,9 @@ Signal and retry behaviour:
   start another export attempt after shutdown begins, and the lock is released
   after success, ordinary failure, SIGINT, SIGTERM, and forced cleanup.
 - The FIFO worker runs in a subshell, so its INT/TERM traps are scoped to the
-  worker and do not alter the calling interactive shell. If the exporter fails for
-  a queued CID, the worker logs the original status and retries that same CID
-  after `IPFS_DAG_RETRY_DELAY`; it does not read the next FIFO CID until the
-  current CID succeeds.
+  worker and do not alter the calling interactive shell. It runs the active
+  exporter and retry-delay sleep as tracked children, making PID-only SIGINT and
+  SIGTERM interrupt foreground exporter waits and retry delays promptly. If the
+  exporter fails for a queued CID, the worker logs the original status and
+  retries that same CID after `IPFS_DAG_RETRY_DELAY`; it does not read the next
+  FIFO CID until the current CID succeeds.
