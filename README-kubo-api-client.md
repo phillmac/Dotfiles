@@ -126,10 +126,18 @@ Signal and retry behaviour:
   holds it across retries for one CID. All children are spawned with
   `close_fds=True`, so no hook, HTTP transfer thread, or retry helper
   inherits the lock descriptor.
-- Active direct-RPC transfer cleanup is bounded. Shutdown sets a shared event,
-  closes active HTTP connections/responses, wakes the bounded queue, joins the
-  producer thread within the normalized `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT`
-  budget, and logs cleanup progress to stderr.
+- Global shutdown and per-attempt cancellation are separate. SIGINT/SIGTERM set
+  the global shutdown event and stop all retries, while ordinary source or
+  destination RPC failures cancel only the current transfer attempt, close that
+  attempt's active HTTP response/connection objects, wake bounded queue waits,
+  join the producer thread, and then retry the same CID with the global shutdown
+  event still unset.
+- Active direct-RPC transfer cleanup is bounded. Each attempt registers only its
+  currently active HTTP connections/responses and unregisters them in `finally`,
+  so completed attempts are not retained. Attempt cancellation wakes the bounded
+  queue and joins the producer thread within the normalized
+  `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT` budget, while a real signal closes the
+  current attempt and returns 130 for SIGINT or 143 for SIGTERM.
 - Signalling only the exporter PID interrupts lock acquisition polling, active
   HTTP streaming, FIFO reads, and internal retry delays. The exporter does not
   start another transfer attempt after shutdown begins, returns 130 for SIGINT
@@ -165,11 +173,22 @@ Kubo endpoints may be configured as absolute Unix-domain socket paths or as
 `IPFS_LAPTOP_API_SOCKET=~/.var/run/ipfs-laptop-api.sock` and
 `RHEA_IPFS_WASABI_SOCKET=~/.var/run/rhea-ipfs-wasabi.sock`.  Transfer-specific
 timeouts are separate from pin timeouts: `IPFS_DAG_HTTP_CONNECT_TIMEOUT`,
-`IPFS_DAG_HTTP_READ_TIMEOUT`, and `IPFS_DAG_HTTP_WRITE_TIMEOUT` accept
-non-negative finite fractional seconds. Connection establishment uses the connect
-timeout first. After the destination connection exists, the upload socket is
-changed to the write timeout for streaming multipart writes. After the final CAR
-chunk and multipart suffix are sent, the same socket is changed to the read
-timeout before waiting for the destination import response. `None` for the read
-or write timeout means blocking stream reads or writes, so healthy multi-hour
-CAR transfers are not governed by a short whole-request timeout.
+`IPFS_DAG_HTTP_READ_TIMEOUT`, and `IPFS_DAG_HTTP_WRITE_TIMEOUT` accept finite
+fractional seconds. Poll intervals and connect timeouts must be positive: zero,
+negative, invalid, NaN, and infinity fall back to the documented defaults so the
+worker does not busy-loop and sockets are not placed in non-blocking connect
+mode. `IPFS_DAG_RETRY_DELAY=0` and `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT=0` remain
+valid and mean immediate retry / immediate TERM-to-KILL escalation.
+
+Connection establishment uses the connect timeout first. Source export explicitly
+connects, switches the socket to the read timeout before sending the bodyless
+`dag/export` request, and uses that read timeout for response headers and CAR
+body reads. Destination import explicitly connects, switches to the write timeout
+for streaming multipart upload, then switches to the read timeout before waiting
+for the import response. `None` for the read or write timeout means blocking
+stream reads or writes, so healthy multi-hour CAR transfers are not governed by a
+short whole-request timeout. The outer pin helper waits for the normalized inner
+cleanup timeout plus a two-second margin; an accepted 60-second inner cleanup
+therefore gives a 62-second outer cleanup window.
+
+External hook and FIFO override cleanup checks the entire process group created by the exporter invocation. Cleanup sends SIGTERM, waits for the configured grace period using process-group existence rather than only the leader process, escalates surviving group members to SIGKILL, and then reaps the direct child without using `pkill` or signalling unrelated processes.

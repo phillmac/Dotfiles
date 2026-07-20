@@ -16,9 +16,8 @@ from pathlib import Path
 from kubo_api_client import KuboClient, KuboError, PinResult
 
 DEFAULT_EXPORT_COMMAND = str(Path(__file__).resolve().parent / ".bashrc.d" / "carpo.bashrc.d" / "rhea-wasabi-pebble-export-laptop-dag-sync")
-from rhea_wasabi_pebble_export import DEFAULT_TERMINATE_TIMEOUT, MAX_TERMINATE_TIMEOUT, parse_nonnegative_finite_float
+from rhea_wasabi_pebble_export import exporter_cleanup_timeout_from_environment as _shared_exporter_cleanup_timeout_from_environment
 
-EXPORTER_CLEANUP_MARGIN = 2.0
 _MISSING_BLOCK_RE = re.compile(r"(?:could not find|not found locally).*?((?:Qm[1-9A-HJ-NP-Za-km-z]+)|(?:ba[a-z2-7]+))", re.IGNORECASE)
 
 
@@ -56,12 +55,7 @@ def missing_block_cid_from_error(error: KuboError) -> str | None:
 
 
 def exporter_cleanup_timeout_from_environment() -> float:
-    bash_timeout = parse_nonnegative_finite_float(
-        os.environ.get("IPFS_DAG_EXPORT_TERMINATE_TIMEOUT"),
-        default=DEFAULT_TERMINATE_TIMEOUT,
-        maximum=MAX_TERMINATE_TIMEOUT,
-    )
-    return min(bash_timeout + EXPORTER_CLEANUP_MARGIN, MAX_TERMINATE_TIMEOUT)
+    return _shared_exporter_cleanup_timeout_from_environment()
 
 
 def _descendant_pids(pid: int) -> set[int]:

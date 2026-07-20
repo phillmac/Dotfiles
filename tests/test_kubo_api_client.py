@@ -773,7 +773,8 @@ class PinWithExportRetryTests(unittest.TestCase):
             ("0.5", 2.5),
             ("not-a-number", 7.0),
             ("-1", 7.0),
-            ("1000000", 60.0),
+            ("60", 62.0),
+            ("1000000", 62.0),
         ]
         for raw, expected in cases:
             with self.subTest(raw=raw), mock.patch.dict(os.environ, {}, clear=True):
@@ -1191,6 +1192,65 @@ class DirectRpcLifecycleRegressionTests(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             self.assertTrue(calls[0] & os.O_RDWR)
             self.assertTrue(calls[0] & os.O_NONBLOCK)
+
+    def test_positive_only_poll_and_connect_timeouts_preserve_allowed_zeroes(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        env = {
+            "IPFS_LAPTOP_API_SOCKET": "/tmp/source.sock",
+            "RHEA_IPFS_WASABI_SOCKET": "/tmp/dest.sock",
+            "IPFS_DAG_RETRY_DELAY": "0",
+            "IPFS_DAG_EXPORT_TERMINATE_TIMEOUT": "0",
+            "IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL": "0",
+            "IPFS_DAG_HTTP_CONNECT_TIMEOUT": "0",
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            config = exporter.ExportConfig.from_env()
+        self.assertEqual(config.retry_delay, 0)
+        self.assertEqual(config.terminate_timeout, 0)
+        self.assertEqual(config.lock_poll_interval, exporter.DEFAULT_LOCK_POLL_INTERVAL)
+        self.assertEqual(config.connect_timeout, exporter.DEFAULT_CONNECT_TIMEOUT)
+
+        for raw in ["-1", "not-a-number", "nan", "inf", "-inf"]:
+            with self.subTest(raw=raw):
+                env["IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL"] = raw
+                env["IPFS_DAG_HTTP_CONNECT_TIMEOUT"] = raw
+                with mock.patch.dict(os.environ, env, clear=True):
+                    config = exporter.ExportConfig.from_env()
+                self.assertEqual(config.lock_poll_interval, exporter.DEFAULT_LOCK_POLL_INTERVAL)
+                self.assertEqual(config.connect_timeout, exporter.DEFAULT_CONNECT_TIMEOUT)
+
+    def test_source_export_sets_read_timeout_before_headers(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        events = []
+        class Sock:
+            def settimeout(self, value):
+                events.append(("settimeout", value))
+        class Resp:
+            status = 200
+            def read(self, n): return b""
+            def close(self): events.append("resp-close")
+        class Conn:
+            def __init__(self): self.sock = None
+            def connect(self): events.append("connect"); self.sock = Sock()
+            def request(self, *args, **kwargs): events.append("request")
+            def getresponse(self): events.append("getresponse"); return Resp()
+            def close(self): events.append("conn-close")
+
+        config = exporter.ExportConfig(
+            source=exporter.KuboEndpoint.parse("/tmp/source.sock"),
+            destination=exporter.KuboEndpoint.parse("/tmp/dest.sock"),
+            retry_delay=0, lock_path=Path("/tmp/lock"), terminate_timeout=1,
+            lock_poll_interval=0.1, hook=None, chunk_size=4, buffer_size=4,
+            connect_timeout=1, read_timeout=22, write_timeout=None,
+        )
+        q = exporter.queue.Queue()
+        result = exporter.TransferResult("Qmabc")
+        attempt = exporter.TransferAttempt(exporter.ShutdownController())
+        with mock.patch.object(exporter, "_connection", return_value=Conn()):
+            exporter._producer("Qmabc", config, attempt, q, result)
+        self.assertEqual(events[:4], ["connect", ("settimeout", 22), "request", "getresponse"])
 
 
 if __name__ == "__main__":

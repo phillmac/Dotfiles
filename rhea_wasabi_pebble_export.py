@@ -16,7 +16,10 @@ from typing import Iterator
 DEFAULT_LOCK = os.path.expanduser("~/.var/run/rhea-wasabi-pebble-export-laptop-dag.lock")
 DEFAULT_RETRY_DELAY = 300.0
 DEFAULT_TERMINATE_TIMEOUT = 5.0
-MAX_TERMINATE_TIMEOUT = 60.0
+MAX_TRANSFER_CLEANUP_TIMEOUT = 60.0
+EXPORTER_CLEANUP_MARGIN = 2.0
+MAX_OUTER_EXPORTER_CLEANUP_TIMEOUT = MAX_TRANSFER_CLEANUP_TIMEOUT + EXPORTER_CLEANUP_MARGIN
+MAX_TERMINATE_TIMEOUT = MAX_TRANSFER_CLEANUP_TIMEOUT
 DEFAULT_LOCK_POLL_INTERVAL = 0.1
 DEFAULT_CHUNK_SIZE = 1048576
 DEFAULT_BUFFER_SIZE = 67108864
@@ -42,6 +45,23 @@ def parse_nonnegative_finite_float(raw: str | None, *, default: float | None, ma
     if not math.isfinite(value) or value < 0:
         return default
     return min(value, maximum) if maximum is not None else value
+
+
+def parse_positive_finite_float(raw: str | None, *, default: float, maximum: float | None = None) -> float:
+    value = parse_nonnegative_finite_float(raw, default=default, maximum=maximum)
+    if value is None or value <= 0:
+        return default
+    return value
+
+
+def exporter_cleanup_timeout_from_environment() -> float:
+    inner = parse_nonnegative_finite_float(
+        os.environ.get("IPFS_DAG_EXPORT_TERMINATE_TIMEOUT"),
+        default=DEFAULT_TERMINATE_TIMEOUT,
+        maximum=MAX_TRANSFER_CLEANUP_TIMEOUT,
+    )
+    assert inner is not None
+    return min(inner + EXPORTER_CLEANUP_MARGIN, MAX_OUTER_EXPORTER_CLEANUP_TIMEOUT)
 
 
 def _parse_positive_int(raw: str | None, *, default: int) -> int:
@@ -96,11 +116,11 @@ class ExportConfig:
             retry_delay=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_RETRY_DELAY"), default=DEFAULT_RETRY_DELAY, maximum=86400.0),
             lock_path=Path(os.environ.get("IPFS_DAG_EXPORT_LOCK", DEFAULT_LOCK)).expanduser(),
             terminate_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_EXPORT_TERMINATE_TIMEOUT"), default=DEFAULT_TERMINATE_TIMEOUT, maximum=MAX_TERMINATE_TIMEOUT),
-            lock_poll_interval=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL"), default=DEFAULT_LOCK_POLL_INTERVAL, maximum=10.0),
+            lock_poll_interval=parse_positive_finite_float(os.environ.get("IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL"), default=DEFAULT_LOCK_POLL_INTERVAL, maximum=10.0),
             hook=os.environ.get("IPFS_DAG_EXPORT_SYNC_HOOK"),
             chunk_size=_parse_positive_int(os.environ.get("IPFS_DAG_CHUNK_SIZE"), default=DEFAULT_CHUNK_SIZE),
             buffer_size=_parse_positive_int(os.environ.get("IPFS_DAG_BUFFER_SIZE"), default=DEFAULT_BUFFER_SIZE),
-            connect_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_HTTP_CONNECT_TIMEOUT"), default=DEFAULT_CONNECT_TIMEOUT, maximum=3600.0),
+            connect_timeout=parse_positive_finite_float(os.environ.get("IPFS_DAG_HTTP_CONNECT_TIMEOUT"), default=DEFAULT_CONNECT_TIMEOUT, maximum=3600.0),
             read_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_HTTP_READ_TIMEOUT"), default=DEFAULT_READ_TIMEOUT, maximum=86400.0),
             write_timeout=parse_nonnegative_finite_float(os.environ.get("IPFS_DAG_HTTP_WRITE_TIMEOUT"), default=DEFAULT_WRITE_TIMEOUT, maximum=86400.0),
         )
@@ -141,19 +161,36 @@ class ExporterError(RuntimeError):
 
 
 
+def process_group_exists(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def terminate_external_process(process: subprocess.Popen[object], *, grace: float) -> None:
     """Terminate and reap a subprocess group created by this process."""
-    if process.poll() is not None:
-        with contextlib.suppress(Exception): process.wait(timeout=0)
-        return
     pgid = process.pid
-    with contextlib.suppress(ProcessLookupError): os.killpg(pgid, signal.SIGTERM)
-    deadline = time.monotonic() + grace
-    while process.poll() is None and time.monotonic() < deadline:
+    if process.poll() is not None and not process_group_exists(pgid):
+        process.wait()
+        return
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    deadline = time.monotonic() + max(0.0, grace)
+    while process_group_exists(pgid) and time.monotonic() < deadline:
+        process.poll()
         time.sleep(0.05)
-    if process.poll() is None:
-        with contextlib.suppress(ProcessLookupError): os.killpg(pgid, signal.SIGKILL)
-    with contextlib.suppress(Exception): process.wait(timeout=max(grace, 0.1))
+    if process_group_exists(pgid):
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    process.wait()
 
 class UnixHTTPConnection(http.client.HTTPConnection):
     def __init__(self, unix_socket: Path, timeout: float | None):
@@ -191,6 +228,48 @@ def _read_error_body(resp: http.client.HTTPResponse) -> str:
         return text
 
 
+class ActiveCloserRegistry:
+    def __init__(self):
+        self._closers: list[object] = []
+        self._lock = threading.Lock()
+    def add(self, obj: object) -> None:
+        with self._lock: self._closers.append(obj)
+    def remove(self, obj: object) -> None:
+        with self._lock:
+            with contextlib.suppress(ValueError): self._closers.remove(obj)
+    def close_active(self) -> None:
+        with self._lock: active = list(self._closers)
+        for obj in active:
+            try: obj.close()  # type: ignore[attr-defined]
+            except Exception: pass
+    def count(self) -> int:
+        with self._lock: return len(self._closers)
+
+
+class TransferAttempt:
+    def __init__(self, global_shutdown: "ShutdownController"):
+        self.global_shutdown = global_shutdown
+        self.cancel_event = threading.Event()
+        self._closers = ActiveCloserRegistry()
+    def cancelled(self) -> bool:
+        return self.cancel_event.is_set() or self.global_shutdown.event.is_set()
+    def cancel(self) -> None:
+        self.cancel_event.set(); self.close_active()
+    def add_closer(self, obj: object) -> None: self._closers.add(obj)
+    def remove_closer(self, obj: object) -> None: self._closers.remove(obj)
+    @contextlib.contextmanager
+    def register_closer(self, obj: object):
+        self.add_closer(obj)
+        try: yield obj
+        finally: self.remove_closer(obj)
+    def close_active(self) -> None: self._closers.close_active()
+    def closer_count(self) -> int: return self._closers.count()
+
+
+def transfer_should_stop(attempt: TransferAttempt) -> bool:
+    return attempt.cancelled()
+
+
 class ShutdownController:
     def __init__(self):
         self.event = threading.Event(); self.signum: int | None = None; self._closers: list[object] = []
@@ -224,50 +303,51 @@ class ShutdownController:
         with self._closers_lock: return len(self._closers)
 
 
-def _queue_put(q: queue.Queue[object], item: object, shutdown: ShutdownController) -> None:
-    while not shutdown.event.is_set():
+def _queue_put(q: queue.Queue[object], item: object, attempt: TransferAttempt) -> None:
+    while not transfer_should_stop(attempt):
         try: q.put(item, timeout=0.1); return
         except queue.Full: continue
-    raise ShutdownRequested(shutdown.signum or signal.SIGTERM)
+    raise ShutdownRequested(attempt.global_shutdown.signum or signal.SIGTERM)
 
 
-def _producer(cid: str, config: ExportConfig, shutdown: ShutdownController, q: queue.Queue[object], result: TransferResult) -> None:
+def _producer(cid: str, config: ExportConfig, attempt: TransferAttempt, q: queue.Queue[object], result: TransferResult) -> None:
     conn = None; resp = None
     try:
-        conn = _connection(config.source, config.connect_timeout); shutdown.add_closer(conn)
+        conn = _connection(config.source, config.connect_timeout); attempt.add_closer(conn)
         path = _path(config.source, "/api/v0/dag/export", {"arg": cid, "progress": "false"})
-        conn.request("POST", path, body=None, headers={"Connection": "close"})
-        resp = conn.getresponse(); shutdown.add_closer(resp)
+        conn.connect()
         if conn.sock is not None:
             conn.sock.settimeout(config.read_timeout)
+        conn.request("POST", path, body=None, headers={"Connection": "close"})
+        resp = conn.getresponse(); attempt.add_closer(resp)
         if resp.status < 200 or resp.status >= 300:
             raise ExporterError(f"source {config.source.display()} HTTP {resp.status}: {_read_error_body(resp)}")
-        while not shutdown.event.is_set():
+        while not transfer_should_stop(attempt):
             data = resp.read(config.chunk_size)
             if not data: break
             result.bytes_exported += len(data)
-            _queue_put(q, DataChunk(data), shutdown)
+            _queue_put(q, DataChunk(data), attempt)
             result.maximum_queue_depth = max(result.maximum_queue_depth, q.qsize())
-        _queue_put(q, _EOF, shutdown)
+        _queue_put(q, _EOF, attempt)
         log(f"Source export completed for {cid}: {result.bytes_exported} bytes")
     except BaseException as exc:
-        try: _queue_put(q, ProducerFailed(exc), shutdown)
+        try: _queue_put(q, ProducerFailed(exc), attempt)
         except BaseException: pass
     finally:
         if resp:
-            shutdown.remove_closer(resp)
+            attempt.remove_closer(resp)
             try: resp.close()
             except Exception: pass
         if conn:
-            shutdown.remove_closer(conn)
+            attempt.remove_closer(conn)
             try: conn.close()
             except Exception: pass
 
-def _multipart_chunks(q: queue.Queue[object], boundary: str, shutdown: ShutdownController, result: TransferResult) -> Iterator[bytes]:
+def _multipart_chunks(q: queue.Queue[object], boundary: str, attempt: TransferAttempt, result: TransferResult) -> Iterator[bytes]:
     prefix = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"export.car\"\r\nContent-Type: application/vnd.ipld.car\r\n\r\n").encode()
     suffix = f"\r\n--{boundary}--\r\n".encode()
     yield prefix
-    while not shutdown.event.is_set():
+    while not transfer_should_stop(attempt):
         try: item = q.get(timeout=0.1)
         except queue.Empty: continue
         if isinstance(item, DataChunk):
@@ -276,7 +356,7 @@ def _multipart_chunks(q: queue.Queue[object], boundary: str, shutdown: ShutdownC
             raise item.error
         elif item is _EOF:
             yield suffix; return
-    raise ShutdownRequested(shutdown.signum or signal.SIGTERM)
+    raise ShutdownRequested(attempt.global_shutdown.signum or signal.SIGTERM)
 
 
 def _request_streaming_multipart(conn: http.client.HTTPConnection, path: str, chunks: Iterator[bytes], boundary: str, write_timeout: float | None, read_timeout: float | None) -> http.client.HTTPResponse:
@@ -298,28 +378,33 @@ def _request_streaming_multipart(conn: http.client.HTTPConnection, path: str, ch
 def transfer_dag(cid: str, config: ExportConfig, shutdown: ShutdownController) -> TransferResult:
     result = TransferResult(cid, started_at=time.monotonic())
     q: queue.Queue[object] = queue.Queue(maxsize=config.max_chunks)
-    producer = threading.Thread(target=_producer, args=(cid, config, shutdown, q, result), name=f"dag-export-{cid}", daemon=True)
+    attempt = TransferAttempt(shutdown)
+    producer = threading.Thread(target=_producer, args=(cid, config, attempt, q, result), name=f"dag-export-{cid}", daemon=True)
     producer.start()
     conn = None; resp = None; primary_error: BaseException | None = None
     try:
         boundary = "codex-" + secrets.token_hex(16)
-        conn = _connection(config.destination, config.connect_timeout); shutdown.add_closer(conn)
+        conn = _connection(config.destination, config.connect_timeout); attempt.add_closer(conn)
         path = _path(config.destination, "/api/v0/dag/import", {"pin-roots": "false", "allow-big-block": "true"})
-        resp = _request_streaming_multipart(conn, path, _multipart_chunks(q, boundary, shutdown, result), boundary, config.write_timeout, config.read_timeout)
-        shutdown.add_closer(resp)
+        resp = _request_streaming_multipart(conn, path, _multipart_chunks(q, boundary, attempt, result), boundary, config.write_timeout, config.read_timeout)
+        attempt.add_closer(resp)
         if resp.status < 200 or resp.status >= 300:
             raise ExporterError(f"destination {config.destination.display()} HTTP {resp.status}: {_read_error_body(resp)}")
         _read_error_body(resp)  # bounded success drain (usually tiny JSON)
         log(f"Destination import completed for {cid}: {result.bytes_uploaded} bytes")
     except BaseException as exc:
-        primary_error = exc; shutdown.event.set(); shutdown.close_active(); raise
+        primary_error = exc
+        attempt.cancel()
+        if shutdown.event.is_set():
+            shutdown.close_active()
+        raise
     finally:
         if resp:
-            shutdown.remove_closer(resp)
+            attempt.remove_closer(resp)
             try: resp.close()
             except Exception: pass
         if conn:
-            shutdown.remove_closer(conn)
+            attempt.remove_closer(conn)
             try: conn.close()
             except Exception: pass
         producer.join(timeout=config.terminate_timeout)
