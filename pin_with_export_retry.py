@@ -16,7 +16,10 @@ from pathlib import Path
 from kubo_api_client import KuboClient, KuboError, PinResult
 
 DEFAULT_EXPORT_COMMAND = str(Path(__file__).resolve().parent / ".bashrc.d" / "carpo.bashrc.d" / "rhea-wasabi-pebble-export-laptop-dag-sync")
-from rhea_wasabi_pebble_export import exporter_cleanup_timeout_from_environment as _shared_exporter_cleanup_timeout_from_environment
+from rhea_wasabi_pebble_export import (
+    exporter_cleanup_timeout_from_environment as _shared_exporter_cleanup_timeout_from_environment,
+    terminate_external_process,
+)
 
 _MISSING_BLOCK_RE = re.compile(r"(?:could not find|not found locally).*?((?:Qm[1-9A-HJ-NP-Za-km-z]+)|(?:ba[a-z2-7]+))", re.IGNORECASE)
 
@@ -58,60 +61,26 @@ def exporter_cleanup_timeout_from_environment() -> float:
     return _shared_exporter_cleanup_timeout_from_environment()
 
 
-def _descendant_pids(pid: int) -> set[int]:
-    remaining = [pid]
-    seen: set[int] = set()
-    while remaining:
-        parent = remaining.pop()
-        try:
-            out = subprocess.run(["pgrep", "-P", str(parent)], text=True, capture_output=True, timeout=1).stdout
-        except Exception:
-            out = ""
-        for line in out.splitlines():
-            try:
-                child = int(line)
-            except ValueError:
-                continue
-            if child not in seen:
-                seen.add(child); remaining.append(child)
-    return seen
+def _terminate_process_group(
+    process: subprocess.Popen[object],
+    signum: int = signal.SIGTERM,
+    *,
+    wait_timeout: float | None = None,
+) -> None:
+    del signum
+    terminate_external_process(
+        process,
+        grace=exporter_cleanup_timeout_from_environment() if wait_timeout is None else wait_timeout,
+    )
 
-def _terminate_process_group(process: subprocess.Popen[object], signum: int = signal.SIGTERM, *, wait_timeout: float | None = None) -> None:
-    if wait_timeout is None:
-        wait_timeout = exporter_cleanup_timeout_from_environment()
-    descendants = _descendant_pids(process.pid)
-    try:
-        os.killpg(process.pid, signum)
-    except ProcessLookupError:
-        pass
-    for pid in descendants:
-        try:
-            os.kill(pid, signum)
-        except ProcessLookupError:
-            pass
-    try:
-        process.wait(timeout=wait_timeout)
-    except subprocess.TimeoutExpired:
-        descendants.update(_descendant_pids(process.pid))
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        for pid in descendants:
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        process.wait()
+
+_kill_process_group = _terminate_process_group
 
 
 class _ExporterSignalReceived(BaseException):
     def __init__(self, signum: int):
         super().__init__(signum)
         self.signum = signum
-
-
-_kill_process_group = _terminate_process_group
 
 
 def _structured_start_failure(missing_cid: str, command: str, exc: OSError) -> ExportFailed:

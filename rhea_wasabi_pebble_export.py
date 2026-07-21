@@ -159,6 +159,12 @@ class ExporterError(RuntimeError):
     pass
 
 
+class TransferCleanupFailed(ExporterError):
+    """The current transfer could not be safely stopped."""
+
+
+class ExternalProcessCleanupFailed(RuntimeError):
+    pass
 
 
 def process_group_exists(pgid: int) -> bool:
@@ -168,29 +174,79 @@ def process_group_exists(pgid: int) -> bool:
         return False
     except PermissionError:
         return True
+
+    proc = Path("/proc")
+    if proc.is_dir():
+        saw_group_member = False
+        for stat_file in proc.glob("[0-9]*/stat"):
+            try:
+                text = stat_file.read_text(encoding="utf-8", errors="replace")
+                close = text.rfind(")")
+                fields = text[close + 2 :].split()
+                state = fields[0]
+                process_pgid = int(fields[2])
+            except (OSError, ValueError, IndexError):
+                continue
+            if process_pgid == pgid:
+                saw_group_member = True
+                if state != "Z":
+                    return True
+        if saw_group_member:
+            return False
     return True
 
 
-def terminate_external_process(process: subprocess.Popen[object], *, grace: float) -> None:
-    """Terminate and reap a subprocess group created by this process."""
+def terminate_external_process(
+    process: subprocess.Popen[object],
+    *,
+    grace: float,
+    kill_wait: float = 2.0,
+) -> None:
+    """Terminate, verify, and reap a subprocess group created with start_new_session=True."""
     pgid = process.pid
-    if process.poll() is not None and not process_group_exists(pgid):
-        process.wait()
-        return
+    term_sent = False
+    kill_sent = False
+
     try:
         os.killpg(pgid, signal.SIGTERM)
+        term_sent = True
     except ProcessLookupError:
         pass
-    deadline = time.monotonic() + max(0.0, grace)
-    while process_group_exists(pgid) and time.monotonic() < deadline:
+
+    term_deadline = time.monotonic() + max(0.0, grace)
+    while process_group_exists(pgid) and time.monotonic() < term_deadline:
         process.poll()
         time.sleep(0.05)
+
     if process_group_exists(pgid):
         try:
             os.killpg(pgid, signal.SIGKILL)
+            kill_sent = True
         except ProcessLookupError:
             pass
-    process.wait()
+
+        kill_deadline = time.monotonic() + max(0.1, kill_wait)
+        while process_group_exists(pgid) and time.monotonic() < kill_deadline:
+            process.poll()
+            time.sleep(0.05)
+
+    try:
+        process.wait(timeout=max(0.1, kill_wait))
+    except subprocess.TimeoutExpired as exc:
+        raise ExternalProcessCleanupFailed(
+            f"direct process {process.pid} in process group {pgid} could not be reaped; "
+            f"term_sent={term_sent} kill_sent={kill_sent} grace={grace:g} kill_wait={kill_wait:g}"
+        ) from exc
+
+    if process_group_exists(pgid):
+        raise ExternalProcessCleanupFailed(
+            f"process group {pgid} for direct process {process.pid} still exists after SIGKILL; "
+            f"term_sent={term_sent} kill_sent={kill_sent} grace={grace:g} kill_wait={kill_wait:g}"
+        )
+
+
+_terminate_process_group = terminate_external_process
+_kill_process_group = terminate_external_process
 
 class UnixHTTPConnection(http.client.HTTPConnection):
     def __init__(self, unix_socket: Path, timeout: float | None):
@@ -409,10 +465,12 @@ def transfer_dag(cid: str, config: ExportConfig, shutdown: ShutdownController) -
             except Exception: pass
         producer.join(timeout=config.terminate_timeout)
         if producer.is_alive():
-            cleanup_error = ExporterError("producer thread did not terminate")
-            if primary_error is None:
-                raise cleanup_error
-            log(f"Cleanup error after primary transfer failure: {cleanup_error}")
+            cleanup_error = TransferCleanupFailed(
+                f"producer thread for {cid} did not terminate within {config.terminate_timeout:g} seconds"
+            )
+            if primary_error is not None:
+                raise cleanup_error from primary_error
+            raise cleanup_error
         result.finished_at = time.monotonic()
     if result.bytes_exported != result.bytes_uploaded:
         raise ExporterError(f"forwarded byte count mismatch for {cid}: exported {result.bytes_exported}, uploaded {result.bytes_uploaded}")
@@ -455,6 +513,9 @@ def process_cid(cid: str, config: ExportConfig | None = None) -> int:
                         return 0
                     except ShutdownRequested as exc:
                         return 128 + exc.signum
+                    except TransferCleanupFailed as exc:
+                        log(f"Fatal transfer cleanup failure for {cid}: {exc}")
+                        return 1
                     except BaseException as exc:
                         if shutdown.event.is_set(): return 128 + (shutdown.signum or signal.SIGTERM)
                         log(f"Exporter failed for {cid} on attempt {attempt}: {exc}")

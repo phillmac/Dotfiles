@@ -836,8 +836,9 @@ class PinWithExportRetryTests(unittest.TestCase):
 
         process = mock.Mock()
         process.pid = 123
-        process.wait.side_effect = [subprocess.TimeoutExpired(["cmd"], 5), 0]
-        with mock.patch.object(pin_with_export_retry.os, "killpg") as killpg:
+        process.wait.return_value = 0
+        with mock.patch.object(pin_with_export_retry.os, "killpg") as killpg, \
+             mock.patch("rhea_wasabi_pebble_export.process_group_exists", side_effect=[True] * 10 + [False, False]):
             pin_with_export_retry._terminate_process_group(process, signal.SIGTERM, wait_timeout=0.01)
         self.assertEqual(killpg.call_args_list[0].args, (123, signal.SIGTERM))
         self.assertEqual(killpg.call_args_list[1].args, (123, signal.SIGKILL))
@@ -1255,3 +1256,124 @@ class DirectRpcLifecycleRegressionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class CleanupFailureRegressionTests(unittest.TestCase):
+    def test_transfer_stuck_producer_raises_fatal_cleanup_chained_from_primary(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        class StuckThread:
+            def __init__(self, *args, **kwargs):
+                self.started = False
+            def start(self):
+                self.started = True
+            def join(self, timeout=None):
+                self.join_timeout = timeout
+            def is_alive(self):
+                return True
+
+        config = exporter.ExportConfig(
+            source=exporter.KuboEndpoint.parse("/tmp/source.sock"),
+            destination=exporter.KuboEndpoint.parse("/tmp/dest.sock"),
+            retry_delay=0,
+            lock_path=Path("/tmp/lock"),
+            terminate_timeout=0.01,
+            lock_poll_interval=0.01,
+            hook=None,
+            chunk_size=4,
+            buffer_size=4,
+            connect_timeout=1,
+            read_timeout=None,
+            write_timeout=None,
+        )
+        primary = exporter.ExporterError("destination failed")
+        with mock.patch.object(exporter.threading, "Thread", StuckThread), \
+             mock.patch.object(exporter, "_connection") as connection, \
+             mock.patch.object(exporter, "_request_streaming_multipart", side_effect=primary):
+            conn = mock.Mock()
+            connection.return_value = conn
+            with self.assertRaises(exporter.TransferCleanupFailed) as caught:
+                exporter.transfer_dag("Qmabc", config, exporter.ShutdownController())
+        self.assertIs(caught.exception.__cause__, primary)
+        self.assertIn("producer thread for Qmabc did not terminate", str(caught.exception))
+
+    def test_process_cid_stops_without_retry_on_transfer_cleanup_failure(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = exporter.ExportConfig(
+                source=exporter.KuboEndpoint.parse("/tmp/source.sock"),
+                destination=exporter.KuboEndpoint.parse("/tmp/dest.sock"),
+                retry_delay=30,
+                lock_path=Path(tmpdir) / "lock",
+                terminate_timeout=0.01,
+                lock_poll_interval=0.01,
+                hook=None,
+                chunk_size=4,
+                buffer_size=4,
+                connect_timeout=1,
+                read_timeout=None,
+                write_timeout=None,
+            )
+            attempts = []
+            def fail_once(cid, cfg, shutdown):
+                attempts.append((cid, shutdown.event.is_set()))
+                raise exporter.TransferCleanupFailed("producer thread for Qmabc did not terminate within 0.01 seconds")
+            with mock.patch.object(exporter, "transfer_dag", side_effect=fail_once), \
+                 mock.patch.object(exporter.ShutdownController, "wait", side_effect=AssertionError("retry delay should not be applied")):
+                self.assertEqual(exporter.process_cid("Qmabc", config), 1)
+            self.assertEqual(attempts, [("Qmabc", False)])
+
+    def test_external_cleanup_kills_term_ignoring_descendant_after_leader_exits(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            leader_file = tmp / "leader"
+            child_file = tmp / "child"
+            pgid_file = tmp / "pgid"
+            child_script = tmp / "child.py"
+            child_script.write_text(
+                "import signal, time\n"
+                "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                "open(__import__('os').environ['CHILD_FILE'], 'w').write(str(__import__('os').getpid()))\n"
+                "while True: time.sleep(1)\n",
+                encoding="utf-8",
+            )
+            leader = tmp / "leader.py"
+            leader.write_text(
+                "import os, signal, subprocess, sys, time\n"
+                "open(os.environ['LEADER_FILE'], 'w').write(str(os.getpid()))\n"
+                "open(os.environ['PGID_FILE'], 'w').write(str(os.getpgrp()))\n"
+                "child = subprocess.Popen([sys.executable, os.environ['CHILD_SCRIPT']], close_fds=True)\n"
+                "def term(signum, frame): raise SystemExit(0)\n"
+                "signal.signal(signal.SIGTERM, term)\n"
+                "while True: time.sleep(1)\n",
+                encoding="utf-8",
+            )
+            env = {**os.environ, "LEADER_FILE": str(leader_file), "CHILD_FILE": str(child_file), "PGID_FILE": str(pgid_file), "CHILD_SCRIPT": str(child_script)}
+            proc = subprocess.Popen([sys.executable, str(leader)], env=env, start_new_session=True)
+            try:
+                deadline = time.time() + 5
+                while time.time() < deadline and not child_file.exists():
+                    time.sleep(0.05)
+                self.assertTrue(child_file.exists())
+                pgid = int(pgid_file.read_text())
+                child_pid = int(child_file.read_text())
+                exporter.terminate_external_process(proc, grace=0.1, kill_wait=1.0)
+                self.assertIsNotNone(proc.returncode)
+                deadline = time.time() + 2
+                while time.time() < deadline and exporter.process_group_exists(pgid):
+                    time.sleep(0.05)
+                self.assertFalse(exporter.process_group_exists(pgid))
+                stat_file = Path(f"/proc/{child_pid}/stat")
+                if stat_file.exists():
+                    text = stat_file.read_text(encoding="utf-8", errors="replace")
+                    state = text[text.rfind(")") + 2:].split()[0]
+                    self.assertEqual(state, "Z")
+                else:
+                    with self.assertRaises(ProcessLookupError):
+                        os.kill(child_pid, 0)
+            finally:
+                if proc.poll() is None:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                    proc.wait(timeout=5)
