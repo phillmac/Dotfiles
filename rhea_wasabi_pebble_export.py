@@ -199,16 +199,20 @@ def process_group_exists(pgid: int) -> bool:
 def terminate_external_process(
     process: subprocess.Popen[object],
     *,
+    initial_signal: int = signal.SIGTERM,
     grace: float,
     kill_wait: float = 2.0,
 ) -> None:
     """Terminate, verify, and reap a subprocess group created with start_new_session=True."""
+    if initial_signal not in (signal.SIGTERM, signal.SIGINT):
+        raise ValueError(f"unsupported cleanup initial signal: {initial_signal}")
+
     pgid = process.pid
     term_sent = False
     kill_sent = False
 
     try:
-        os.killpg(pgid, signal.SIGTERM)
+        os.killpg(pgid, initial_signal)
         term_sent = True
     except ProcessLookupError:
         pass
@@ -235,15 +239,17 @@ def terminate_external_process(
     except subprocess.TimeoutExpired as exc:
         raise ExternalProcessCleanupFailed(
             f"direct process {process.pid} in process group {pgid} could not be reaped; "
-            f"term_sent={term_sent} kill_sent={kill_sent} grace={grace:g} kill_wait={kill_wait:g}"
+            f"initial_signal={initial_signal} term_sent={term_sent} kill_sent={kill_sent} grace={grace:g} kill_wait={kill_wait:g}"
         ) from exc
 
     if process_group_exists(pgid):
         raise ExternalProcessCleanupFailed(
             f"process group {pgid} for direct process {process.pid} still exists after SIGKILL; "
-            f"term_sent={term_sent} kill_sent={kill_sent} grace={grace:g} kill_wait={kill_wait:g}"
+            f"initial_signal={initial_signal} term_sent={term_sent} kill_sent={kill_sent} grace={grace:g} kill_wait={kill_wait:g}"
         )
 
+def log_cleanup_failure(context: str, exc: BaseException) -> None:
+    log(f"{context}: process cleanup failed: {exc}")
 
 _terminate_process_group = terminate_external_process
 _kill_process_group = terminate_external_process
@@ -502,9 +508,26 @@ def process_cid(cid: str, config: ExportConfig | None = None) -> int:
                     try:
                         if config.hook:
                             proc = subprocess.Popen([config.hook, cid], start_new_session=True, close_fds=True)
-                            try: rc = proc.wait()
+                            try:
+                                rc = proc.wait()
+                            except ShutdownRequested:
+                                cleanup_error = None
+                                try:
+                                    terminate_external_process(proc, grace=config.terminate_timeout)
+                                except ExternalProcessCleanupFailed as exc:
+                                    cleanup_error = exc
+                                if cleanup_error is not None:
+                                    log_cleanup_failure(f"hook cleanup for {cid} pid={proc.pid} pgid={proc.pid} during signal", cleanup_error)
+                                raise
+                            except ExternalProcessCleanupFailed as exc:
+                                log(f"Fatal hook cleanup failure for {cid}: {exc}")
+                                return 1
                             except BaseException:
-                                terminate_external_process(proc, grace=config.terminate_timeout)
+                                try:
+                                    terminate_external_process(proc, grace=config.terminate_timeout)
+                                except ExternalProcessCleanupFailed as cleanup_exc:
+                                    log(f"Fatal hook cleanup failure for {cid}: {cleanup_exc}")
+                                    return 1
                                 raise
                             if rc != 0: raise ExporterError(f"hook exited with status {rc}")
                         else:
@@ -558,10 +581,23 @@ def run_fifo_worker(queue_path: Path = Path(QUEUE_PATH), config: ExportConfig | 
                             try:
                                 rc = proc.wait()
                             except ShutdownRequested as exc:
-                                terminate_external_process(proc, grace=config.terminate_timeout)
+                                cleanup_error = None
+                                try:
+                                    terminate_external_process(proc, grace=config.terminate_timeout)
+                                except ExternalProcessCleanupFailed as cleanup_exc:
+                                    cleanup_error = cleanup_exc
+                                if cleanup_error is not None:
+                                    log_cleanup_failure(f"FIFO override cleanup for {cid} pid={proc.pid} pgid={proc.pid} during signal", cleanup_error)
                                 return 128 + exc.signum
+                            except ExternalProcessCleanupFailed as exc:
+                                log(f"Fatal FIFO override cleanup failure for {cid}: {exc}")
+                                return 1
                             except BaseException:
-                                terminate_external_process(proc, grace=config.terminate_timeout)
+                                try:
+                                    terminate_external_process(proc, grace=config.terminate_timeout)
+                                except ExternalProcessCleanupFailed as cleanup_exc:
+                                    log(f"Fatal FIFO override cleanup failure for {cid}: {cleanup_exc}")
+                                    return 1
                                 raise
                             if rc == 0: break
                             log(f"Exporter failed for {cid} with status {rc}")
@@ -569,7 +605,7 @@ def run_fifo_worker(queue_path: Path = Path(QUEUE_PATH), config: ExportConfig | 
                             if shutdown.wait(config.retry_delay): return 128 + (shutdown.signum or signal.SIGTERM)
                     else:
                         rc = process_cid(cid, config)
-                        if rc in (130, 143): return rc
+                        if rc != 0: return rc
         except ShutdownRequested as exc:
             return 128 + exc.signum
         finally:

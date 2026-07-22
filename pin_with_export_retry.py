@@ -17,6 +17,7 @@ from kubo_api_client import KuboClient, KuboError, PinResult
 
 DEFAULT_EXPORT_COMMAND = str(Path(__file__).resolve().parent / ".bashrc.d" / "carpo.bashrc.d" / "rhea-wasabi-pebble-export-laptop-dag-sync")
 from rhea_wasabi_pebble_export import (
+    ExternalProcessCleanupFailed,
     exporter_cleanup_timeout_from_environment as _shared_exporter_cleanup_timeout_from_environment,
     terminate_external_process,
 )
@@ -67,9 +68,9 @@ def _terminate_process_group(
     *,
     wait_timeout: float | None = None,
 ) -> None:
-    del signum
     terminate_external_process(
         process,
+        initial_signal=signum,
         grace=exporter_cleanup_timeout_from_environment() if wait_timeout is None else wait_timeout,
     )
 
@@ -119,15 +120,33 @@ def export_missing_cid(missing_cid: str, export_command: str | Path = DEFAULT_EX
         try:
             returncode = process.wait(timeout=timeout)
         except _ExporterSignalReceived as exc:
-            _terminate_process_group(process, signal.SIGTERM)
+            cleanup_error = None
+            try:
+                _terminate_process_group(process, signal.SIGTERM)
+            except ExternalProcessCleanupFailed as cleanup_exc:
+                cleanup_error = cleanup_exc
+            if cleanup_error is not None:
+                print(f"outer exporter cleanup for {missing_cid} pid={process.pid} pgid={process.pid} during signal {exc.signum}: process cleanup failed: {cleanup_error}", file=sys.stderr)
             if exc.signum == signal.SIGINT:
                 raise KeyboardInterrupt
             raise SystemExit(128 + exc.signum)
         except subprocess.TimeoutExpired as exc:
-            _terminate_process_group(process, signal.SIGTERM)
-            raise ExportFailed(ExportFailure(missing_cid, command, f"timeout after {timeout} seconds", "The synchronous exporter did not finish before the configured timeout.")) from exc
-        except BaseException:
-            _terminate_process_group(process, signal.SIGTERM)
+            cleanup_error = None
+            try:
+                _terminate_process_group(process, signal.SIGTERM)
+            except ExternalProcessCleanupFailed as cleanup_exc:
+                cleanup_error = cleanup_exc
+            status = f"timeout after {timeout} seconds"
+            message = "The synchronous exporter did not finish before the configured timeout."
+            if cleanup_error is not None:
+                status += "; process-group cleanup failed"
+                message += f" Cleanup error: {cleanup_error}"
+            raise ExportFailed(ExportFailure(missing_cid, command, status, message)) from exc
+        except BaseException as exc:
+            try:
+                _terminate_process_group(process, signal.SIGTERM)
+            except ExternalProcessCleanupFailed as cleanup_exc:
+                raise RuntimeError(f"exporter cleanup failed after internal exception: {cleanup_exc}") from exc
             raise
     finally:
         if can_install_handlers:

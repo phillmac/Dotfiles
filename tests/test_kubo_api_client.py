@@ -1377,3 +1377,77 @@ class CleanupFailureRegressionTests(unittest.TestCase):
                 if proc.poll() is None:
                     os.killpg(proc.pid, signal.SIGKILL)
                     proc.wait(timeout=5)
+
+class FatalLifecyclePropagationTests(unittest.TestCase):
+    def _config(self, tmpdir: str):
+        import rhea_wasabi_pebble_export as exporter
+        return exporter.ExportConfig(
+            source=exporter.KuboEndpoint.parse("/tmp/source.sock"),
+            destination=exporter.KuboEndpoint.parse("/tmp/dest.sock"),
+            retry_delay=30,
+            lock_path=Path(tmpdir) / "lock",
+            terminate_timeout=0.01,
+            lock_poll_interval=0.01,
+            hook=None,
+            chunk_size=4,
+            buffer_size=4,
+            connect_timeout=1,
+            read_timeout=None,
+            write_timeout=None,
+        )
+
+    def test_fifo_builtin_exits_on_any_nonzero_result_without_next_cid(self):
+        import rhea_wasabi_pebble_export as exporter
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = self._config(tmpdir)
+            reads = [b"A\nB\n"]
+            processed = []
+            def fake_read(fd, size):
+                return reads.pop(0) if reads else b""
+            def fake_process(cid, cfg):
+                processed.append(cid)
+                return 1
+            with mock.patch.object(exporter, "_ensure_fifo"), \
+                 mock.patch.object(exporter.os, "open", return_value=123), \
+                 mock.patch.object(exporter.os, "read", side_effect=fake_read), \
+                 mock.patch.object(exporter.os, "close"), \
+                 mock.patch("select.select", return_value=([123], [], [])), \
+                 mock.patch.object(exporter, "process_cid", side_effect=fake_process), \
+                 mock.patch.object(exporter, "log"):
+                self.assertEqual(exporter.run_fifo_worker(Path("queue"), config), 1)
+            self.assertEqual(processed, ["A"])
+
+    def test_hook_cleanup_failure_is_fatal_and_not_retried(self):
+        import rhea_wasabi_pebble_export as exporter
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = self._config(tmpdir)
+            config = exporter.ExportConfig(**{**config.__dict__, "hook": "/tmp/hook"})
+            proc = mock.Mock()
+            proc.pid = 99999
+            proc.wait.side_effect = RuntimeError("wait interrupted")
+            launches = []
+            def fake_popen(*args, **kwargs):
+                launches.append(args)
+                return proc
+            with mock.patch.object(exporter.subprocess, "Popen", side_effect=fake_popen), \
+                 mock.patch.object(exporter, "terminate_external_process", side_effect=exporter.ExternalProcessCleanupFailed("group still exists")), \
+                 mock.patch.object(exporter.ShutdownController, "wait", side_effect=AssertionError("retry delay should not run")), \
+                 mock.patch.object(exporter, "log") as log:
+                self.assertEqual(exporter.process_cid("Qmabc", config), 1)
+            self.assertEqual(len(launches), 1)
+            self.assertTrue(any("Fatal hook cleanup failure" in str(call) for call in log.call_args_list))
+
+    def test_pin_timeout_cleanup_failure_stays_structured(self):
+        import pin_with_export_retry
+        proc = mock.Mock()
+        proc.pid = 12345
+        timeout = subprocess.TimeoutExpired(["exporter", "Qmabc"], 2)
+        proc.wait.side_effect = timeout
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen", return_value=proc), \
+             mock.patch.object(pin_with_export_retry, "_terminate_process_group", side_effect=pin_with_export_retry.ExternalProcessCleanupFailed("group still exists")):
+            with self.assertRaises(pin_with_export_retry.ExportFailed) as caught:
+                pin_with_export_retry.export_missing_cid("Qmabc", "/tmp/exporter", timeout=2)
+        self.assertIs(caught.exception.__cause__, timeout)
+        self.assertIn("timeout after 2 seconds", caught.exception.failure.status)
+        self.assertIn("process-group cleanup failed", caught.exception.failure.status)
+        self.assertIn("group still exists", caught.exception.failure.message)
