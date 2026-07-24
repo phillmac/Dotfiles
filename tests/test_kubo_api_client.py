@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import os
 import subprocess
@@ -10,6 +12,76 @@ import unittest
 from unittest import mock
 
 from kubo_api_client import KuboClient, _MultipartStream
+
+
+
+
+class Python39ImportAndCliSmokeTests(unittest.TestCase):
+    def run_repo_python(self, *args: str, expected_returncode: int = 0) -> subprocess.CompletedProcess[str]:
+        completed = subprocess.run(
+            [sys.executable, *args],
+            cwd=Path(__file__).resolve().parents[1],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+        )
+        self.assertEqual(
+            completed.returncode,
+            expected_returncode,
+            msg=completed.stderr,
+        )
+        return completed
+
+    def test_production_modules_import_in_fresh_subprocess(self):
+        completed = self.run_repo_python(
+            "-c",
+            (
+                "import kubo_api_client; "
+                "import pin_with_export_retry; "
+                "import rhea_wasabi_pebble_export"
+            ),
+        )
+        self.assertEqual(completed.stderr, "")
+
+    def test_pin_with_export_retry_help_runs_without_import_traceback(self):
+        completed = self.run_repo_python("pin_with_export_retry.py", "--help")
+        self.assertIn("usage:", completed.stdout.lower())
+        self.assertIn("--api", completed.stdout)
+        self.assertNotIn("Traceback", completed.stderr)
+
+    def test_rhea_wasabi_export_help_runs_without_import_traceback(self):
+        completed = self.run_repo_python("rhea_wasabi_pebble_export.py", "--help")
+        self.assertIn("usage:", completed.stdout.lower())
+        self.assertNotIn("Traceback", completed.stderr)
+
+    def test_pin_with_export_retry_executable_help_runs(self):
+        completed = subprocess.run(
+            ["./pin_with_export_retry.py", "--help"],
+            cwd=Path(__file__).resolve().parents[1],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+        )
+        self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+        self.assertIn("usage:", completed.stdout.lower())
+        self.assertNotIn("Traceback", completed.stderr)
+
+    def test_unix_socket_pin_cli_form_parses_and_reports_connection_failure(self):
+        completed = self.run_repo_python(
+            "pin_with_export_retry.py",
+            "QmYdDptW2DkN8ndNNMmVJDXAnyEZ8LVRtBHRur3cvzS9S4",
+            "-v",
+            "--api",
+            "unix:///tmp/nonexistent-rhea-ipfs-wasabi.sock",
+            expected_returncode=1,
+        )
+        self.assertNotIn("Traceback", completed.stderr)
+        self.assertIn("Error:", completed.stderr)
+        self.assertIn("nonexistent-rhea-ipfs-wasabi.sock", completed.stderr)
 
 
 class KuboClientParsingTests(unittest.TestCase):

@@ -20,7 +20,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from typing import Any, BinaryIO, Iterable, Iterator
+from typing import Any, BinaryIO, Iterable, Iterator, Optional
 
 
 @dataclass(frozen=True)
@@ -86,7 +86,22 @@ class PinResult:
     raw_events: list[dict[str, Any]]
 
 
-MultipartField = tuple[str, str, BinaryIO, str, str | None, dict[str, str]]
+MultipartField = tuple[str, str, BinaryIO, str, Optional[str], dict[str, str]]
+
+
+class _UnixHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, unix_socket: str, timeout: float | None):
+        super().__init__("localhost", timeout=timeout)
+        self.unix_socket = unix_socket
+
+    def connect(self) -> None:
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        if self.timeout is not None:
+            self.sock.settimeout(self.timeout)
+        try:
+            self.sock.connect(self.unix_socket)
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(exc.errno, exc.strerror, self.unix_socket) from exc
 
 
 class KuboClient:
@@ -192,13 +207,17 @@ class KuboClient:
 
     def _open_stream_response(self, path_and_query: str, data: bytes | Iterable[bytes], headers: dict[str, str]):
         url = urllib.parse.urlsplit(self.api)
-        if url.scheme not in {"http", "https"}:
+        if url.scheme == "unix":
+            connection = _UnixHTTPConnection(urllib.parse.unquote(url.path), timeout=self.timeout)
+            target = path_and_query
+        elif url.scheme in {"http", "https"}:
+            host = url.hostname or ""
+            port = url.port
+            connection_class = http.client.HTTPSConnection if url.scheme == "https" else http.client.HTTPConnection
+            connection = connection_class(host, port, timeout=self.timeout)
+            target = (url.path.rstrip("/") + path_and_query) or path_and_query
+        else:
             raise urllib.error.URLError(f"Unsupported Kubo API scheme for streaming trailers: {url.scheme}")
-        host = url.hostname or ""
-        port = url.port
-        connection_class = http.client.HTTPSConnection if url.scheme == "https" else http.client.HTTPConnection
-        connection = connection_class(host, port, timeout=self.timeout)
-        target = (url.path.rstrip("/") + path_and_query) or path_and_query
         connection.request("POST", target, body=data, headers=headers, encode_chunked=not isinstance(data, (bytes, bytearray)))
         resp = connection.getresponse()
         resp._kubo_connection = connection
