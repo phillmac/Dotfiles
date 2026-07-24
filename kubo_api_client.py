@@ -20,7 +20,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from typing import Any, BinaryIO, Iterable, Iterator, Optional
+from typing import Any, BinaryIO, Dict, Iterable, Iterator, Optional, Tuple, Union
 
 
 @dataclass(frozen=True)
@@ -28,8 +28,8 @@ class KuboError:
     """Structured error returned by Kubo or raised by the transport."""
 
     message: str
-    code: int | None = None
-    type: str | None = None
+    code: Optional[int] = None
+    type: Optional[str] = None
     raw: Any = None
 
 
@@ -48,10 +48,10 @@ class AddEntry:
 
     name: str
     hash: str
-    size: str | None = None
-    mode: str | None = None
-    mtime: int | None = None
-    mtime_nsecs: int | None = None
+    size: Optional[str] = None
+    mode: Optional[str] = None
+    mtime: Optional[int] = None
+    mtime_nsecs: Optional[int] = None
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -61,7 +61,7 @@ class AddResult:
 
     progress: list[AddProgress]
     entries: list[AddEntry]
-    cid: str | None
+    cid: Optional[str]
     errors: list[KuboError]
     raw_events: list[dict[str, Any]]
 
@@ -71,7 +71,7 @@ class PinProgress:
     """An `ipfs pin add --progress` event."""
 
     progress: int
-    bytes: int | None = None
+    bytes: Optional[int] = None
     raw: dict[str, Any] = field(default_factory=dict)
 
 
@@ -81,16 +81,24 @@ class PinResult:
 
     progress: list[PinProgress]
     pins: list[str]
-    cid: str | None
+    cid: Optional[str]
     errors: list[KuboError]
     raw_events: list[dict[str, Any]]
 
 
-MultipartField = tuple[str, str, BinaryIO, str, Optional[str], dict[str, str]]
+MultipartField = Tuple[str, str, BinaryIO, str, Optional[str], Dict[str, str]]
+
+
+def _path_is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
 
 
 class _UnixHTTPConnection(http.client.HTTPConnection):
-    def __init__(self, unix_socket: str, timeout: float | None):
+    def __init__(self, unix_socket: str, timeout: Optional[float]):
         super().__init__("localhost", timeout=timeout)
         self.unix_socket = unix_socket
 
@@ -114,7 +122,7 @@ class KuboClient:
     clear error is returned in result.errors.
     """
 
-    def __init__(self, api: str = "http://127.0.0.1:5001", timeout: float | None = None):
+    def __init__(self, api: str = "http://127.0.0.1:5001", timeout: Optional[float] = None):
         self.api = self._normalize_api(api).rstrip("/")
         self.timeout = timeout
 
@@ -124,7 +132,7 @@ class KuboClient:
         body, _ = self._post("/api/v0/version", {})
         return json.loads(body.decode("utf-8")) if body else {}
 
-    def add(self, paths: str | os.PathLike[str] | Iterable[str | os.PathLike[str]], **options: Any) -> AddResult:
+    def add(self, paths: Union[str, os.PathLike[str], Iterable[Union[str, os.PathLike[str]]]], **options: Any) -> AddResult:
         """Add one or more paths and split streamed progress from final entries.
 
         Useful options include `recursive`, `pin`, `progress`, `wrap_with_directory`,
@@ -157,7 +165,7 @@ class KuboClient:
             for handle in opened:
                 handle.close()
 
-    def pin_add(self, cids: str | Iterable[str], **options: Any) -> PinResult:
+    def pin_add(self, cids: Union[str, Iterable[str]], **options: Any) -> PinResult:
         """Pin one or more CIDs/paths and split progress from final pin status.
 
         By default this sends `recursive=true` and `progress=true`, matching the
@@ -174,10 +182,10 @@ class KuboClient:
         except KuboErrorException as exc:
             return PinResult([], [], None, [exc.error], [])
 
-    def _post_stream(self, path: str, options: dict[str, Any], fields: list[MultipartField] | None, args: list[str] | None = None):
+    def _post_stream(self, path: str, options: dict[str, Any], fields: Optional[list[MultipartField]], args: Optional[list[str]] = None):
         query = self._query(options, args=args)
         headers = {"Accept": "application/json"}
-        data: bytes | Iterable[bytes] = b""
+        data: Union[bytes, Iterable[bytes]] = b""
         if fields is not None:
             data, content_type = self._encode_multipart(fields)
             headers["Content-Type"] = content_type
@@ -205,19 +213,18 @@ class KuboClient:
             if connection is not None:
                 connection.close()
 
-    def _open_stream_response(self, path_and_query: str, data: bytes | Iterable[bytes], headers: dict[str, str]):
-        url = urllib.parse.urlsplit(self.api)
-        if url.scheme == "unix":
-            connection = _UnixHTTPConnection(urllib.parse.unquote(url.path), timeout=self.timeout)
-            target = path_and_query
-        elif url.scheme in {"http", "https"}:
-            host = url.hostname or ""
-            port = url.port
-            connection_class = http.client.HTTPSConnection if url.scheme == "https" else http.client.HTTPConnection
-            connection = connection_class(host, port, timeout=self.timeout)
-            target = (url.path.rstrip("/") + path_and_query) or path_and_query
-        else:
-            raise urllib.error.URLError(f"Unsupported Kubo API scheme for streaming trailers: {url.scheme}")
+    def _open_connection(self) -> Tuple[http.client.HTTPConnection, str]:
+        parsed = urllib.parse.urlsplit(self.api)
+        if parsed.scheme == "unix":
+            return _UnixHTTPConnection(urllib.parse.unquote(parsed.path), timeout=self.timeout), ""
+        if parsed.scheme in {"http", "https"}:
+            connection_class = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
+            return connection_class(parsed.hostname or "", parsed.port, timeout=self.timeout), parsed.path.rstrip("/")
+        raise urllib.error.URLError(f"Unsupported Kubo API scheme: {parsed.scheme}")
+
+    def _open_stream_response(self, path_and_query: str, data: Union[bytes, Iterable[bytes]], headers: dict[str, str]):
+        connection, path_prefix = self._open_connection()
+        target = (path_prefix + path_and_query) or path_and_query
         connection.request("POST", target, body=data, headers=headers, encode_chunked=not isinstance(data, (bytes, bytearray)))
         resp = connection.getresponse()
         resp._kubo_connection = connection
@@ -265,9 +272,22 @@ class KuboClient:
             yield pending
 
     def _post(self, path: str, options: dict[str, Any]) -> tuple[bytes, Any]:
-        req = urllib.request.Request(self.api + path + self._query(options), data=b"", method="POST")
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-            return resp.read(), resp
+        connection, path_prefix = self._open_connection()
+        target = (path_prefix + path + self._query(options)) or path
+        try:
+            connection.request("POST", target, body=b"")
+            resp = connection.getresponse()
+            with resp:
+                body = resp.read()
+            if resp.status >= 400:
+                raise KuboErrorException(self._error_from_status(resp.status, resp.reason, body))
+            return body, resp
+        except (urllib.error.URLError, TimeoutError, socket.timeout, OSError, http.client.HTTPException) as err:
+            if isinstance(err, KuboErrorException):
+                raise
+            raise KuboErrorException(KuboError(str(err), raw=err)) from err
+        finally:
+            connection.close()
 
     @staticmethod
     def _parse_add(events: Iterable[dict[str, Any]], has_root_cid: bool = True) -> AddResult:
@@ -310,7 +330,7 @@ class KuboClient:
         return PinResult(progress, pins, pins[-1] if pins else None, errors, raw_events)
 
     @staticmethod
-    def _query(options: dict[str, Any], args: list[str] | None = None) -> str:
+    def _query(options: dict[str, Any], args: Optional[list[str]] = None) -> str:
         pairs: list[tuple[str, str]] = []
         for arg in args or []:
             pairs.append(("arg", arg))
@@ -344,7 +364,7 @@ class KuboClient:
 
     @staticmethod
     def _multipart_paths(
-        path_list: Iterable[str | os.PathLike[str]],
+        path_list: Iterable[Union[str, os.PathLike[str]]],
         recursive: bool = True,
         dereference_symlinks: bool = False,
         hidden: bool = False,
@@ -384,7 +404,7 @@ class KuboClient:
                     directory_parts.append((root, root.name))
                 for child in descendants:
                     if child.is_dir() and (dereference_symlinks or not child.is_symlink()):
-                        has_files_beneath = any(file.is_relative_to(child) for file in files)
+                        has_files_beneath = any(_path_is_relative_to(file, child) for file in files)
                         if preserve_metadata or not has_files_beneath:
                             directory_parts.append((child, KuboClient._multipart_relative_name(root, child)))
                 if not files and not descendants and not preserve_metadata:
@@ -519,7 +539,7 @@ class KuboClient:
         return descendants
 
     @staticmethod
-    def _directory_identity(path: Path) -> tuple[int, int] | None:
+    def _directory_identity(path: Path) -> Optional[tuple[int, int]]:
         try:
             stat = path.stat()
         except OSError:
@@ -540,7 +560,7 @@ class KuboClient:
         return urllib.parse.quote(filename, safe="-._~")
 
     @staticmethod
-    def _stream_error_from_trailers(resp: Any, trailers: dict[str, str] | None = None) -> KuboError | None:
+    def _stream_error_from_trailers(resp: Any, trailers: Optional[dict[str, str]] = None) -> Optional[KuboError]:
         message = (trailers or {}).get("x-stream-error")
         for source_name in ("trailers", "headers") if not message else ():
             source = getattr(resp, source_name, None)
@@ -604,7 +624,7 @@ class _LazyFile:
 
     def __init__(self, path: Path):
         self.path = path
-        self._handle: BinaryIO | None = None
+        self._handle: Optional[BinaryIO] = None
 
     def read(self, size: int = -1) -> bytes:
         if size is None or size < 0:

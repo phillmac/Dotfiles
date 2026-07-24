@@ -14,7 +14,7 @@ import urllib.request
 import signal
 import sys
 
-from kubo_api_client import KuboClient
+from kubo_api_client import KuboClient, KuboErrorException
 
 
 def _post_bytes(api: str, path: str, params: dict[str, str], timeout: float = 10) -> bytes:
@@ -130,7 +130,7 @@ class KuboDaemon:
             try:
                 client.version()
                 return
-            except (urllib.error.URLError, TimeoutError, OSError) as err:
+            except (KuboErrorException, urllib.error.URLError, TimeoutError, OSError) as err:
                 last_error = err
                 time.sleep(0.25)
         raise TimeoutError(f"Timed out waiting for Kubo API at {self.api}: {last_error}")

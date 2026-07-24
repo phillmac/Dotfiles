@@ -3,20 +3,26 @@ from __future__ import annotations
 import io
 import os
 import subprocess
+import json
+import socket
 import signal
 import sys
 import time
 from pathlib import Path, PureWindowsPath
 import tempfile
 import unittest
+import urllib.parse
 from unittest import mock
 
-from kubo_api_client import KuboClient, _MultipartStream
+from kubo_api_client import KuboClient, _MultipartStream, _path_is_relative_to
 
 
 
 
-class Python39ImportAndCliSmokeTests(unittest.TestCase):
+class Python38ImportAndCliSmokeTests(unittest.TestCase):
+    def test_supported_python_floor_is_38(self):
+        self.assertGreaterEqual(sys.version_info, (3, 8))
+
     def run_repo_python(self, *args: str, expected_returncode: int = 0) -> subprocess.CompletedProcess[str]:
         completed = subprocess.run(
             [sys.executable, *args],
@@ -82,6 +88,100 @@ class Python39ImportAndCliSmokeTests(unittest.TestCase):
         self.assertNotIn("Traceback", completed.stderr)
         self.assertIn("Error:", completed.stderr)
         self.assertIn("nonexistent-rhea-ipfs-wasabi.sock", completed.stderr)
+
+
+class PathCompatibilityTests(unittest.TestCase):
+    def test_path_is_relative_to_direct_child(self):
+        parent = Path("/tmp/parent")
+        self.assertTrue(_path_is_relative_to(parent / "child", parent))
+
+    def test_path_is_relative_to_nested_child(self):
+        parent = Path("/tmp/parent")
+        self.assertTrue(_path_is_relative_to(parent / "child" / "file.txt", parent))
+
+    def test_path_is_relative_to_sibling(self):
+        parent = Path("/tmp/parent")
+        self.assertFalse(_path_is_relative_to(Path("/tmp/sibling"), parent))
+
+    def test_path_is_relative_to_outside_parent(self):
+        parent = Path("/tmp/parent")
+        self.assertFalse(_path_is_relative_to(Path("/var/tmp/outside"), parent))
+
+    def test_path_is_relative_to_equal_paths(self):
+        parent = Path("/tmp/parent")
+        self.assertTrue(_path_is_relative_to(parent, parent))
+
+
+class UnixSocketKuboClientTests(unittest.TestCase):
+    def _serve_once(self, socket_path: Path, response: dict[str, object]):
+        import threading
+
+        ready = threading.Event()
+        seen = {}
+
+        def server():
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                listener.bind(str(socket_path))
+                listener.listen(1)
+                ready.set()
+                listener.settimeout(5)
+                conn, _ = listener.accept()
+                with conn:
+                    conn.settimeout(5)
+                    data = b""
+                    while b"\r\n\r\n" not in data:
+                        chunk = conn.recv(4096)
+                        if not chunk:
+                            break
+                        data += chunk
+                    first_line = data.split(b"\r\n", 1)[0].decode("ascii")
+                    _method, target, _version = first_line.split(" ", 2)
+                    seen["target"] = target
+                    body = json.dumps(response).encode("utf-8") + b"\n"
+                    conn.sendall(
+                        b"HTTP/1.1 200 OK\r\n"
+                        + f"Content-Length: {len(body)}\r\n".encode("ascii")
+                        + b"Content-Type: application/json\r\nConnection: close\r\n\r\n"
+                        + body
+                    )
+
+        thread = threading.Thread(target=server, daemon=True)
+        thread.start()
+        self.assertTrue(ready.wait(5))
+        return seen, thread
+
+    def test_pin_add_uses_temporary_unix_socket_transport(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            socket_path = Path(tmpdir) / "kubo.sock"
+            seen, thread = self._serve_once(socket_path, {"Pins": ["QmTest"]})
+            client = KuboClient(f"unix://{socket_path}", timeout=5)
+
+            result = client.pin_add("QmTest")
+
+            thread.join(5)
+            self.assertFalse(thread.is_alive())
+            parsed = urllib.parse.urlsplit(seen["target"])
+            params = urllib.parse.parse_qs(parsed.query)
+            self.assertEqual(parsed.path, "/api/v0/pin/add")
+            self.assertEqual(params.get("arg"), ["QmTest"])
+            self.assertEqual(params.get("recursive"), ["true"])
+            self.assertEqual(params.get("progress"), ["true"])
+            self.assertEqual(result.errors, [])
+            self.assertEqual(result.pins, ["QmTest"])
+
+    def test_version_uses_temporary_unix_socket_transport(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            socket_path = Path(tmpdir) / "kubo.sock"
+            seen, thread = self._serve_once(socket_path, {"Version": "0.42.0"})
+            client = KuboClient(f"unix://{socket_path}", timeout=5)
+
+            version = client.version()
+
+            thread.join(5)
+            self.assertFalse(thread.is_alive())
+            parsed = urllib.parse.urlsplit(seen["target"])
+            self.assertEqual(parsed.path, "/api/v0/version")
+            self.assertEqual(version["Version"], "0.42.0")
 
 
 class KuboClientParsingTests(unittest.TestCase):
@@ -1525,7 +1625,7 @@ class FatalLifecyclePropagationTests(unittest.TestCase):
         self.assertIn("group still exists", caught.exception.failure.message)
 
 class ExternalPostExitVerificationTests(unittest.TestCase):
-    def _config(self, tmpdir: str, *, hook: str | None = None):
+    def _config(self, tmpdir: str, *, hook: Optional[str] = None):
         import rhea_wasabi_pebble_export as exporter
         return exporter.ExportConfig(
             source=exporter.KuboEndpoint.parse("/tmp/source.sock"),

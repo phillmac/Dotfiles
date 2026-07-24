@@ -12,6 +12,7 @@ import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional, Union
 
 from kubo_api_client import KuboClient, KuboError, PinResult
 
@@ -47,7 +48,7 @@ class ExportFailed(RuntimeError):
         self.failure = failure
 
 
-def missing_block_cid(result: PinResult) -> str | None:
+def missing_block_cid(result: PinResult) -> Optional[str]:
     for error in result.errors:
         cid = missing_block_cid_from_error(error)
         if cid:
@@ -55,7 +56,7 @@ def missing_block_cid(result: PinResult) -> str | None:
     return None
 
 
-def missing_block_cid_from_error(error: KuboError) -> str | None:
+def missing_block_cid_from_error(error: KuboError) -> Optional[str]:
     match = _MISSING_BLOCK_RE.search(error.message)
     return match.group(1) if match else None
 
@@ -68,7 +69,7 @@ def _terminate_process_group(
     process: subprocess.Popen[object],
     signum: int = signal.SIGTERM,
     *,
-    wait_timeout: float | None = None,
+    wait_timeout: Optional[float] = None,
 ) -> None:
     terminate_external_process(
         process,
@@ -96,7 +97,7 @@ def _structured_start_failure(missing_cid: str, command: str, exc: OSError) -> E
     return ExportFailed(failure)
 
 
-def export_missing_cid(missing_cid: str, export_command: str | Path = DEFAULT_EXPORT_COMMAND, *, timeout: float | None = None) -> None:
+def export_missing_cid(missing_cid: str, export_command: Union[str, Path] = DEFAULT_EXPORT_COMMAND, *, timeout: Optional[float] = None) -> None:
     command = str(export_command)
     try:
         process = subprocess.Popen([command, missing_cid], start_new_session=True)
@@ -196,9 +197,9 @@ def pin_with_export_retry(
     cid: str,
     *,
     api: str = "http://127.0.0.1:5001",
-    timeout: float | None = None,
-    export_command: str | Path = DEFAULT_EXPORT_COMMAND,
-    export_timeout: float | None = None,
+    timeout: Optional[float] = None,
+    export_command: Union[str, Path] = DEFAULT_EXPORT_COMMAND,
+    export_timeout: Optional[float] = None,
     max_attempts: int = 0,
     recursive: bool = True,
     progress: bool = True,
@@ -238,7 +239,7 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     args = _parser().parse_args(argv)
     result = pin_with_export_retry(args.cid, api=args.api, timeout=args.timeout, export_command=args.export_command, export_timeout=args.export_timeout, max_attempts=args.max_attempts, recursive=not args.no_recursive, progress=not args.no_progress, verbose=args.verbose)
     if result.errors:

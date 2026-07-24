@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse, contextlib, fcntl, http.client, json, math, os, queue, secrets, signal, socket, stat, subprocess, sys, threading, time, urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator, Optional, Union
 
 DEFAULT_LOCK = os.path.expanduser("~/.var/run/rhea-wasabi-pebble-export-laptop-dag.lock")
 DEFAULT_RETRY_DELAY = 300.0
@@ -35,7 +35,7 @@ def log(msg: str) -> None:
     print(f"{time.strftime('%c')} - {msg}", file=sys.stderr, flush=True)
 
 
-def parse_nonnegative_finite_float(raw: str | None, *, default: float | None, maximum: float | None = None) -> float | None:
+def parse_nonnegative_finite_float(raw: Optional[str], *, default: Optional[float], maximum: Optional[float] = None) -> Optional[float]:
     if raw is None or raw == "":
         return default
     try:
@@ -47,7 +47,7 @@ def parse_nonnegative_finite_float(raw: str | None, *, default: float | None, ma
     return min(value, maximum) if maximum is not None else value
 
 
-def parse_positive_finite_float(raw: str | None, *, default: float, maximum: float | None = None) -> float:
+def parse_positive_finite_float(raw: Optional[str], *, default: float, maximum: Optional[float] = None) -> float:
     value = parse_nonnegative_finite_float(raw, default=default, maximum=maximum)
     if value is None or value <= 0:
         return default
@@ -64,7 +64,7 @@ def exporter_cleanup_timeout_from_environment() -> float:
     return min(inner + EXPORTER_CLEANUP_MARGIN, MAX_OUTER_EXPORTER_CLEANUP_TIMEOUT)
 
 
-def _parse_positive_int(raw: str | None, *, default: int) -> int:
+def _parse_positive_int(raw: Optional[str], *, default: int) -> int:
     try:
         value = int(raw) if raw not in (None, "") else default
     except ValueError:
@@ -75,7 +75,7 @@ def _parse_positive_int(raw: str | None, *, default: int) -> int:
 @dataclass(frozen=True)
 class KuboEndpoint:
     base_url: str
-    unix_socket: Path | None
+    unix_socket: Optional[Path]
 
     @classmethod
     def parse(cls, value: str) -> "KuboEndpoint":
@@ -101,12 +101,12 @@ class ExportConfig:
     lock_path: Path
     terminate_timeout: float
     lock_poll_interval: float
-    hook: str | None
+    hook: Optional[str]
     chunk_size: int
     buffer_size: int
     connect_timeout: float
-    read_timeout: float | None
-    write_timeout: float | None
+    read_timeout: Optional[float]
+    write_timeout: Optional[float]
 
     @classmethod
     def from_env(cls) -> "ExportConfig":
@@ -212,7 +212,7 @@ def process_group_exists(pgid: int) -> bool:
 def terminate_external_process(
     process: subprocess.Popen[object],
     *,
-    pgid: int | None = None,
+    pgid: Optional[int] = None,
     initial_signal: int = signal.SIGTERM,
     grace: float,
     kill_wait: float = 2.0,
@@ -268,7 +268,7 @@ def wait_and_verify_external_process(
     *,
     cleanup_grace: float,
     context: str,
-    timeout: float | None = None,
+    timeout: Optional[float] = None,
 ) -> int:
     """Wait for an external leader and fail if its process group survives."""
     pgid = process.pid
@@ -305,7 +305,7 @@ _terminate_process_group = terminate_external_process
 _kill_process_group = terminate_external_process
 
 class UnixHTTPConnection(http.client.HTTPConnection):
-    def __init__(self, unix_socket: Path, timeout: float | None):
+    def __init__(self, unix_socket: Path, timeout: Optional[float]):
         super().__init__("localhost", timeout=timeout)
         self.unix_socket = str(unix_socket)
     def connect(self) -> None:
@@ -315,7 +315,7 @@ class UnixHTTPConnection(http.client.HTTPConnection):
         self.sock.connect(self.unix_socket)
 
 
-def _connection(endpoint: KuboEndpoint, timeout: float | None) -> http.client.HTTPConnection:
+def _connection(endpoint: KuboEndpoint, timeout: Optional[float]) -> http.client.HTTPConnection:
     if endpoint.unix_socket:
         return UnixHTTPConnection(endpoint.unix_socket, timeout)
     p = urllib.parse.urlparse(endpoint.base_url)
@@ -384,7 +384,7 @@ def transfer_should_stop(attempt: TransferAttempt) -> bool:
 
 class ShutdownController:
     def __init__(self):
-        self.event = threading.Event(); self.signum: int | None = None; self._closers: list[object] = []
+        self.event = threading.Event(); self.signum: Optional[int] = None; self._closers: list[object] = []
         self._closers_lock = threading.Lock(); self._old: dict[int, object] = {}
     def __enter__(self):
         if threading.current_thread() is threading.main_thread():
@@ -471,7 +471,7 @@ def _multipart_chunks(q: queue.Queue[object], boundary: str, attempt: TransferAt
     raise ShutdownRequested(attempt.global_shutdown.signum or signal.SIGTERM)
 
 
-def _request_streaming_multipart(conn: http.client.HTTPConnection, path: str, chunks: Iterator[bytes], boundary: str, write_timeout: float | None, read_timeout: float | None) -> http.client.HTTPResponse:
+def _request_streaming_multipart(conn: http.client.HTTPConnection, path: str, chunks: Iterator[bytes], boundary: str, write_timeout: Optional[float], read_timeout: Optional[float]) -> http.client.HTTPResponse:
     headers = {
         "Connection": "close",
         "Content-Type": f"multipart/form-data; boundary={boundary}",
@@ -493,7 +493,7 @@ def transfer_dag(cid: str, config: ExportConfig, shutdown: ShutdownController) -
     attempt = TransferAttempt(shutdown)
     producer = threading.Thread(target=_producer, args=(cid, config, attempt, q, result), name=f"dag-export-{cid}", daemon=True)
     producer.start()
-    conn = None; resp = None; primary_error: BaseException | None = None
+    conn = None; resp = None; primary_error: Optional[BaseException] = None
     try:
         boundary = "codex-" + secrets.token_hex(16)
         conn = _connection(config.destination, config.connect_timeout); attempt.add_closer(conn)
@@ -543,7 +543,7 @@ def acquire_lock_interruptibly(lock_fd: int, config: ExportConfig, shutdown: Shu
     raise ShutdownRequested(shutdown.signum or signal.SIGTERM)
 
 
-def process_cid(cid: str, config: ExportConfig | None = None) -> int:
+def process_cid(cid: str, config: Optional[ExportConfig] = None) -> int:
     config = config or ExportConfig.from_env()
     config.lock_path.parent.mkdir(parents=True, exist_ok=True)
     with ShutdownController() as shutdown:
@@ -612,7 +612,7 @@ def _ensure_fifo(path: Path) -> None:
     if not path.exists(): os.mkfifo(path)
 
 
-def run_fifo_worker(queue_path: Path = Path(QUEUE_PATH), config: ExportConfig | None = None) -> int:
+def run_fifo_worker(queue_path: Path = Path(QUEUE_PATH), config: Optional[ExportConfig] = None) -> int:
     config = config or ExportConfig.from_env(); _ensure_fifo(queue_path)
     with ShutdownController() as shutdown:
         log(f"Waiting for CIDs on {queue_path}")
@@ -678,7 +678,7 @@ def run_fifo_worker(queue_path: Path = Path(QUEUE_PATH), config: ExportConfig | 
     return 128 + (shutdown.signum or signal.SIGTERM)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) == 1 and argv[0] not in {"-h", "--help", "export", "fifo-worker"}:
         return process_cid(argv[0])
