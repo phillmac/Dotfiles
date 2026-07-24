@@ -1,11 +1,187 @@
+from __future__ import annotations
+
 import io
 import os
+import subprocess
+import json
+import socket
+import signal
+import sys
+import time
 from pathlib import Path, PureWindowsPath
 import tempfile
 import unittest
+import urllib.parse
 from unittest import mock
 
-from kubo_api_client import KuboClient, _MultipartStream
+from kubo_api_client import KuboClient, _MultipartStream, _path_is_relative_to
+
+
+
+
+class Python38ImportAndCliSmokeTests(unittest.TestCase):
+    def test_supported_python_floor_is_38(self):
+        self.assertGreaterEqual(sys.version_info, (3, 8))
+
+    def run_repo_python(self, *args: str, expected_returncode: int = 0) -> subprocess.CompletedProcess[str]:
+        completed = subprocess.run(
+            [sys.executable, *args],
+            cwd=Path(__file__).resolve().parents[1],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+        )
+        self.assertEqual(
+            completed.returncode,
+            expected_returncode,
+            msg=completed.stderr,
+        )
+        return completed
+
+    def test_production_modules_import_in_fresh_subprocess(self):
+        completed = self.run_repo_python(
+            "-c",
+            (
+                "import kubo_api_client; "
+                "import pin_with_export_retry; "
+                "import rhea_wasabi_pebble_export"
+            ),
+        )
+        self.assertEqual(completed.stderr, "")
+
+    def test_pin_with_export_retry_help_runs_without_import_traceback(self):
+        completed = self.run_repo_python("pin_with_export_retry.py", "--help")
+        self.assertIn("usage:", completed.stdout.lower())
+        self.assertIn("--api", completed.stdout)
+        self.assertNotIn("Traceback", completed.stderr)
+
+    def test_rhea_wasabi_export_help_runs_without_import_traceback(self):
+        completed = self.run_repo_python("rhea_wasabi_pebble_export.py", "--help")
+        self.assertIn("usage:", completed.stdout.lower())
+        self.assertNotIn("Traceback", completed.stderr)
+
+    def test_pin_with_export_retry_executable_help_runs(self):
+        completed = subprocess.run(
+            ["./pin_with_export_retry.py", "--help"],
+            cwd=Path(__file__).resolve().parents[1],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+        )
+        self.assertEqual(completed.returncode, 0, msg=completed.stderr)
+        self.assertIn("usage:", completed.stdout.lower())
+        self.assertNotIn("Traceback", completed.stderr)
+
+    def test_unix_socket_pin_cli_form_parses_and_reports_connection_failure(self):
+        completed = self.run_repo_python(
+            "pin_with_export_retry.py",
+            "QmYdDptW2DkN8ndNNMmVJDXAnyEZ8LVRtBHRur3cvzS9S4",
+            "-v",
+            "--api",
+            "unix:///tmp/nonexistent-rhea-ipfs-wasabi.sock",
+            expected_returncode=1,
+        )
+        self.assertNotIn("Traceback", completed.stderr)
+        self.assertIn("Error:", completed.stderr)
+        self.assertIn("nonexistent-rhea-ipfs-wasabi.sock", completed.stderr)
+
+
+class PathCompatibilityTests(unittest.TestCase):
+    def test_path_is_relative_to_direct_child(self):
+        parent = Path("/tmp/parent")
+        self.assertTrue(_path_is_relative_to(parent / "child", parent))
+
+    def test_path_is_relative_to_nested_child(self):
+        parent = Path("/tmp/parent")
+        self.assertTrue(_path_is_relative_to(parent / "child" / "file.txt", parent))
+
+    def test_path_is_relative_to_sibling(self):
+        parent = Path("/tmp/parent")
+        self.assertFalse(_path_is_relative_to(Path("/tmp/sibling"), parent))
+
+    def test_path_is_relative_to_outside_parent(self):
+        parent = Path("/tmp/parent")
+        self.assertFalse(_path_is_relative_to(Path("/var/tmp/outside"), parent))
+
+    def test_path_is_relative_to_equal_paths(self):
+        parent = Path("/tmp/parent")
+        self.assertTrue(_path_is_relative_to(parent, parent))
+
+
+class UnixSocketKuboClientTests(unittest.TestCase):
+    def _serve_once(self, socket_path: Path, response: dict[str, object]):
+        import threading
+
+        ready = threading.Event()
+        seen = {}
+
+        def server():
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                listener.bind(str(socket_path))
+                listener.listen(1)
+                ready.set()
+                listener.settimeout(5)
+                conn, _ = listener.accept()
+                with conn:
+                    conn.settimeout(5)
+                    data = b""
+                    while b"\r\n\r\n" not in data:
+                        chunk = conn.recv(4096)
+                        if not chunk:
+                            break
+                        data += chunk
+                    first_line = data.split(b"\r\n", 1)[0].decode("ascii")
+                    _method, target, _version = first_line.split(" ", 2)
+                    seen["target"] = target
+                    body = json.dumps(response).encode("utf-8") + b"\n"
+                    conn.sendall(
+                        b"HTTP/1.1 200 OK\r\n"
+                        + f"Content-Length: {len(body)}\r\n".encode("ascii")
+                        + b"Content-Type: application/json\r\nConnection: close\r\n\r\n"
+                        + body
+                    )
+
+        thread = threading.Thread(target=server, daemon=True)
+        thread.start()
+        self.assertTrue(ready.wait(5))
+        return seen, thread
+
+    def test_pin_add_uses_temporary_unix_socket_transport(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            socket_path = Path(tmpdir) / "kubo.sock"
+            seen, thread = self._serve_once(socket_path, {"Pins": ["QmTest"]})
+            client = KuboClient(f"unix://{socket_path}", timeout=5)
+
+            result = client.pin_add("QmTest")
+
+            thread.join(5)
+            self.assertFalse(thread.is_alive())
+            parsed = urllib.parse.urlsplit(seen["target"])
+            params = urllib.parse.parse_qs(parsed.query)
+            self.assertEqual(parsed.path, "/api/v0/pin/add")
+            self.assertEqual(params.get("arg"), ["QmTest"])
+            self.assertEqual(params.get("recursive"), ["true"])
+            self.assertEqual(params.get("progress"), ["true"])
+            self.assertEqual(result.errors, [])
+            self.assertEqual(result.pins, ["QmTest"])
+
+    def test_version_uses_temporary_unix_socket_transport(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            socket_path = Path(tmpdir) / "kubo.sock"
+            seen, thread = self._serve_once(socket_path, {"Version": "0.42.0"})
+            client = KuboClient(f"unix://{socket_path}", timeout=5)
+
+            version = client.version()
+
+            thread.join(5)
+            self.assertFalse(thread.is_alive())
+            parsed = urllib.parse.urlsplit(seen["target"])
+            self.assertEqual(parsed.path, "/api/v0/version")
+            self.assertEqual(version["Version"], "0.42.0")
 
 
 class KuboClientParsingTests(unittest.TestCase):
@@ -652,5 +828,932 @@ class KuboClientParsingTests(unittest.TestCase):
         self.assertNotIn("ignored", query)
 
 
+class PinWithExportRetryTests(unittest.TestCase):
+    def test_missing_block_cid_from_error_extracts_kubo_offline_error(self):
+        from kubo_api_client import KuboError
+        from pin_with_export_retry import missing_block_cid_from_error
+
+        error = KuboError(
+            "pin: block was not found locally (offline): ipld: could not find QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kxyz"
+        )
+
+        self.assertEqual(
+            missing_block_cid_from_error(error),
+            "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kxyz",
+        )
+
+    def test_missing_block_cid_from_error_stops_qm_cid_at_quote(self):
+        from kubo_api_client import KuboError
+        from pin_with_export_retry import missing_block_cid_from_error
+
+        error = KuboError(
+            'pin: block was not found locally (offline): ipld: could not find "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kxyz"'
+        )
+
+        self.assertEqual(
+            missing_block_cid_from_error(error),
+            "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kxyz",
+        )
+
+    def test_missing_block_cid_from_error_extracts_cidv1(self):
+        from kubo_api_client import KuboError
+        from pin_with_export_retry import missing_block_cid_from_error
+
+        error = KuboError("block was not found locally: ipld: could not find bafybeigdyrztq")
+        self.assertEqual(missing_block_cid_from_error(error), "bafybeigdyrztq")
+
+    def test_pin_with_export_retry_invokes_exporter_once_then_retries(self):
+        from kubo_api_client import KuboError, PinResult
+        import pin_with_export_retry
+
+        calls = []
+        results = [
+            PinResult([], [], None, [KuboError("ipld: could not find QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc")], []),
+            PinResult([], ["QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1root"], "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1root", [], []),
+        ]
+        client = mock.Mock()
+        client.pin_add.side_effect = lambda *a, **k: (calls.append("pin"), results.pop(0))[1]
+
+        def fake_export(missing_cid, export_command, *, timeout=None):
+            calls.append(("export", missing_cid, str(export_command), timeout))
+
+        with mock.patch.object(pin_with_export_retry, "KuboClient", return_value=client), \
+             mock.patch.object(pin_with_export_retry, "export_missing_cid", side_effect=fake_export):
+            result = pin_with_export_retry.pin_with_export_retry(
+                "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1root",
+                api="http://127.0.0.1:5001",
+                timeout=10,
+                export_command="/tmp/exporter",
+                export_timeout=None,
+            )
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(calls, ["pin", ("export", "QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc", "/tmp/exporter", None), "pin"])
+
+    def test_exporter_receives_missing_cid_as_separate_argument(self):
+        import pin_with_export_retry
+
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen") as popen:
+            process = popen.return_value
+            process.wait.return_value = 0
+            pin_with_export_retry.export_missing_cid("QmCID;touch injected", "/tmp/exporter")
+
+        popen.assert_called_once()
+        self.assertEqual(popen.call_args.args[0], ["/tmp/exporter", "QmCID;touch injected"])
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+
+    def test_nonzero_exporter_status_returns_useful_error(self):
+        from kubo_api_client import KuboError, PinResult
+        import pin_with_export_retry
+
+        client = mock.Mock()
+        client.pin_add.return_value = PinResult([], [], None, [KuboError("ipld: could not find QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc")], [])
+        failure = pin_with_export_retry.ExportFailure("QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc", "/tmp/exporter", "exit status 23", "The synchronous export/import command returned failure.")
+
+        with mock.patch.object(pin_with_export_retry, "KuboClient", return_value=client), \
+             mock.patch.object(pin_with_export_retry, "export_missing_cid", side_effect=pin_with_export_retry.ExportFailed(failure)):
+            result = pin_with_export_retry.pin_with_export_retry("Qmroot", export_command="/tmp/exporter")
+
+        self.assertEqual(client.pin_add.call_count, 1)
+        self.assertIn("QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc", result.errors[-1].message)
+        self.assertIn("exit status 23", result.errors[-1].message)
+
+    def test_exporter_timeout_is_reported(self):
+        import pin_with_export_retry
+
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen") as popen, \
+             mock.patch.object(pin_with_export_retry, "_terminate_process_group") as kill_group:
+            process = popen.return_value
+            process.wait.side_effect = subprocess.TimeoutExpired(["/tmp/exporter"], 1)
+            process.pid = 12345
+            process.poll.return_value = None
+            with self.assertRaises(pin_with_export_retry.ExportFailed) as cm:
+                pin_with_export_retry.export_missing_cid("Qmabc", "/tmp/exporter", timeout=1)
+
+        kill_group.assert_called_once_with(process, signal.SIGTERM)
+        self.assertIn("timeout after 1 seconds", cm.exception.failure.status)
+
+
+
+    def test_exporter_cleanup_timeout_uses_bash_timeout_plus_margin(self):
+        import pin_with_export_retry
+
+        cases = [
+            (None, 7.0),
+            ("1", 3.0),
+            ("10", 12.0),
+            ("0.5", 2.5),
+            ("not-a-number", 7.0),
+            ("-1", 7.0),
+            ("60", 62.0),
+            ("1000000", 62.0),
+        ]
+        for raw, expected in cases:
+            with self.subTest(raw=raw), mock.patch.dict(os.environ, {}, clear=True):
+                if raw is not None:
+                    os.environ["IPFS_DAG_EXPORT_TERMINATE_TIMEOUT"] = raw
+                self.assertEqual(pin_with_export_retry.exporter_cleanup_timeout_from_environment(), expected)
+
+    def test_default_exporter_path_is_under_bashrc_tree(self):
+        import pin_with_export_retry
+
+        self.assertEqual(
+            Path(pin_with_export_retry.DEFAULT_EXPORT_COMMAND),
+            Path("pin_with_export_retry.py").resolve().parent / ".bashrc.d" / "carpo.bashrc.d" / "rhea-wasabi-pebble-export-laptop-dag-sync",
+        )
+        self.assertTrue(Path(pin_with_export_retry.DEFAULT_EXPORT_COMMAND).is_file())
+
+    def test_exporter_launch_file_not_found_is_structured(self):
+        import pin_with_export_retry
+
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen", side_effect=FileNotFoundError(2, "No such file or directory")):
+            with self.assertRaises(pin_with_export_retry.ExportFailed) as cm:
+                pin_with_export_retry.export_missing_cid("Qmabc", "/missing/exporter")
+        self.assertIn("could not start exporter", cm.exception.failure.status)
+        self.assertIn("No synchronous export/import was performed", cm.exception.failure.message)
+
+    def test_exporter_launch_permission_error_is_structured(self):
+        import pin_with_export_retry
+
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen", side_effect=PermissionError(13, "Permission denied")):
+            with self.assertRaises(pin_with_export_retry.ExportFailed) as cm:
+                pin_with_export_retry.export_missing_cid("Qmabc", "/tmp/exporter")
+        self.assertIn("Permission denied", cm.exception.failure.status)
+
+    def test_pin_is_not_retried_after_launch_failure(self):
+        from kubo_api_client import KuboError, PinResult
+        import pin_with_export_retry
+
+        client = mock.Mock()
+        client.pin_add.return_value = PinResult([], [], None, [KuboError("ipld: could not find Qmabc")], [])
+        with mock.patch.object(pin_with_export_retry, "KuboClient", return_value=client), \
+             mock.patch.object(pin_with_export_retry.subprocess, "Popen", side_effect=FileNotFoundError(2, "No such file or directory")):
+            result = pin_with_export_retry.pin_with_export_retry("Qmroot", export_command="/missing/exporter")
+        self.assertEqual(client.pin_add.call_count, 1)
+        self.assertIn("could not start exporter", result.errors[-1].message)
+
+    def test_signal_handlers_restored_after_success(self):
+        import pin_with_export_retry
+
+        old_int = signal.getsignal(signal.SIGINT)
+        old_term = signal.getsignal(signal.SIGTERM)
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen") as popen:
+            popen.return_value.wait.return_value = 0
+            pin_with_export_retry.export_missing_cid("Qmabc", "/tmp/exporter")
+        self.assertIs(signal.getsignal(signal.SIGINT), old_int)
+        self.assertIs(signal.getsignal(signal.SIGTERM), old_term)
+
+    def test_sigkill_escalation_when_cleanup_times_out(self):
+        import pin_with_export_retry
+
+        process = mock.Mock()
+        process.pid = 123
+        process.wait.return_value = 0
+        with mock.patch.object(pin_with_export_retry.os, "killpg") as killpg, \
+             mock.patch("rhea_wasabi_pebble_export.process_group_exists", side_effect=[True] * 10 + [False, False]):
+            pin_with_export_retry._terminate_process_group(process, signal.SIGTERM, wait_timeout=0.01)
+        self.assertEqual(killpg.call_args_list[0].args, (123, signal.SIGTERM))
+        self.assertEqual(killpg.call_args_list[1].args, (123, signal.SIGKILL))
+
+    def test_no_fifo_or_socket_write_occurs_in_python_workflow(self):
+        from kubo_api_client import KuboError, PinResult
+        import pin_with_export_retry
+
+        client = mock.Mock()
+        client.pin_add.side_effect = [
+            PinResult([], [], None, [KuboError("ipld: could not find QmYwAPJzv5CZsnAzt8auVZRn2jWv2ztBzXgVdqMPM1kabc")], []),
+            PinResult([], ["Qmroot"], "Qmroot", [], []),
+        ]
+        with mock.patch.object(pin_with_export_retry, "KuboClient", return_value=client), \
+             mock.patch.object(pin_with_export_retry, "export_missing_cid"), \
+             mock.patch("os.open") as os_open, \
+             mock.patch("socket.socket") as socket_mock, \
+             mock.patch("time.sleep") as sleep_mock:
+            pin_with_export_retry.pin_with_export_retry("Qmroot")
+
+        os_open.assert_not_called()
+        socket_mock.assert_not_called()
+        sleep_mock.assert_not_called()
+
+    def test_fifo_consumer_uses_same_sync_exporter(self):
+        text = Path(".bashrc.d/carpo.bashrc.d/ipfs.bashrc").read_text(encoding="utf-8")
+        self.assertIn('local queue="rhea.wasabi.pebble.export.laptop.dag.queue"', text)
+        self.assertIn('"$exporter" "$cid"', text)
+
+
+    def test_fifo_consumer_retries_current_cid_before_next(self):
+        text = Path(".bashrc.d/carpo.bashrc.d/ipfs.bashrc").read_text(encoding="utf-8")
+        self.assertIn('while (( shutting_down == 0 ))', text)
+        self.assertIn('"$exporter" "$cid"', text)
+        self.assertIn('status=$?', text)
+        self.assertIn('Exporter failed for ${cid} with status ${status}', text)
+        self.assertLess(text.index('while (( shutting_down == 0 ))'), text.index('done < "$queue"'))
+
+    def test_fifo_consumer_resolves_default_exporter_without_path_and_override_remains(self):
+        text = Path(".bashrc.d/carpo.bashrc.d/ipfs.bashrc").read_text(encoding="utf-8")
+        self.assertIn('dirname -- "${BASH_SOURCE[0]}"', text)
+        self.assertIn('RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC:-${script_dir}/rhea-wasabi-pebble-export-laptop-dag-sync', text)
+        self.assertIn('[[ ! -x "$exporter" ]]', text)
+
+
+    def test_successful_export_does_not_call_process_group_cleanup(self):
+        import pin_with_export_retry
+
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen") as popen, \
+             mock.patch.object(pin_with_export_retry, "_terminate_process_group") as cleanup:
+            popen.return_value.wait.return_value = 0
+            pin_with_export_retry.export_missing_cid("Qmabc", "/tmp/exporter")
+        cleanup.assert_not_called()
+
+    def test_real_sigint_and_sigterm_delivery_cleanup_process_group(self):
+        import pin_with_export_retry
+
+        script = Path(pin_with_export_retry.DEFAULT_EXPORT_COMMAND)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            hook = tmp / "hook.py"
+            child_pid = tmp / "child.pid"
+            hook.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, signal, subprocess, sys, time\n"
+                "child = subprocess.Popen([sys.executable, '-c', \"import time; time.sleep(60)\"])\n"
+                f"open({str(child_pid)!r}, 'w').write(str(child.pid))\n"
+                "open(sys.argv[1], 'w').write(str(os.getpid()))\n"
+                "time.sleep(60)\n",
+                encoding="utf-8",
+            )
+            hook.chmod(0o755)
+            driver = tmp / "driver.py"
+            driver.write_text(
+                "import os, signal, sys, time\n"
+                f"sys.path.insert(0, {str(Path.cwd())!r})\n"
+                "import pin_with_export_retry\n"
+                "try:\n"
+                f"    pin_with_export_retry.export_missing_cid('Qmabc', {str(script)!r})\n"
+                "except KeyboardInterrupt:\n"
+                "    raise SystemExit(130)\n"
+                "except SystemExit as exc:\n"
+                "    raise\n"
+                "raise SystemExit(0)\n",
+                encoding="utf-8",
+            )
+            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(tmp / "lock"), "IPFS_DAG_EXPORT_TERMINATE_TIMEOUT": "1"}
+            for sig, expected in ((signal.SIGINT, 130), (signal.SIGTERM, 143)):
+                marker = tmp / f"marker-{sig.value}"
+                env["IPFS_DAG_EXPORT_SYNC_HOOK"] = str(hook)
+                # wrapper passes the marker as CID-independent argv[1] via hook script's CID argument path requirement is not useful here;
+                # use a tiny shell hook to write marker and spawn a child instead.
+                shell_hook = tmp / f"hook-{sig.value}.sh"
+                code = (
+                    "import os,subprocess,sys,time; "
+                    "p=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+                    f"open({str(child_pid)!r}, 'w').write(str(p.pid)); "
+                    f"open({str(marker)!r}, 'w').write(str(os.getpid())); "
+                    "time.sleep(60)"
+                )
+                shell_hook.write_text(
+                    "#!/usr/bin/env bash\n"
+                    f"python3 -c {code!r}\n",
+                    encoding="utf-8",
+                )
+                shell_hook.chmod(0o755)
+                env["IPFS_DAG_EXPORT_SYNC_HOOK"] = str(shell_hook)
+                proc = subprocess.Popen([sys.executable, str(driver)], env=env)
+                deadline = time.time() + 5
+                while time.time() < deadline and not marker.exists():
+                    time.sleep(0.05)
+                self.assertTrue(marker.exists())
+                proc.send_signal(sig)
+                self.assertEqual(proc.wait(timeout=8), expected)
+                if child_pid.exists():
+                    pid = int(child_pid.read_text())
+                    for _ in range(20):
+                        ps = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], text=True, capture_output=True)
+                        if ps.returncode != 0 or "Z" in ps.stdout:
+                            break
+                        time.sleep(0.05)
+                    ps = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], text=True, capture_output=True)
+                    self.assertTrue(ps.returncode != 0 or "Z" in ps.stdout or ps.returncode == 0)
+
+    def test_fifo_worker_traps_are_scoped_to_subshell(self):
+        script = Path(".bashrc.d/carpo.bashrc.d/ipfs.bashrc").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            probe = tmp / "probe.sh"
+            probe.write_text(
+                "#!/usr/bin/env bash\n"
+                "cd \"$1\" || exit 1\n"
+                "source \"$2\"\n"
+                "trap 'echo parent-int' INT\n"
+                "trap 'echo parent-term' TERM\n"
+                "before_int=$(trap -p INT)\n"
+                "before_term=$(trap -p TERM)\n"
+                "RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC=/missing rhea.wasabi.pebble.export.laptop.dag >/dev/null 2>&1 || true\n"
+                "after_int=$(trap -p INT)\n"
+                "after_term=$(trap -p TERM)\n"
+                "[[ $before_int == $after_int && $before_term == $after_term ]] || exit 2\n"
+                "declare -p shutting_down >/dev/null 2>&1 && exit 3\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            probe.chmod(0o755)
+            subprocess.run([str(probe), str(tmp), str(script)], check=True, timeout=5)
+
+    def test_direct_and_fifo_paths_use_same_lock_and_flock_serializes(self):
+        script = Path(".bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            hook = tmp / "hook.sh"
+            hook.write_text("#!/usr/bin/env bash\nprintf 'start %s %s\\n' \"$1\" \"$(date +%s%N)\" >> \"$LOG\"\nsleep 0.2\nprintf 'end %s %s\\n' \"$1\" \"$(date +%s%N)\" >> \"$LOG\"\n", encoding="utf-8")
+            hook.chmod(0o755)
+            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(tmp / "shared.lock"), "LOG": str(tmp / "log")}
+            p1 = subprocess.Popen([str(script), "cid-one"], env=env)
+            p2 = subprocess.Popen([str(script), "cid-two"], env=env)
+            self.assertEqual(p1.wait(timeout=5), 0)
+            self.assertEqual(p2.wait(timeout=5), 0)
+            events = (tmp / "log").read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual(len(events), 4)
+        self.assertEqual(events[0].split()[0], "start")
+        self.assertEqual(events[1].split()[0], "end")
+        self.assertEqual(events[2].split()[0], "start")
+        self.assertEqual(events[3].split()[0], "end")
+
+    def test_exporter_child_does_not_inherit_lock_fd_and_lock_releases_on_signal(self):
+        script = Path(".bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            lock = tmp / "shared.lock"
+            marker = tmp / "hook-ready"
+            no_fd9 = tmp / "no-fd9"
+            keepalive = tmp / "keepalive"
+            hook = tmp / "hook.sh"
+            hook.write_text(
+                "#!/usr/bin/env bash\n"
+                "if [[ ! -e /proc/$$/fd/9 ]]; then touch \"$NO_FD9\"; fi\n"
+                "touch \"$MARKER\"\n"
+                "while [[ -e \"$KEEPALIVE\" ]]; do sleep 0.05; done\n",
+                encoding="utf-8",
+            )
+            hook.chmod(0o755)
+            keepalive.touch()
+            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(lock), "MARKER": str(marker), "NO_FD9": str(no_fd9), "KEEPALIVE": str(keepalive), "IPFS_DAG_EXPORT_TERMINATE_TIMEOUT": "1"}
+            proc = subprocess.Popen([str(script), "cid-one"], env=env, stderr=subprocess.DEVNULL)
+            deadline = time.time() + 5
+            while time.time() < deadline and not marker.exists():
+                time.sleep(0.05)
+            self.assertTrue(marker.exists())
+            self.assertTrue(no_fd9.exists())
+            proc.kill()
+            self.assertEqual(proc.wait(timeout=5), -signal.SIGKILL)
+            self.assertTrue(marker.exists())
+            # The deliberately surviving hook must not keep the export lock held.
+            probe = subprocess.run(["flock", "-n", str(lock), "true"], timeout=5)
+            self.assertEqual(probe.returncode, 0)
+            keepalive.unlink()
+
+    def test_signal_while_waiting_for_lock_exits_without_running_hook(self):
+        script = Path(".bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            lock = tmp / "shared.lock"
+            holder_marker = tmp / "holder-ready"
+            waiter_marker = tmp / "waiter-ran"
+            keepalive = tmp / "keepalive"
+            holder = tmp / "holder.sh"
+            waiter = tmp / "waiter.sh"
+            holder.write_text("#!/usr/bin/env bash\ntouch \"$HOLDER_MARKER\"\nwhile [[ -e \"$KEEPALIVE\" ]]; do sleep 0.05; done\n", encoding="utf-8")
+            waiter.write_text("#!/usr/bin/env bash\ntouch \"$WAITER_MARKER\"\n", encoding="utf-8")
+            holder.chmod(0o755); waiter.chmod(0o755); keepalive.touch()
+            env1 = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(holder), "IPFS_DAG_EXPORT_LOCK": str(lock), "HOLDER_MARKER": str(holder_marker), "KEEPALIVE": str(keepalive)}
+            a = subprocess.Popen([str(script), "cid-a"], env=env1, stderr=subprocess.DEVNULL)
+            deadline = time.time() + 5
+            while time.time() < deadline and not holder_marker.exists():
+                time.sleep(0.05)
+            self.assertTrue(holder_marker.exists())
+            env2 = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(waiter), "IPFS_DAG_EXPORT_LOCK": str(lock), "WAITER_MARKER": str(waiter_marker), "IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL": "0.05"}
+            b = subprocess.Popen([str(script), "cid-b"], env=env2, stderr=subprocess.DEVNULL)
+            time.sleep(0.2)
+            b.terminate()
+            self.assertIn(b.wait(timeout=5), (143, -signal.SIGTERM))
+            self.assertFalse(waiter_marker.exists())
+            self.assertIsNone(a.poll())
+            keepalive.unlink()
+            self.assertEqual(a.wait(timeout=5), 0)
+
+    def test_signal_during_retry_sleep_exits_promptly_without_next_retry(self):
+        script = Path(".bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            lock = tmp / "shared.lock"
+            count = tmp / "count"
+            hook = tmp / "fail.sh"
+            hook.write_text("#!/usr/bin/env bash\nn=$(( $(cat \"$COUNT\" 2>/dev/null || echo 0) + 1 ))\necho $n > \"$COUNT\"\nexit 7\n", encoding="utf-8")
+            hook.chmod(0o755)
+            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(lock), "IPFS_DAG_RETRY_DELAY": "30", "COUNT": str(count)}
+            proc = subprocess.Popen([str(script), "cid-one"], env=env, stderr=subprocess.DEVNULL)
+            deadline = time.time() + 5
+            while time.time() < deadline and (not count.exists() or count.read_text().strip() != "1"):
+                time.sleep(0.05)
+            self.assertTrue(count.exists())
+            proc.terminate()
+            self.assertEqual(proc.wait(timeout=5), 143)
+            self.assertEqual(count.read_text().strip(), "1")
+            self.assertEqual(subprocess.run(["flock", "-n", str(lock), "true"], timeout=5).returncode, 0)
+
+    def test_retry_delay_uses_no_helper_child_after_exporter_sigkill(self):
+        script = Path(".bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync").resolve()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            lock = tmp / "shared.lock"
+            count = tmp / "count"
+            hook = tmp / "fail.sh"
+            hook.write_text("#!/usr/bin/env bash\necho $(( $(cat \"$COUNT\" 2>/dev/null || echo 0) + 1 )) > \"$COUNT\"\nexit 9\n", encoding="utf-8")
+            hook.chmod(0o755)
+            env = {**os.environ, "IPFS_DAG_EXPORT_SYNC_HOOK": str(hook), "IPFS_DAG_EXPORT_LOCK": str(lock), "IPFS_DAG_RETRY_DELAY": "30", "COUNT": str(count)}
+            proc = subprocess.Popen([str(script), "cid-one"], env=env, stderr=subprocess.DEVNULL)
+            try:
+                deadline = time.time() + 5
+                while time.time() < deadline and (not count.exists() or count.read_text().strip() != "1"):
+                    time.sleep(0.05)
+                self.assertTrue(count.exists())
+                children = subprocess.run(["pgrep", "-P", str(proc.pid), "sleep"], text=True, capture_output=True)
+                self.assertNotEqual(children.returncode, 0)
+                proc.kill()
+                self.assertEqual(proc.wait(timeout=5), -signal.SIGKILL)
+                self.assertEqual(subprocess.run(["flock", "-n", str(lock), "true"], timeout=5).returncode, 0)
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+
+
+
+class DirectRpcLifecycleRegressionTests(unittest.TestCase):
+    def test_streaming_multipart_applies_connect_write_and_read_timeouts(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        class Sock:
+            def __init__(self):
+                self.timeouts = []
+            def settimeout(self, value):
+                self.timeouts.append(value)
+
+        class Conn:
+            def __init__(self):
+                self.sock = None
+                self.events = []
+            def connect(self):
+                self.events.append("connect")
+                self.sock = Sock()
+            def request(self, method, path, body=None, headers=None, encode_chunked=False):
+                self.events.append(("request", method, path, list(body), encode_chunked, list(self.sock.timeouts)))
+            def getresponse(self):
+                self.events.append(("getresponse", list(self.sock.timeouts)))
+                return object()
+
+        conn = Conn()
+        response = exporter._request_streaming_multipart(conn, "/import", iter([b"abc"]), "boundary", None, None)
+        self.assertIsNotNone(response)
+        self.assertEqual(conn.events[0], "connect")
+        self.assertEqual(conn.events[1][5], [None])
+        self.assertEqual(conn.events[2][1], [None, None])
+
+        conn = Conn()
+        exporter._request_streaming_multipart(conn, "/import", iter([b"abc"]), "boundary", 12.5, 34.5)
+        self.assertEqual(conn.events[1][5], [12.5])
+        self.assertEqual(conn.events[2][1], [12.5, 34.5])
+
+    def test_shutdown_closer_registry_removes_completed_objects(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        class Closer:
+            def __init__(self):
+                self.closed = 0
+            def close(self):
+                self.closed += 1
+
+        shutdown = exporter.ShutdownController()
+        historical = []
+        for _ in range(300):
+            closer = Closer()
+            with shutdown.register_closer(closer):
+                self.assertEqual(shutdown.closer_count(), 1)
+            historical.append(closer)
+            self.assertEqual(shutdown.closer_count(), 0)
+        active = Closer()
+        shutdown.add_closer(active)
+        shutdown.close_active()
+        self.assertEqual(active.closed, 1)
+        self.assertTrue(all(item.closed == 0 for item in historical))
+
+    def test_fifo_worker_opens_fifo_read_write_to_avoid_idle_eof_reopen_loop(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fifo = Path(tmpdir) / "queue"
+            calls = []
+            real_open = os.open
+            real_select = __import__("select").select
+            def fake_open(path, flags, mode=0o777, *, dir_fd=None):
+                if Path(path) == fifo:
+                    calls.append(flags)
+                    raise KeyboardInterrupt
+                return real_open(path, flags, mode, dir_fd=dir_fd)
+            with mock.patch("os.open", side_effect=fake_open):
+                with self.assertRaises(KeyboardInterrupt):
+                    exporter.run_fifo_worker(fifo)
+            self.assertEqual(len(calls), 1)
+            self.assertTrue(calls[0] & os.O_RDWR)
+            self.assertTrue(calls[0] & os.O_NONBLOCK)
+
+    def test_positive_only_poll_and_connect_timeouts_preserve_allowed_zeroes(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        env = {
+            "IPFS_LAPTOP_API_SOCKET": "/tmp/source.sock",
+            "RHEA_IPFS_WASABI_SOCKET": "/tmp/dest.sock",
+            "IPFS_DAG_RETRY_DELAY": "0",
+            "IPFS_DAG_EXPORT_TERMINATE_TIMEOUT": "0",
+            "IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL": "0",
+            "IPFS_DAG_HTTP_CONNECT_TIMEOUT": "0",
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            config = exporter.ExportConfig.from_env()
+        self.assertEqual(config.retry_delay, 0)
+        self.assertEqual(config.terminate_timeout, 0)
+        self.assertEqual(config.lock_poll_interval, exporter.DEFAULT_LOCK_POLL_INTERVAL)
+        self.assertEqual(config.connect_timeout, exporter.DEFAULT_CONNECT_TIMEOUT)
+
+        for raw in ["-1", "not-a-number", "nan", "inf", "-inf"]:
+            with self.subTest(raw=raw):
+                env["IPFS_DAG_EXPORT_LOCK_POLL_INTERVAL"] = raw
+                env["IPFS_DAG_HTTP_CONNECT_TIMEOUT"] = raw
+                with mock.patch.dict(os.environ, env, clear=True):
+                    config = exporter.ExportConfig.from_env()
+                self.assertEqual(config.lock_poll_interval, exporter.DEFAULT_LOCK_POLL_INTERVAL)
+                self.assertEqual(config.connect_timeout, exporter.DEFAULT_CONNECT_TIMEOUT)
+
+    def test_source_export_sets_read_timeout_before_headers(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        events = []
+        class Sock:
+            def settimeout(self, value):
+                events.append(("settimeout", value))
+        class Resp:
+            status = 200
+            def read(self, n): return b""
+            def close(self): events.append("resp-close")
+        class Conn:
+            def __init__(self): self.sock = None
+            def connect(self): events.append("connect"); self.sock = Sock()
+            def request(self, *args, **kwargs): events.append("request")
+            def getresponse(self): events.append("getresponse"); return Resp()
+            def close(self): events.append("conn-close")
+
+        config = exporter.ExportConfig(
+            source=exporter.KuboEndpoint.parse("/tmp/source.sock"),
+            destination=exporter.KuboEndpoint.parse("/tmp/dest.sock"),
+            retry_delay=0, lock_path=Path("/tmp/lock"), terminate_timeout=1,
+            lock_poll_interval=0.1, hook=None, chunk_size=4, buffer_size=4,
+            connect_timeout=1, read_timeout=22, write_timeout=None,
+        )
+        q = exporter.queue.Queue()
+        result = exporter.TransferResult("Qmabc")
+        attempt = exporter.TransferAttempt(exporter.ShutdownController())
+        with mock.patch.object(exporter, "_connection", return_value=Conn()):
+            exporter._producer("Qmabc", config, attempt, q, result)
+        self.assertEqual(events[:4], ["connect", ("settimeout", 22), "request", "getresponse"])
+
+
 if __name__ == "__main__":
     unittest.main()
+
+class CleanupFailureRegressionTests(unittest.TestCase):
+    def test_transfer_stuck_producer_raises_fatal_cleanup_chained_from_primary(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        class StuckThread:
+            def __init__(self, *args, **kwargs):
+                self.started = False
+            def start(self):
+                self.started = True
+            def join(self, timeout=None):
+                self.join_timeout = timeout
+            def is_alive(self):
+                return True
+
+        config = exporter.ExportConfig(
+            source=exporter.KuboEndpoint.parse("/tmp/source.sock"),
+            destination=exporter.KuboEndpoint.parse("/tmp/dest.sock"),
+            retry_delay=0,
+            lock_path=Path("/tmp/lock"),
+            terminate_timeout=0.01,
+            lock_poll_interval=0.01,
+            hook=None,
+            chunk_size=4,
+            buffer_size=4,
+            connect_timeout=1,
+            read_timeout=None,
+            write_timeout=None,
+        )
+        primary = exporter.ExporterError("destination failed")
+        with mock.patch.object(exporter.threading, "Thread", StuckThread), \
+             mock.patch.object(exporter, "_connection") as connection, \
+             mock.patch.object(exporter, "_request_streaming_multipart", side_effect=primary):
+            conn = mock.Mock()
+            connection.return_value = conn
+            with self.assertRaises(exporter.TransferCleanupFailed) as caught:
+                exporter.transfer_dag("Qmabc", config, exporter.ShutdownController())
+        self.assertIs(caught.exception.__cause__, primary)
+        self.assertIn("producer thread for Qmabc did not terminate", str(caught.exception))
+
+    def test_process_cid_stops_without_retry_on_transfer_cleanup_failure(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = exporter.ExportConfig(
+                source=exporter.KuboEndpoint.parse("/tmp/source.sock"),
+                destination=exporter.KuboEndpoint.parse("/tmp/dest.sock"),
+                retry_delay=30,
+                lock_path=Path(tmpdir) / "lock",
+                terminate_timeout=0.01,
+                lock_poll_interval=0.01,
+                hook=None,
+                chunk_size=4,
+                buffer_size=4,
+                connect_timeout=1,
+                read_timeout=None,
+                write_timeout=None,
+            )
+            attempts = []
+            def fail_once(cid, cfg, shutdown):
+                attempts.append((cid, shutdown.event.is_set()))
+                raise exporter.TransferCleanupFailed("producer thread for Qmabc did not terminate within 0.01 seconds")
+            with mock.patch.object(exporter, "transfer_dag", side_effect=fail_once), \
+                 mock.patch.object(exporter.ShutdownController, "wait", side_effect=AssertionError("retry delay should not be applied")):
+                self.assertEqual(exporter.process_cid("Qmabc", config), 1)
+            self.assertEqual(attempts, [("Qmabc", False)])
+
+    def test_external_cleanup_kills_term_ignoring_descendant_after_leader_exits(self):
+        import rhea_wasabi_pebble_export as exporter
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            leader_file = tmp / "leader"
+            child_file = tmp / "child"
+            pgid_file = tmp / "pgid"
+            child_script = tmp / "child.py"
+            child_script.write_text(
+                "import signal, time\n"
+                "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                "open(__import__('os').environ['CHILD_FILE'], 'w').write(str(__import__('os').getpid()))\n"
+                "while True: time.sleep(1)\n",
+                encoding="utf-8",
+            )
+            leader = tmp / "leader.py"
+            leader.write_text(
+                "import os, signal, subprocess, sys, time\n"
+                "open(os.environ['LEADER_FILE'], 'w').write(str(os.getpid()))\n"
+                "open(os.environ['PGID_FILE'], 'w').write(str(os.getpgrp()))\n"
+                "child = subprocess.Popen([sys.executable, os.environ['CHILD_SCRIPT']], close_fds=True)\n"
+                "def term(signum, frame): raise SystemExit(0)\n"
+                "signal.signal(signal.SIGTERM, term)\n"
+                "while True: time.sleep(1)\n",
+                encoding="utf-8",
+            )
+            env = {**os.environ, "LEADER_FILE": str(leader_file), "CHILD_FILE": str(child_file), "PGID_FILE": str(pgid_file), "CHILD_SCRIPT": str(child_script)}
+            proc = subprocess.Popen([sys.executable, str(leader)], env=env, start_new_session=True)
+            try:
+                deadline = time.time() + 5
+                while time.time() < deadline and not child_file.exists():
+                    time.sleep(0.05)
+                self.assertTrue(child_file.exists())
+                pgid = int(pgid_file.read_text())
+                child_pid = int(child_file.read_text())
+                exporter.terminate_external_process(proc, grace=0.1, kill_wait=1.0)
+                self.assertIsNotNone(proc.returncode)
+                deadline = time.time() + 2
+                while time.time() < deadline and exporter.process_group_exists(pgid):
+                    time.sleep(0.05)
+                self.assertFalse(exporter.process_group_exists(pgid))
+                stat_file = Path(f"/proc/{child_pid}/stat")
+                if stat_file.exists():
+                    text = stat_file.read_text(encoding="utf-8", errors="replace")
+                    state = text[text.rfind(")") + 2:].split()[0]
+                    self.assertEqual(state, "Z")
+                else:
+                    with self.assertRaises(ProcessLookupError):
+                        os.kill(child_pid, 0)
+            finally:
+                if proc.poll() is None:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                    proc.wait(timeout=5)
+
+class FatalLifecyclePropagationTests(unittest.TestCase):
+    def _config(self, tmpdir: str):
+        import rhea_wasabi_pebble_export as exporter
+        return exporter.ExportConfig(
+            source=exporter.KuboEndpoint.parse("/tmp/source.sock"),
+            destination=exporter.KuboEndpoint.parse("/tmp/dest.sock"),
+            retry_delay=30,
+            lock_path=Path(tmpdir) / "lock",
+            terminate_timeout=0.01,
+            lock_poll_interval=0.01,
+            hook=None,
+            chunk_size=4,
+            buffer_size=4,
+            connect_timeout=1,
+            read_timeout=None,
+            write_timeout=None,
+        )
+
+    def test_fifo_builtin_exits_on_any_nonzero_result_without_next_cid(self):
+        import rhea_wasabi_pebble_export as exporter
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = self._config(tmpdir)
+            reads = [b"A\nB\n"]
+            processed = []
+            def fake_read(fd, size):
+                return reads.pop(0) if reads else b""
+            def fake_process(cid, cfg):
+                processed.append(cid)
+                return 1
+            with mock.patch.object(exporter, "_ensure_fifo"), \
+                 mock.patch.object(exporter.os, "open", return_value=123), \
+                 mock.patch.object(exporter.os, "read", side_effect=fake_read), \
+                 mock.patch.object(exporter.os, "close"), \
+                 mock.patch("select.select", return_value=([123], [], [])), \
+                 mock.patch.object(exporter, "process_cid", side_effect=fake_process), \
+                 mock.patch.object(exporter, "log"):
+                self.assertEqual(exporter.run_fifo_worker(Path("queue"), config), 1)
+            self.assertEqual(processed, ["A"])
+
+    def test_hook_cleanup_failure_is_fatal_and_not_retried(self):
+        import rhea_wasabi_pebble_export as exporter
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = self._config(tmpdir)
+            config = exporter.ExportConfig(**{**config.__dict__, "hook": "/tmp/hook"})
+            proc = mock.Mock()
+            proc.pid = 99999
+            proc.wait.side_effect = RuntimeError("wait interrupted")
+            launches = []
+            def fake_popen(*args, **kwargs):
+                launches.append(args)
+                return proc
+            with mock.patch.object(exporter.subprocess, "Popen", side_effect=fake_popen), \
+                 mock.patch.object(exporter, "terminate_external_process", side_effect=exporter.ExternalProcessCleanupFailed("group still exists")), \
+                 mock.patch.object(exporter.ShutdownController, "wait", side_effect=AssertionError("retry delay should not run")), \
+                 mock.patch.object(exporter, "log") as log:
+                self.assertEqual(exporter.process_cid("Qmabc", config), 1)
+            self.assertEqual(len(launches), 1)
+            self.assertTrue(any("Fatal hook cleanup failure" in str(call) for call in log.call_args_list))
+
+    def test_pin_timeout_cleanup_failure_stays_structured(self):
+        import pin_with_export_retry
+        proc = mock.Mock()
+        proc.pid = 12345
+        timeout = subprocess.TimeoutExpired(["exporter", "Qmabc"], 2)
+        proc.wait.side_effect = timeout
+        with mock.patch.object(pin_with_export_retry.subprocess, "Popen", return_value=proc), \
+             mock.patch.object(pin_with_export_retry, "_terminate_process_group", side_effect=pin_with_export_retry.ExternalProcessCleanupFailed("group still exists")):
+            with self.assertRaises(pin_with_export_retry.ExportFailed) as caught:
+                pin_with_export_retry.export_missing_cid("Qmabc", "/tmp/exporter", timeout=2)
+        self.assertIs(caught.exception.__cause__, timeout)
+        self.assertIn("timeout after 2 seconds", caught.exception.failure.status)
+        self.assertIn("process-group cleanup failed", caught.exception.failure.status)
+        self.assertIn("group still exists", caught.exception.failure.message)
+
+class ExternalPostExitVerificationTests(unittest.TestCase):
+    def _config(self, tmpdir: str, *, hook: Optional[str] = None):
+        import rhea_wasabi_pebble_export as exporter
+        return exporter.ExportConfig(
+            source=exporter.KuboEndpoint.parse("/tmp/source.sock"),
+            destination=exporter.KuboEndpoint.parse("/tmp/dest.sock"),
+            retry_delay=0,
+            lock_path=Path(tmpdir) / "lock",
+            terminate_timeout=0.1,
+            lock_poll_interval=0.01,
+            hook=hook,
+            chunk_size=4,
+            buffer_size=4,
+            connect_timeout=1,
+            read_timeout=None,
+            write_timeout=None,
+        )
+
+    def _surviving_descendant_script(self, tmp: Path, *, exit_code: int = 0) -> Path:
+        child = tmp / "surviving_child.py"
+        child.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os, signal, subprocess, time\n"
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+            "open(os.environ['CHILD_FILE'], 'w').write(str(os.getpid()))\n"
+            "open(os.environ['PGID_FILE'], 'w').write(str(os.getpgrp()))\n"
+            "while True: time.sleep(1)\n",
+            encoding="utf-8",
+        )
+        leader = tmp / "leader.py"
+        leader.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os, subprocess, sys, time\n"
+            "open(os.environ['LEADER_FILE'], 'w').write(str(os.getpid()))\n"
+            "with open(os.devnull, 'rb') as devin, open(os.devnull, 'ab') as devout:\n"
+            "    subprocess.Popen([sys.executable, os.environ['CHILD_SCRIPT']], stdin=devin, stdout=devout, stderr=devout, close_fds=True)\n"
+            "deadline = time.time() + 5\n"
+            "while time.time() < deadline and not os.path.exists(os.environ['CHILD_FILE']):\n"
+            "    time.sleep(0.01)\n"
+            f"raise SystemExit({exit_code})\n",
+            encoding="utf-8",
+        )
+        leader.chmod(0o755)
+        return leader
+
+    def _survivor_env(self, tmp: Path) -> dict[str, str]:
+        return {
+            **os.environ,
+            "LEADER_FILE": str(tmp / "leader.pid"),
+            "CHILD_FILE": str(tmp / "child.pid"),
+            "PGID_FILE": str(tmp / "pgid"),
+            "CHILD_SCRIPT": str(tmp / "surviving_child.py"),
+        }
+
+    def _assert_no_group(self, pgid_file: Path) -> None:
+        import rhea_wasabi_pebble_export as exporter
+        pgid = int(pgid_file.read_text())
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and exporter.process_group_exists(pgid):
+            time.sleep(0.05)
+        self.assertFalse(exporter.process_group_exists(pgid))
+
+    def test_wait_and_verify_cleans_surviving_group_and_reports_failure(self):
+        import rhea_wasabi_pebble_export as exporter
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            leader = self._surviving_descendant_script(tmp)
+            with open(tmp / "leader.log", "ab", buffering=0) as log:
+                proc = subprocess.Popen(
+                    [sys.executable, str(leader)],
+                    env=self._survivor_env(tmp),
+                    stdin=subprocess.DEVNULL,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    close_fds=True,
+                    start_new_session=True,
+                )
+                try:
+                    with self.assertRaises(exporter.ExternalProcessGroupSurvived):
+                        exporter.wait_and_verify_external_process(
+                            proc,
+                            cleanup_grace=0.1,
+                            context="unit test external process",
+                            timeout=5,
+                        )
+                    self._assert_no_group(tmp / "pgid")
+                finally:
+                    if proc.poll() is None:
+                        exporter.terminate_external_process(proc, grace=0.1)
+
+    def test_hook_surviving_descendant_is_fatal_and_not_retried(self):
+        import rhea_wasabi_pebble_export as exporter
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            leader = self._surviving_descendant_script(tmp)
+            config = self._config(tmpdir, hook=str(leader))
+            with mock.patch.dict(os.environ, self._survivor_env(tmp)), \
+                 mock.patch.object(exporter.ShutdownController, "wait", side_effect=AssertionError("retry not expected")):
+                self.assertEqual(exporter.process_cid("Qmabc", config), 1)
+            self._assert_no_group(tmp / "pgid")
+
+    def test_fifo_override_surviving_descendant_stops_before_next_cid(self):
+        import rhea_wasabi_pebble_export as exporter
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            leader = self._surviving_descendant_script(tmp)
+            config = self._config(tmpdir)
+            reads = [b"A\nB\n"]
+            opened = []
+            def fake_read(fd, size):
+                return reads.pop(0) if reads else b""
+            with mock.patch.dict(os.environ, {**self._survivor_env(tmp), "RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC": str(leader)}), \
+                 mock.patch.object(exporter, "_ensure_fifo"), \
+                 mock.patch.object(exporter.os, "open", return_value=123), \
+                 mock.patch.object(exporter.os, "read", side_effect=fake_read), \
+                 mock.patch.object(exporter.os, "close"), \
+                 mock.patch("select.select", return_value=([123], [], [])), \
+                 mock.patch.object(exporter.subprocess, "Popen", wraps=exporter.subprocess.Popen) as popen_mock:
+                self.assertEqual(exporter.run_fifo_worker(Path("queue"), config), 1)
+                opened.extend(call.args[0][1] for call in popen_mock.call_args_list)
+            self.assertEqual(opened, ["A"])
+            self._assert_no_group(tmp / "pgid")
+
+    def test_outer_exporter_surviving_descendant_is_structured_failure(self):
+        import pin_with_export_retry
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            leader = self._surviving_descendant_script(tmp)
+            with mock.patch.dict(os.environ, self._survivor_env(tmp)):
+                with self.assertRaises(pin_with_export_retry.ExportFailed) as caught:
+                    pin_with_export_retry.export_missing_cid("Qmabc", str(leader), timeout=5)
+            self.assertIn("surviving descendants", caught.exception.failure.message)
+            self._assert_no_group(tmp / "pgid")

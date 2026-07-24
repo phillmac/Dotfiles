@@ -45,3 +45,150 @@ print(pin_result.errors)
 Options are passed through to Kubo after converting underscores to hyphens, so
 `cid_version=1` becomes `cid-version=1` and newer daemon options can be used
 without changing the client.
+
+## Exporting missing DAGs for pin recovery
+
+Two workflows are supported for exporting a child DAG from the laptop IPFS API
+and importing it into the Rhea IPFS API. Both workflows use the same Python synchronous exporter implementation,
+`rhea_wasabi_pebble_export.py`, through the compatibility executable
+`.bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync`, and
+therefore share the same Python-owned `flock` lock. Queue-triggered exports and
+direct pin-recovery exports can run at the same time, but only one
+direct Kubo RPC DAG export/import transfer runs at once.
+
+### Queue worker
+
+The long-running Bash function `rhea.wasabi.pebble.export.laptop.dag` still
+accepts newline-delimited CIDs through the existing FIFO:
+
+```text
+rhea.wasabi.pebble.export.laptop.dag.queue
+```
+
+Start the worker in a shell that has `.bashrc.d/carpo.bashrc.d/ipfs.bashrc`
+loaded, then write CIDs to the FIFO as before. A FIFO write only queues work for
+the worker; it does not mean the export/import has completed.
+
+### Synchronous pin recovery
+
+When a node is offline and `ipfs pin add --progress <cid>` fails because a child
+block is missing locally, `pin_with_export_retry.py` pins the original root CID,
+parses the missing child CID from Kubo's error, directly invokes the synchronous
+exporter for that child, waits until the direct Kubo `/api/v0/dag/import?pin-roots=false&allow-big-block=true` RPC succeeds on Rhea, and immediately retries the original root pin. The Python workflow does not communicate through the FIFO.
+
+```sh
+./pin_with_export_retry.py ROOT_CID \
+    --api http://127.0.0.1:5001 \
+    --export-command .bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync \
+    --verbose
+```
+
+Useful options:
+
+- `--max-attempts N` stops after `N` pin attempts; the default `0` retries until
+  success or until Kubo returns an error that does not include a missing block.
+- `--timeout SECONDS` applies only to Kubo API calls.
+- `--export-timeout SECONDS` limits the synchronous exporter; the default is no
+  exporter timeout so large DAG exports can complete.
+- `--export-command PATH` defaults to the exporter under the sourced dotfiles
+  tree: `.bashrc.d/carpo.bashrc.d/rhea-wasabi-pebble-export-laptop-dag-sync`.
+  The FIFO worker resolves the same default relative to `ipfs.bashrc`, so the
+  normal dotfiles symlink/source installation does not need the repository root
+  in `PATH`.
+- `RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC` overrides the FIFO worker's
+  exporter path.
+- `IPFS_LAPTOP_API_SOCKET`, `RHEA_IPFS_WASABI_SOCKET`, and `IPFS_DAG_RETRY_DELAY`
+  keep their exporter meanings for sockets and internal retry backoff.
+  `LAPTOP_IPFS_CLI_IMAGE` and `RHEA_IPFS_CLI_IMAGE` are obsolete for the
+  built-in direct-RPC exporter because it no longer runs Docker.
+- `IPFS_DAG_EXPORT_LOCK` overrides the shared lock path. By default it is
+  `${HOME}/.var/run/rhea-wasabi-pebble-export-laptop-dag.lock`.
+- `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT` controls the Python pipeline cleanup grace
+  period and accepts non-negative finite numeric values, including fractional
+  seconds. Invalid, negative, NaN, and infinite values fall back safely to the
+  default `5.0`. `pin_with_export_retry.py` derives its outer exporter
+  process-group cleanup wait from the same normalized value plus a fixed safety
+  margin, capped to avoid unbounded waits.
+
+Signal and retry behaviour:
+
+- Python starts the exporter in its own process group. Ctrl+C, SIGTERM,
+  `--export-timeout`, and unexpected exceptions terminate that complete exporter
+  process group, wait briefly, and then escalate to SIGKILL if needed. Expected
+  exporter launch failures, nonzero exits, signal exits, and timeouts are reported
+  as structured pin errors; Ctrl+C and SIGTERM keep normal interrupt/termination
+  semantics instead of becoming ordinary pin failures.
+- The synchronous exporter is implemented in Python. Bash files are thin
+  compatibility wrappers only; they do not own locking, retry timers, deadline
+  calculations, pipeline creation, child PID supervision, or cleanup. The Python
+  exporter opens the lock file once, verifies the descriptor is non-inheritable,
+  acquires `fcntl.flock(lock_fd, fcntl.LOCK_EX)` before any export attempt, and
+  holds it across retries for one CID. All children are spawned with
+  `close_fds=True`, so no hook, HTTP transfer thread, or retry helper
+  inherits the lock descriptor.
+- Global shutdown and per-attempt cancellation are separate. SIGINT/SIGTERM set
+  the global shutdown event and stop all retries, while ordinary source or
+  destination RPC failures cancel only the current transfer attempt, close that
+  attempt's active HTTP response/connection objects, wake bounded queue waits,
+  join the producer thread, and then retry the same CID with the global shutdown
+  event still unset.
+- Active direct-RPC transfer cleanup is bounded. Each attempt registers only its
+  currently active HTTP connections/responses and unregisters them in `finally`,
+  so completed attempts are not retained. Attempt cancellation wakes the bounded
+  queue and joins the producer thread within the normalized
+  `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT` budget, while a real signal closes the
+  current attempt and returns 130 for SIGINT or 143 for SIGTERM.
+- Signalling only the exporter PID interrupts lock acquisition polling, active
+  HTTP streaming, FIFO reads, and internal retry delays. The exporter does not
+  start another transfer attempt after shutdown begins, returns 130 for SIGINT
+  and 143 for SIGTERM, and releases the lock after success, ordinary failure,
+  SIGINT, SIGTERM, timeout, and exception.
+- The FIFO worker is also implemented in Python and calls the same `process_cid()`
+  function as direct synchronous export. The Bash function remains a subshell
+  wrapper for compatibility and trap isolation. The Python worker creates or
+  reopens `rhea.wasabi.pebble.export.laptop.dag.queue`, refuses non-FIFO paths,
+  ignores blank lines, retries the current CID before reading the next CID, and
+  preserves FIFO ordering without requeueing duplicate entries.
+
+### Direct Kubo RPC streaming
+
+The built-in exporter no longer runs Docker, the `ipfs` CLI, `mbuffer`, or any
+CAR-file spooler.  It POSTs to the source Kubo `/api/v0/dag/export` endpoint
+with `arg=<CID>&progress=false`, reads the response as opaque CAR bytes in
+fixed-size chunks, and sends those bytes through a bounded in-memory queue to a
+streaming multipart/form-data POST to the destination `/api/v0/dag/import`
+endpoint with `pin-roots=false&allow-big-block=true`.  The multipart part is
+named `file`, uses filename `export.car`, and has content type
+`application/vnd.ipld.car`.
+
+The default buffer settings are `IPFS_DAG_CHUNK_SIZE=1048576` and
+`IPFS_DAG_BUFFER_SIZE=67108864`, giving 1 MiB chunks and about 64 MiB of total
+queue capacity.  The producer blocks when the queue is full and the importer
+blocks when it is empty, so memory remains bounded and a slow destination applies
+backpressure to the source export.  CAR bytes are never parsed, modified, written
+to disk, or accumulated as a complete stream in memory.
+
+Kubo endpoints may be configured as absolute Unix-domain socket paths or as
+`http://` / `https://` URLs.  The retained defaults are
+`IPFS_LAPTOP_API_SOCKET=~/.var/run/ipfs-laptop-api.sock` and
+`RHEA_IPFS_WASABI_SOCKET=~/.var/run/rhea-ipfs-wasabi.sock`.  Transfer-specific
+timeouts are separate from pin timeouts: `IPFS_DAG_HTTP_CONNECT_TIMEOUT`,
+`IPFS_DAG_HTTP_READ_TIMEOUT`, and `IPFS_DAG_HTTP_WRITE_TIMEOUT` accept finite
+fractional seconds. Poll intervals and connect timeouts must be positive: zero,
+negative, invalid, NaN, and infinity fall back to the documented defaults so the
+worker does not busy-loop and sockets are not placed in non-blocking connect
+mode. `IPFS_DAG_RETRY_DELAY=0` and `IPFS_DAG_EXPORT_TERMINATE_TIMEOUT=0` remain
+valid and mean immediate retry / immediate TERM-to-KILL escalation.
+
+Connection establishment uses the connect timeout first. Source export explicitly
+connects, switches the socket to the read timeout before sending the bodyless
+`dag/export` request, and uses that read timeout for response headers and CAR
+body reads. Destination import explicitly connects, switches to the write timeout
+for streaming multipart upload, then switches to the read timeout before waiting
+for the import response. `None` for the read or write timeout means blocking
+stream reads or writes, so healthy multi-hour CAR transfers are not governed by a
+short whole-request timeout. The outer pin helper waits for the normalized inner
+cleanup timeout plus a two-second margin; an accepted 60-second inner cleanup
+therefore gives a 62-second outer cleanup window.
+
+External hook and FIFO override cleanup checks the entire process group created by the exporter invocation. Cleanup sends SIGTERM, waits for the configured grace period using process-group existence rather than only the leader process, escalates surviving group members to SIGKILL, and then reaps the direct child without using `pkill` or signalling unrelated processes.
