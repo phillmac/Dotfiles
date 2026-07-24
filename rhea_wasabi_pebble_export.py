@@ -167,38 +167,52 @@ class ExternalProcessCleanupFailed(RuntimeError):
     pass
 
 
+class ExternalProcessGroupSurvived(RuntimeError):
+    """The group leader exited while descendants remained alive."""
+
+
 def process_group_exists(pgid: int) -> bool:
+    proc = Path("/proc")
+    if proc.is_dir():
+        saw_group_member = False
+        try:
+            with os.scandir(proc) as entries:
+                for entry in entries:
+                    if not entry.name.isdigit():
+                        continue
+                    try:
+                        text = (proc / entry.name / "stat").read_text(encoding="utf-8", errors="replace")
+                        close = text.rfind(")")
+                        fields = text[close + 2 :].split()
+                        state = fields[0]
+                        process_pgid = int(fields[2])
+                    except (OSError, ValueError, IndexError):
+                        continue
+                    if process_pgid == pgid:
+                        saw_group_member = True
+                        if state != "Z":
+                            return True
+        except OSError as exc:
+            raise ExternalProcessCleanupFailed(
+                f"could not inspect /proc while checking process group {pgid}: {exc}"
+            ) from exc
+        if saw_group_member:
+            return False
+        return False
+
     try:
         os.killpg(pgid, 0)
     except ProcessLookupError:
         return False
     except PermissionError:
         return True
-
-    proc = Path("/proc")
-    if proc.is_dir():
-        saw_group_member = False
-        for stat_file in proc.glob("[0-9]*/stat"):
-            try:
-                text = stat_file.read_text(encoding="utf-8", errors="replace")
-                close = text.rfind(")")
-                fields = text[close + 2 :].split()
-                state = fields[0]
-                process_pgid = int(fields[2])
-            except (OSError, ValueError, IndexError):
-                continue
-            if process_pgid == pgid:
-                saw_group_member = True
-                if state != "Z":
-                    return True
-        if saw_group_member:
-            return False
     return True
 
 
 def terminate_external_process(
     process: subprocess.Popen[object],
     *,
+    pgid: int | None = None,
     initial_signal: int = signal.SIGTERM,
     grace: float,
     kill_wait: float = 2.0,
@@ -207,7 +221,7 @@ def terminate_external_process(
     if initial_signal not in (signal.SIGTERM, signal.SIGINT):
         raise ValueError(f"unsupported cleanup initial signal: {initial_signal}")
 
-    pgid = process.pid
+    pgid = process.pid if pgid is None else pgid
     term_sent = False
     kill_sent = False
 
@@ -247,6 +261,42 @@ def terminate_external_process(
             f"process group {pgid} for direct process {process.pid} still exists after SIGKILL; "
             f"initial_signal={initial_signal} term_sent={term_sent} kill_sent={kill_sent} grace={grace:g} kill_wait={kill_wait:g}"
         )
+
+
+def wait_and_verify_external_process(
+    process: subprocess.Popen[object],
+    *,
+    cleanup_grace: float,
+    context: str,
+    timeout: float | None = None,
+) -> int:
+    """Wait for an external leader and fail if its process group survives."""
+    pgid = process.pid
+    try:
+        returncode = process.wait(timeout=timeout)
+    except (subprocess.TimeoutExpired, KeyboardInterrupt, SystemExit):
+        raise
+    except OSError as exc:
+        raise ExternalProcessCleanupFailed(
+            f"{context}: could not wait for leader pid={process.pid} pgid={pgid}: {exc}"
+        ) from exc
+
+    if not process_group_exists(pgid):
+        return returncode
+
+    terminate_external_process(
+        process,
+        pgid=pgid,
+        initial_signal=signal.SIGTERM,
+        grace=cleanup_grace,
+    )
+
+    raise ExternalProcessGroupSurvived(
+        f"{context}: leader pid={process.pid} exited with status {returncode}, "
+        f"but process group {pgid} retained live descendants; "
+        f"the descendants were terminated after cleanup_grace={cleanup_grace:g}"
+    )
+
 
 def log_cleanup_failure(context: str, exc: BaseException) -> None:
     log(f"{context}: process cleanup failed: {exc}")
@@ -509,7 +559,11 @@ def process_cid(cid: str, config: ExportConfig | None = None) -> int:
                         if config.hook:
                             proc = subprocess.Popen([config.hook, cid], start_new_session=True, close_fds=True)
                             try:
-                                rc = proc.wait()
+                                rc = wait_and_verify_external_process(
+                                    proc,
+                                    cleanup_grace=config.terminate_timeout,
+                                    context=f"hook export for {cid}",
+                                )
                             except ShutdownRequested:
                                 cleanup_error = None
                                 try:
@@ -521,6 +575,9 @@ def process_cid(cid: str, config: ExportConfig | None = None) -> int:
                                 raise
                             except ExternalProcessCleanupFailed as exc:
                                 log(f"Fatal hook cleanup failure for {cid}: {exc}")
+                                return 1
+                            except ExternalProcessGroupSurvived as exc:
+                                log(f"Fatal hook process-group survival for {cid}: {exc}")
                                 return 1
                             except BaseException:
                                 try:
@@ -579,7 +636,11 @@ def run_fifo_worker(queue_path: Path = Path(QUEUE_PATH), config: ExportConfig | 
                         while not shutdown.event.is_set():
                             proc = subprocess.Popen([override, cid], start_new_session=True, close_fds=True)
                             try:
-                                rc = proc.wait()
+                                rc = wait_and_verify_external_process(
+                                    proc,
+                                    cleanup_grace=config.terminate_timeout,
+                                    context=f"FIFO override export for {cid}",
+                                )
                             except ShutdownRequested as exc:
                                 cleanup_error = None
                                 try:
@@ -591,6 +652,9 @@ def run_fifo_worker(queue_path: Path = Path(QUEUE_PATH), config: ExportConfig | 
                                 return 128 + exc.signum
                             except ExternalProcessCleanupFailed as exc:
                                 log(f"Fatal FIFO override cleanup failure for {cid}: {exc}")
+                                return 1
+                            except ExternalProcessGroupSurvived as exc:
+                                log(f"Fatal FIFO override process-group survival for {cid}: {exc}")
                                 return 1
                             except BaseException:
                                 try:

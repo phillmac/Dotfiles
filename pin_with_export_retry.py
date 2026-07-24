@@ -18,8 +18,10 @@ from kubo_api_client import KuboClient, KuboError, PinResult
 DEFAULT_EXPORT_COMMAND = str(Path(__file__).resolve().parent / ".bashrc.d" / "carpo.bashrc.d" / "rhea-wasabi-pebble-export-laptop-dag-sync")
 from rhea_wasabi_pebble_export import (
     ExternalProcessCleanupFailed,
+    ExternalProcessGroupSurvived,
     exporter_cleanup_timeout_from_environment as _shared_exporter_cleanup_timeout_from_environment,
     terminate_external_process,
+    wait_and_verify_external_process,
 )
 
 _MISSING_BLOCK_RE = re.compile(r"(?:could not find|not found locally).*?((?:Qm[1-9A-HJ-NP-Za-km-z]+)|(?:ba[a-z2-7]+))", re.IGNORECASE)
@@ -118,7 +120,12 @@ def export_missing_cid(missing_cid: str, export_command: str | Path = DEFAULT_EX
 
     try:
         try:
-            returncode = process.wait(timeout=timeout)
+            returncode = wait_and_verify_external_process(
+                process,
+                cleanup_grace=exporter_cleanup_timeout_from_environment(),
+                context=f"synchronous exporter for missing CID {missing_cid}",
+                timeout=timeout,
+            )
         except _ExporterSignalReceived as exc:
             cleanup_error = None
             try:
@@ -142,11 +149,36 @@ def export_missing_cid(missing_cid: str, export_command: str | Path = DEFAULT_EX
                 status += "; process-group cleanup failed"
                 message += f" Cleanup error: {cleanup_error}"
             raise ExportFailed(ExportFailure(missing_cid, command, status, message)) from exc
+        except ExternalProcessGroupSurvived as exc:
+            raise ExportFailed(
+                ExportFailure(
+                    missing_cid,
+                    command,
+                    "leader exited with surviving descendants",
+                    f"The synchronous exporter leader exited with surviving descendants. {exc}",
+                )
+            ) from exc
+        except ExternalProcessCleanupFailed as exc:
+            raise ExportFailed(
+                ExportFailure(
+                    missing_cid,
+                    command,
+                    "process-group cleanup failed",
+                    f"The synchronous exporter process group could not be verified clean. {exc}",
+                )
+            ) from exc
         except BaseException as exc:
             try:
                 _terminate_process_group(process, signal.SIGTERM)
             except ExternalProcessCleanupFailed as cleanup_exc:
-                raise RuntimeError(f"exporter cleanup failed after internal exception: {cleanup_exc}") from exc
+                if hasattr(exc, "add_note"):
+                    exc.add_note(f"External process cleanup also failed: {cleanup_exc}")
+                else:
+                    print(
+                        f"outer exporter cleanup for {missing_cid} pid={process.pid} "
+                        f"pgid={process.pid} after internal exception failed: {cleanup_exc}",
+                        file=sys.stderr,
+                    )
             raise
     finally:
         if can_install_handlers:

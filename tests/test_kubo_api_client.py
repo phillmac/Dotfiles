@@ -1451,3 +1451,137 @@ class FatalLifecyclePropagationTests(unittest.TestCase):
         self.assertIn("timeout after 2 seconds", caught.exception.failure.status)
         self.assertIn("process-group cleanup failed", caught.exception.failure.status)
         self.assertIn("group still exists", caught.exception.failure.message)
+
+class ExternalPostExitVerificationTests(unittest.TestCase):
+    def _config(self, tmpdir: str, *, hook: str | None = None):
+        import rhea_wasabi_pebble_export as exporter
+        return exporter.ExportConfig(
+            source=exporter.KuboEndpoint.parse("/tmp/source.sock"),
+            destination=exporter.KuboEndpoint.parse("/tmp/dest.sock"),
+            retry_delay=0,
+            lock_path=Path(tmpdir) / "lock",
+            terminate_timeout=0.1,
+            lock_poll_interval=0.01,
+            hook=hook,
+            chunk_size=4,
+            buffer_size=4,
+            connect_timeout=1,
+            read_timeout=None,
+            write_timeout=None,
+        )
+
+    def _surviving_descendant_script(self, tmp: Path, *, exit_code: int = 0) -> Path:
+        child = tmp / "surviving_child.py"
+        child.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os, signal, subprocess, time\n"
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+            "open(os.environ['CHILD_FILE'], 'w').write(str(os.getpid()))\n"
+            "open(os.environ['PGID_FILE'], 'w').write(str(os.getpgrp()))\n"
+            "while True: time.sleep(1)\n",
+            encoding="utf-8",
+        )
+        leader = tmp / "leader.py"
+        leader.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os, subprocess, sys, time\n"
+            "open(os.environ['LEADER_FILE'], 'w').write(str(os.getpid()))\n"
+            "with open(os.devnull, 'rb') as devin, open(os.devnull, 'ab') as devout:\n"
+            "    subprocess.Popen([sys.executable, os.environ['CHILD_SCRIPT']], stdin=devin, stdout=devout, stderr=devout, close_fds=True)\n"
+            "deadline = time.time() + 5\n"
+            "while time.time() < deadline and not os.path.exists(os.environ['CHILD_FILE']):\n"
+            "    time.sleep(0.01)\n"
+            f"raise SystemExit({exit_code})\n",
+            encoding="utf-8",
+        )
+        leader.chmod(0o755)
+        return leader
+
+    def _survivor_env(self, tmp: Path) -> dict[str, str]:
+        return {
+            **os.environ,
+            "LEADER_FILE": str(tmp / "leader.pid"),
+            "CHILD_FILE": str(tmp / "child.pid"),
+            "PGID_FILE": str(tmp / "pgid"),
+            "CHILD_SCRIPT": str(tmp / "surviving_child.py"),
+        }
+
+    def _assert_no_group(self, pgid_file: Path) -> None:
+        import rhea_wasabi_pebble_export as exporter
+        pgid = int(pgid_file.read_text())
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and exporter.process_group_exists(pgid):
+            time.sleep(0.05)
+        self.assertFalse(exporter.process_group_exists(pgid))
+
+    def test_wait_and_verify_cleans_surviving_group_and_reports_failure(self):
+        import rhea_wasabi_pebble_export as exporter
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            leader = self._surviving_descendant_script(tmp)
+            with open(tmp / "leader.log", "ab", buffering=0) as log:
+                proc = subprocess.Popen(
+                    [sys.executable, str(leader)],
+                    env=self._survivor_env(tmp),
+                    stdin=subprocess.DEVNULL,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    close_fds=True,
+                    start_new_session=True,
+                )
+                try:
+                    with self.assertRaises(exporter.ExternalProcessGroupSurvived):
+                        exporter.wait_and_verify_external_process(
+                            proc,
+                            cleanup_grace=0.1,
+                            context="unit test external process",
+                            timeout=5,
+                        )
+                    self._assert_no_group(tmp / "pgid")
+                finally:
+                    if proc.poll() is None:
+                        exporter.terminate_external_process(proc, grace=0.1)
+
+    def test_hook_surviving_descendant_is_fatal_and_not_retried(self):
+        import rhea_wasabi_pebble_export as exporter
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            leader = self._surviving_descendant_script(tmp)
+            config = self._config(tmpdir, hook=str(leader))
+            with mock.patch.dict(os.environ, self._survivor_env(tmp)), \
+                 mock.patch.object(exporter.ShutdownController, "wait", side_effect=AssertionError("retry not expected")):
+                self.assertEqual(exporter.process_cid("Qmabc", config), 1)
+            self._assert_no_group(tmp / "pgid")
+
+    def test_fifo_override_surviving_descendant_stops_before_next_cid(self):
+        import rhea_wasabi_pebble_export as exporter
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            leader = self._surviving_descendant_script(tmp)
+            config = self._config(tmpdir)
+            reads = [b"A\nB\n"]
+            opened = []
+            def fake_read(fd, size):
+                return reads.pop(0) if reads else b""
+            with mock.patch.dict(os.environ, {**self._survivor_env(tmp), "RHEA_WASABI_PEBBLE_EXPORT_LAPTOP_DAG_SYNC": str(leader)}), \
+                 mock.patch.object(exporter, "_ensure_fifo"), \
+                 mock.patch.object(exporter.os, "open", return_value=123), \
+                 mock.patch.object(exporter.os, "read", side_effect=fake_read), \
+                 mock.patch.object(exporter.os, "close"), \
+                 mock.patch("select.select", return_value=([123], [], [])), \
+                 mock.patch.object(exporter.subprocess, "Popen", wraps=exporter.subprocess.Popen) as popen_mock:
+                self.assertEqual(exporter.run_fifo_worker(Path("queue"), config), 1)
+                opened.extend(call.args[0][1] for call in popen_mock.call_args_list)
+            self.assertEqual(opened, ["A"])
+            self._assert_no_group(tmp / "pgid")
+
+    def test_outer_exporter_surviving_descendant_is_structured_failure(self):
+        import pin_with_export_retry
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            leader = self._surviving_descendant_script(tmp)
+            with mock.patch.dict(os.environ, self._survivor_env(tmp)):
+                with self.assertRaises(pin_with_export_retry.ExportFailed) as caught:
+                    pin_with_export_retry.export_missing_cid("Qmabc", str(leader), timeout=5)
+            self.assertIn("surviving descendants", caught.exception.failure.message)
+            self._assert_no_group(tmp / "pgid")
